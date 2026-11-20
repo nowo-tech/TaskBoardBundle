@@ -13,7 +13,7 @@ use Throwable;
 use function spl_object_id;
 
 /**
- * Since 2.26.1 (audit WA-2): the application rows a TaskBoard write wrote through the application's entity manager
+ * Since 2.27.0 (audit WA-2): the application rows a TaskBoard write wrote through the application's entity manager
  * (e.g. rows an application `onFlush` listener added) inside a transaction that is then rolled back on purpose (a sync
  * dry run). Without it those entities would stay managed with values, or ids, that the rollback undid, and a later
  * edit would update nothing.

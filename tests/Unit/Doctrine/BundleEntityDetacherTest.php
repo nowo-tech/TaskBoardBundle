@@ -18,7 +18,7 @@ use stdClass;
 use Stringable;
 
 /**
- * Since 2.26.1 (audits WA-1, WA-2): the safe fallbacks of the shared-manager detach and of the dry-run forget.
+ * Since 2.27.0 (audits WA-1, WA-2): the safe fallbacks of the shared-manager detach and of the dry-run forget.
  */
 final class BundleEntityDetacherTest extends TestCase
 {

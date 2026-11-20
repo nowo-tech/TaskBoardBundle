@@ -9,7 +9,7 @@ use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 
 /**
- * Since 2.26.1 (audit WA-1): an application entity that references TaskBoard rows (a board and a task, no cascade), as a
+ * Since 2.27.0 (audit WA-1): an application entity that references TaskBoard rows (a board and a task, no cascade), as a
  * host's schedule, alert or automation rule does.
  */
 #[ORM\Entity]

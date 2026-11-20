@@ -15,7 +15,7 @@ use function is_object;
 use function spl_object_id;
 
 /**
- * Since 2.26.1 (REQ-RUNTIME-003 rule 2): keeps the memory of a long batch (remote sync pages, number backfill) flat
+ * Since 2.27.0 (REQ-RUNTIME-003 rule 2): keeps the memory of a long batch (remote sync pages, number backfill) flat
  * without clearing a manager the bundle does not own.
  *
  * - The bundle's private manager ({@see TaskBoardEntityManager}, `database.private_entity_manager: true`) is cleared:

@@ -117,7 +117,7 @@ With `database.private_entity_manager: true` the sync, the import and the backfi
 manager, which they may clear: the application's manager is never flushed, cleared or reset.
 
 Without it (the 2.x default, deprecated) they write through `database.entity_manager`, which is the application's.
-Since 2.26.1 (REQ-RUNTIME-003 rule 2) a long run keeps its memory flat with `BundleEntityDetacher`, after each sync
+Since 2.27.0 (REQ-RUNTIME-003 rule 2) a long run keeps its memory flat with `BundleEntityDetacher`, after each sync
 page, after a dry-run rollback and after each backfill batch, and never clears, closes or resets the manager:
 
 - The application's entities stay managed, with their pending changes. This includes the application entities the sync
@@ -147,7 +147,7 @@ Accepted for 2.x. None of them leaks data or bypasses a permission.
   again by id before changing it.
 - **The application's pending changes to TaskBoard rows.** "Pending changes are kept" applies to the application's own
   entities only. The backfill writes with plain SQL and never flushes, so a change the application left unflushed on a
-  detached TaskBoard row, or a new TaskBoard row it persisted without flushing, is dropped, as it was in 2.26.0. A task
+  detached TaskBoard row, or a new TaskBoard row it persisted without flushing, is dropped, as it was in 2.26.1. A task
   that stays managed (an application entity references it) keeps the number it had in memory: load it again to read the
   new number.
 - **More rows stay in memory.** Kept TaskBoard rows (and everything they reach through initialized collections) and

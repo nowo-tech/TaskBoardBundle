@@ -10,7 +10,7 @@ use Nowo\TaskBoardBundle\Sync\Dto\SyncStatus;
 use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\AppUser;
 
 /**
- * Since 2.26.1 (REQ-RUNTIME-003 rule 2): with `database.private_entity_manager: true` a remote sync (pages, dry-run
+ * Since 2.27.0 (REQ-RUNTIME-003 rule 2): with `database.private_entity_manager: true` a remote sync (pages, dry-run
  * rollback, reloads) never touches the application's entity manager: its entities stay managed and the changes it left
  * pending are still pending, unwritten, until the application flushes them.
  */

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[2.26.1] - 2026-11-20](#2261---2026-11-20)
 - [[2.26.0] - 2026-11-20](#2260---2026-11-20)
 - [[2.25.1] - 2026-11-20](#2251---2026-11-20)
 - [[2.25.0] - 2026-11-19](#2250---2026-11-19)
@@ -126,7 +127,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **A remote sync and the number backfill no longer clear the application's entity manager** (REQ-RUNTIME-003 rule 2).
   Without `database.private_entity_manager`, they write through `database.entity_manager`, which is the application's
-  manager. Up to 2.26.0 they called `clear()` on it after each sync page, after a dry-run rollback and after each
+  manager. Up to 2.26.1 they called `clear()` on it after each sync page, after a dry-run rollback and after each
   backfill batch. That detached every application entity, so the application's later edits to them were silently not
   written, and it dropped the changes the application had left pending on them.
   - They now detach only the TaskBoard rows that no managed application entity references (new internal
@@ -146,6 +147,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `docs/CONCURRENCY.md`: the remote sync, import and number-backfill writes (transactions, run lock, conflicts), the
   application's entity manager, and the accepted residual risks.
+
+## [2.26.1] - 2026-11-20
+
+### Fixed
+
+- Configuration tree split so the bundle compiles on PHP 8.3+ thread stacks of 512 KiB (FrankenPHP Alpine images): `Configuration::getConfigTreeBuilder()` was one fluent chain that needed more than 512 KiB of stack to compile ("Maximum call stack size ... reached during compilation"). It is now built by one private method per section, with the same builder calls in the same order, so the tree, its defaults, validation and reference dumps are unchanged. A test compiles the sources and builds the tree under a 512 KiB stack.
 
 ## [2.26.0] - 2026-11-20
 
@@ -3264,7 +3271,7 @@ First stable release of **TaskBoard Bundle**.
 - Doctrine ORM ^2.15 || ^3.0
 - `nowo-tech/time-track-bundle` ^1.0 (required in 1.0.x; optional from 1.1.0)
 
-[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v2.26.0...HEAD
+[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v2.26.1...HEAD
 [1.9.0]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.4...v1.9.0
 [1.8.4]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.3...v1.8.4
 [1.8.3]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.2...v1.8.3

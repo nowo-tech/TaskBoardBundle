@@ -645,7 +645,7 @@ final readonly class TaskBoardSyncService
     }
 
     /**
-     * Detaches the TaskBoard rows no application entity holds (memory stays flat; since 2.26.1 the application's entities
+     * Detaches the TaskBoard rows no application entity holds (memory stays flat; since 2.27.0 the application's entities
      * and the TaskBoard rows they reference stay managed, REQ-RUNTIME-003 rule 2, audit WA-1) and loads the run's board,
      * connection and actor again (the same instances when they stayed managed).
      */

@@ -74,7 +74,7 @@ final class XmlMappingParityTest extends TestCase
         $host       = 0;
         foreach ($attributes->getMetadataFactory()->getAllMetadata() as $metadata) {
             if (str_starts_with($metadata->getName(), 'Nowo\\TaskBoardBundle\\Tests\\')) {
-                // The test host's entities: its user (the target of the user relations) and, since 2.26.1, the entities
+                // The test host's entities: its user (the target of the user relations) and, since 2.27.0, the entities
                 // that reference TaskBoard rows (audit WA-1).
                 ++$host;
 

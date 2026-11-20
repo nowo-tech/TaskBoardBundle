@@ -8,7 +8,7 @@ use Doctrine\ORM\Mapping as ORM;
 use Nowo\TaskBoardBundle\Entity\Task;
 
 /**
- * Since 2.26.1 (audit WA-1): an application entity that references a task with cascade persist.
+ * Since 2.27.0 (audit WA-1): an application entity that references a task with cascade persist.
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'app_host_cascade_link')]

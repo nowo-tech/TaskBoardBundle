@@ -16,7 +16,7 @@ use Nowo\TaskBoardBundle\Tests\Support\PrivateEntityManagerReplay;
 use function sprintf;
 
 /**
- * Since 2.26.1 (REQ-RUNTIME-003 rule 2): a backfill batch on the application's entity manager (the 2.x default) detaches
+ * Since 2.27.0 (REQ-RUNTIME-003 rule 2): a backfill batch on the application's entity manager (the 2.x default) detaches
  * the tasks it loaded, never the application's entities, and leaves the application's pending changes pending (the
  * batch writes with plain SQL and never flushes the manager).
  */

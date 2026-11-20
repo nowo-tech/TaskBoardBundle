@@ -12,7 +12,7 @@ use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\AppUser;
 use Nowo\TaskBoardBundle\Tests\Support\PrivateEntityManagerReplay;
 
 /**
- * Since 2.26.1 (REQ-RUNTIME-003 rule 2): without `database.private_entity_manager` (the 2.x default) a remote sync
+ * Since 2.27.0 (REQ-RUNTIME-003 rule 2): without `database.private_entity_manager` (the 2.x default) a remote sync
  * writes through the application's entity manager. It keeps its memory flat by detaching the TaskBoard rows after each
  * page and after a dry-run rollback, never by clearing that manager: the application's entities stay managed and keep
  * their changes. The changes the application left pending are written by the sync's flush (the deprecated 2.14

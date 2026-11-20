@@ -25,7 +25,7 @@ use function md5;
 use function substr;
 
 /**
- * Since 2.26.1 (audits WA-1, WA-2): without `database.private_entity_manager` the sync shares the application's entity
+ * Since 2.27.0 (audits WA-1, WA-2): without `database.private_entity_manager` the sync shares the application's entity
  * manager. TaskBoard rows that application entities reference stay managed across the sync's pages, its dry run and its
  * reloads, so the run finishes and the application's next flush works; application rows written inside a rolled-back
  * dry-run page leave the manager. Run on SQLite, MySQL, MariaDB and PostgreSQL.

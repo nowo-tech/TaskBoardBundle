@@ -13,6 +13,7 @@ use Nowo\TaskBoardBundle\Sync\Field\SyncFieldType;
 use Nowo\TaskBoardBundle\Sync\File\HostAllowlist;
 use Nowo\TaskBoardBundle\Sync\File\RemoteFileFetcher;
 use Nowo\TaskBoardBundle\Sync\Provider\ClickUp\ClickUpTaskProvider;
+use Symfony\Component\Config\Definition\Builder\ArrayNodeDefinition;
 use Symfony\Component\Config\Definition\Builder\TreeBuilder;
 use Symfony\Component\Config\Definition\ConfigurationInterface;
 
@@ -90,7 +91,31 @@ final class Configuration implements ConfigurationInterface
         $treeBuilder = new TreeBuilder(self::ALIAS);
         $root        = $treeBuilder->getRootNode();
 
-        $root
+        $this->addUserDirectoryToFirewallSections($root);
+        $this->addApiSection($root);
+        $this->addSecuritySection($root);
+        $this->addRoutesSection($root);
+        $this->addWebUiSection($root);
+        $this->addTemplatesSection($root);
+        $this->addDatabaseToTenancySections($root);
+        $this->addSearchToMemberBadgeProviderSections($root);
+        $this->addWriteProvenanceProviderToAssigneeProviderSections($root);
+        $this->addBoardSection($root);
+        $this->addTaskPanelToImportSections($root);
+        $this->addCommentsToCalendarSections($root);
+        $this->addMultiBoardToTaskTemplatesSections($root);
+        $this->addTaskQuestionsToRestructureSections($root);
+        $this->addSyncSection($root);
+
+        return $treeBuilder;
+    }
+
+    /**
+     * Adds the `user_directory` to `firewall` settings.
+     */
+    private function addUserDirectoryToFirewallSections(ArrayNodeDefinition $rootNode): void
+    {
+        $rootNode
             ->children()
                 ->scalarNode('user_directory')
                     ->defaultNull()
@@ -117,6 +142,16 @@ final class Configuration implements ConfigurationInterface
                     ->setDeprecated('nowo-tech/task-board-bundle', '1.7', 'The "%node%" option at path "%path%" is deprecated and has no effect; configure the firewall and access_control in your security.yaml instead.')
                     ->defaultValue('main')
                 ->end()
+            ->end();
+    }
+
+    /**
+     * Adds the `api` section.
+     */
+    private function addApiSection(ArrayNodeDefinition $rootNode): void
+    {
+        $rootNode
+            ->children()
                 ->arrayNode('api')
                     ->info('Since 2.2.0 (spec 213): a REST API shaped like ClickUp API v2. Off: no route, service, listener or table. See docs/API.md.')
                     ->addDefaultsIfNotSet()
@@ -158,6 +193,16 @@ final class Configuration implements ConfigurationInterface
                         ->end()
                     ->end()
                 ->end()
+            ->end();
+    }
+
+    /**
+     * Adds the `security` section.
+     */
+    private function addSecuritySection(ArrayNodeDefinition $rootNode): void
+    {
+        $rootNode
+            ->children()
                 ->arrayNode('security')
                     ->addDefaultsIfNotSet()
                     ->children()
@@ -190,438 +235,530 @@ final class Configuration implements ConfigurationInterface
                         ->end()
                     ->end()
                 ->end()
-                ->arrayNode('routes')
+            ->end();
+    }
+
+    /**
+     * Adds the `index` to `task_advance` settings.
+     */
+    private function addRoutesIndexToTaskAdvanceSections(ArrayNodeDefinition $routes): void
+    {
+        $routes
+            ->children()
+                ->arrayNode('index')
                     ->addDefaultsIfNotSet()
                     ->children()
-                        ->arrayNode('index')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_index')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('board')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_board')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('list')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/list')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_list')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('gantt')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/gantt')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_gantt')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('task')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_task')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('board_create')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/create')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_board_create')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('task_create')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/create')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_task_create')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('task_move')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/move')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_task_move')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('task_advance')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/advance')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_task_advance')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('task_link')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/link')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_task_link')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('task_link_update')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/link/{linkId}')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_task_link_update')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('task_link_remove')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/link/{linkId}/remove')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_task_link_remove')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('task_member')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/member')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_task_member')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('task_member_remove')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/member/{memberId}/remove')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_task_member_remove')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('task_subtask')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/subtask')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_task_subtask')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('task_priority')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/priority')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_task_priority')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('column_create')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/column')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_column_create')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('column_update')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/column/{columnId}')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_column_update')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('column_reorder')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/columns/reorder')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_column_reorder')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('board_import')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/import')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_board_import')->end()
-                            ->end()
-                        ->end()
-                        // Since 1.11: column delete, column sets and the task panel fragment.
-                        ->arrayNode('column_delete')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/column/{columnId}/delete')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_column_delete')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('column_set_create')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/column-sets')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_column_set_create')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('column_set_apply')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/column-sets/apply')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_column_set_apply')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('column_set_delete')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/column-sets/{setId}/delete')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_column_set_delete')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('task_panel')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/panel')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_task_panel')->end()
-                            ->end()
-                        ->end()
-                        // Since 1.16: task comments.
-                        ->arrayNode('task_comment')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/comment')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_task_comment')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('task_comment_edit')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/comment/{commentId}')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_task_comment_edit')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('task_comment_delete')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/comment/{commentId}/delete')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_task_comment_delete')->end()
-                            ->end()
-                        ->end()
-                        // Since 1.15: task dependencies and manual time entries.
-                        ->arrayNode('task_dependency')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/dependency')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_task_dependency')->end()
-                            ->end()
-                        ->end()
-                        // Since 1.18: import subtasks (with their Gantt relations) into a task.
-                        ->arrayNode('task_import')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/import')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_task_import')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('task_dependency_remove')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/dependency/{dependencyId}/remove')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_task_dependency_remove')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('task_time')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/time')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_task_time')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('task_time_remove')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/time/{entryId}/remove')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_task_time_remove')->end()
-                            ->end()
-                        ->end()
-                        // Since 2.12.0: the billable switch of a manual time entry.
-                        ->arrayNode('task_time_billable')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/time/{entryId}/billable')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_task_time_billable')->end()
-                            ->end()
-                        ->end()
-                        // Since 2.1.0 (spec 214): task_by_number exists only with task_numbers.enabled, calendar and task_schedule only with calendar.enabled.
-                        ->arrayNode('task_by_number')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/n/{number}')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_task_by_number')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('calendar')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/calendar')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_calendar')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('task_schedule')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/schedule')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_task_schedule')->end()
-                            ->end()
-                        ->end()
-                        // Since 2.24.0: with calendar.enabled; moves an event of a calendar event source (form-encoded POST, JSON answer).
-                        ->arrayNode('calendar_event_reschedule')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/calendar/event-reschedule')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_calendar_event_reschedule')->end()
-                            ->end()
-                        ->end()
-                        // Since 2.3.0 (spec 217): only with move.enabled.
-                        ->arrayNode('task_move_board')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/move-board')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_task_move_board')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('task_duplicate')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/duplicate')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_task_duplicate')->end()
-                            ->end()
-                        ->end()
-                        // Since 2.3.0 (spec 215): only with recurrence.enabled.
-                        ->arrayNode('task_recurrence')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/recurrence')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_task_recurrence')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('task_recurrence_action')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/recurrence/{action}')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_task_recurrence_action')->end()
-                            ->end()
-                        ->end()
-                        // Since 2.23.0 (Beacon spec 242): only with task_questions.enabled.
-                        ->arrayNode('task_question_ask')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/question')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_task_question_ask')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('task_question_answer')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/question/{questionId}/answer')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_task_question_answer')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('task_question_withdraw')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/question/{questionId}/withdraw')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_task_question_withdraw')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('task_question_publish')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/question/{questionId}/publish')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_task_question_publish')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('my_questions')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/questions')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_my_questions')->end()
-                            ->end()
-                        ->end()
-                        // Since 1.23 (the board_connection* routes exist only with sync.enabled).
-                        ->arrayNode('task_restore')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/restore')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_task_restore')->end()
-                            ->end()
-                        ->end()
-                        // Since 2.22.0: the writes of the task menu (context menus).
-                        ->arrayNode('task_menu')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/menu/task')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_task_menu')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('board_connection')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/connection')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_board_connection')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('board_connection_containers')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/connection/containers')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_board_connection_containers')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('board_connection_link')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/connection/link')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_board_connection_link')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('board_connection_refresh')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/connection/refresh')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_board_connection_refresh')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('board_connection_progress')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/connection/progress/{runId}')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_board_connection_progress')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('board_connection_cancel')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/connection/cancel/{runId}')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_board_connection_cancel')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('board_connection_unlink')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/connection/unlink')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_board_connection_unlink')->end()
-                            ->end()
-                        ->end()
-                        // Since 1.27.0 (TB-SYNC-2): the People page of a linked board.
-                        ->arrayNode('board_connection_people')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/connection/people')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_board_connection_people')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('board_connection_people_save')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/connection/people/save')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_board_connection_people_save')->end()
-                            ->end()
-                        ->end()
-                        // Since 1.28.0: mark every unmapped person as a former person (with sync.people_bulk_former).
-                        ->arrayNode('board_connection_people_former')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/connection/people/former')->end()
-                                ->scalarNode('name')->defaultValue('nowo_task_board_board_connection_people_former')->end()
-                            ->end()
-                        ->end()
+                        ->scalarNode('path')->defaultValue('/tools/task-board')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_index')->end()
                     ->end()
                 ->end()
+                ->arrayNode('board')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_board')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('list')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/list')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_list')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('gantt')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/gantt')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_gantt')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('task')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_task')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('board_create')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/create')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_board_create')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('task_create')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/create')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_task_create')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('task_move')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/move')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_task_move')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('task_advance')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/advance')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_task_advance')->end()
+                    ->end()
+                ->end()
+            ->end();
+    }
+
+    /**
+     * Adds the `task_link` to `column_update` settings.
+     */
+    private function addRoutesTaskLinkToColumnUpdateSections(ArrayNodeDefinition $routes): void
+    {
+        $routes
+            ->children()
+                ->arrayNode('task_link')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/link')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_task_link')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('task_link_update')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/link/{linkId}')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_task_link_update')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('task_link_remove')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/link/{linkId}/remove')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_task_link_remove')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('task_member')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/member')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_task_member')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('task_member_remove')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/member/{memberId}/remove')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_task_member_remove')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('task_subtask')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/subtask')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_task_subtask')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('task_priority')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/priority')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_task_priority')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('column_create')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/column')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_column_create')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('column_update')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/column/{columnId}')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_column_update')->end()
+                    ->end()
+                ->end()
+            ->end();
+    }
+
+    /**
+     * Adds the `column_reorder` to `task_comment_edit` settings.
+     */
+    private function addRoutesColumnReorderToTaskCommentEditSections(ArrayNodeDefinition $routes): void
+    {
+        $routes
+            ->children()
+                ->arrayNode('column_reorder')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/columns/reorder')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_column_reorder')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('board_import')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/import')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_board_import')->end()
+                    ->end()
+                ->end()
+                // Since 1.11: column delete, column sets and the task panel fragment.
+                ->arrayNode('column_delete')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/column/{columnId}/delete')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_column_delete')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('column_set_create')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/column-sets')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_column_set_create')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('column_set_apply')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/column-sets/apply')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_column_set_apply')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('column_set_delete')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/column-sets/{setId}/delete')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_column_set_delete')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('task_panel')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/panel')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_task_panel')->end()
+                    ->end()
+                ->end()
+                // Since 1.16: task comments.
+                ->arrayNode('task_comment')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/comment')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_task_comment')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('task_comment_edit')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/comment/{commentId}')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_task_comment_edit')->end()
+                    ->end()
+                ->end()
+            ->end();
+    }
+
+    /**
+     * Adds the `task_comment_delete` to `calendar` settings.
+     */
+    private function addRoutesTaskCommentDeleteToCalendarSections(ArrayNodeDefinition $routes): void
+    {
+        $routes
+            ->children()
+                ->arrayNode('task_comment_delete')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/comment/{commentId}/delete')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_task_comment_delete')->end()
+                    ->end()
+                ->end()
+                // Since 1.15: task dependencies and manual time entries.
+                ->arrayNode('task_dependency')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/dependency')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_task_dependency')->end()
+                    ->end()
+                ->end()
+                // Since 1.18: import subtasks (with their Gantt relations) into a task.
+                ->arrayNode('task_import')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/import')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_task_import')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('task_dependency_remove')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/dependency/{dependencyId}/remove')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_task_dependency_remove')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('task_time')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/time')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_task_time')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('task_time_remove')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/time/{entryId}/remove')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_task_time_remove')->end()
+                    ->end()
+                ->end()
+                // Since 2.12.0: the billable switch of a manual time entry.
+                ->arrayNode('task_time_billable')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/time/{entryId}/billable')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_task_time_billable')->end()
+                    ->end()
+                ->end()
+                // Since 2.1.0 (spec 214): task_by_number exists only with task_numbers.enabled, calendar and task_schedule only with calendar.enabled.
+                ->arrayNode('task_by_number')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/n/{number}')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_task_by_number')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('calendar')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/calendar')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_calendar')->end()
+                    ->end()
+                ->end()
+            ->end();
+    }
+
+    /**
+     * Adds the `task_schedule` to `task_question_withdraw` settings.
+     */
+    private function addRoutesTaskScheduleToTaskQuestionWithdrawSections(ArrayNodeDefinition $routes): void
+    {
+        $routes
+            ->children()
+                ->arrayNode('task_schedule')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/schedule')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_task_schedule')->end()
+                    ->end()
+                ->end()
+                // Since 2.24.0: with calendar.enabled; moves an event of a calendar event source (form-encoded POST, JSON answer).
+                ->arrayNode('calendar_event_reschedule')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/calendar/event-reschedule')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_calendar_event_reschedule')->end()
+                    ->end()
+                ->end()
+                // Since 2.3.0 (spec 217): only with move.enabled.
+                ->arrayNode('task_move_board')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/move-board')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_task_move_board')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('task_duplicate')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/duplicate')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_task_duplicate')->end()
+                    ->end()
+                ->end()
+                // Since 2.3.0 (spec 215): only with recurrence.enabled.
+                ->arrayNode('task_recurrence')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/recurrence')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_task_recurrence')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('task_recurrence_action')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/recurrence/{action}')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_task_recurrence_action')->end()
+                    ->end()
+                ->end()
+                // Since 2.23.0 (Beacon spec 242): only with task_questions.enabled.
+                ->arrayNode('task_question_ask')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/question')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_task_question_ask')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('task_question_answer')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/question/{questionId}/answer')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_task_question_answer')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('task_question_withdraw')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/question/{questionId}/withdraw')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_task_question_withdraw')->end()
+                    ->end()
+                ->end()
+            ->end();
+    }
+
+    /**
+     * Adds the `task_question_publish` to `board_connection_progress` settings.
+     */
+    private function addRoutesTaskQuestionPublishToBoardConnectionProgressSections(ArrayNodeDefinition $routes): void
+    {
+        $routes
+            ->children()
+                ->arrayNode('task_question_publish')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/question/{questionId}/publish')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_task_question_publish')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('my_questions')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/questions')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_my_questions')->end()
+                    ->end()
+                ->end()
+                // Since 1.23 (the board_connection* routes exist only with sync.enabled).
+                ->arrayNode('task_restore')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/task/{taskId}/restore')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_task_restore')->end()
+                    ->end()
+                ->end()
+                // Since 2.22.0: the writes of the task menu (context menus).
+                ->arrayNode('task_menu')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/menu/task')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_task_menu')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('board_connection')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/connection')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_board_connection')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('board_connection_containers')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/connection/containers')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_board_connection_containers')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('board_connection_link')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/connection/link')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_board_connection_link')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('board_connection_refresh')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/connection/refresh')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_board_connection_refresh')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('board_connection_progress')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/connection/progress/{runId}')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_board_connection_progress')->end()
+                    ->end()
+                ->end()
+            ->end();
+    }
+
+    /**
+     * Adds the `board_connection_cancel` to `board_connection_people_former` settings.
+     */
+    private function addRoutesBoardConnectionCancelToBoardConnectionPeopleFormerSections(ArrayNodeDefinition $routes): void
+    {
+        $routes
+            ->children()
+                ->arrayNode('board_connection_cancel')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/connection/cancel/{runId}')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_board_connection_cancel')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('board_connection_unlink')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/connection/unlink')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_board_connection_unlink')->end()
+                    ->end()
+                ->end()
+                // Since 1.27.0 (TB-SYNC-2): the People page of a linked board.
+                ->arrayNode('board_connection_people')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/connection/people')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_board_connection_people')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('board_connection_people_save')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/connection/people/save')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_board_connection_people_save')->end()
+                    ->end()
+                ->end()
+                // Since 1.28.0: mark every unmapped person as a former person (with sync.people_bulk_former).
+                ->arrayNode('board_connection_people_former')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/connection/people/former')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_board_connection_people_former')->end()
+                    ->end()
+                ->end()
+            ->end();
+    }
+
+    /**
+     * Adds the `routes` section; its large children have their own methods.
+     */
+    private function addRoutesSection(ArrayNodeDefinition $rootNode): void
+    {
+        $routes = $rootNode->children()->arrayNode('routes');
+        $routes
+            ->addDefaultsIfNotSet();
+        $this->addRoutesIndexToTaskAdvanceSections($routes);
+        $this->addRoutesTaskLinkToColumnUpdateSections($routes);
+        $this->addRoutesColumnReorderToTaskCommentEditSections($routes);
+        $this->addRoutesTaskCommentDeleteToCalendarSections($routes);
+        $this->addRoutesTaskScheduleToTaskQuestionWithdrawSections($routes);
+        $this->addRoutesTaskQuestionPublishToBoardConnectionProgressSections($routes);
+        $this->addRoutesBoardConnectionCancelToBoardConnectionPeopleFormerSections($routes);
+    }
+
+    /**
+     * Adds the `web_ui` section.
+     */
+    private function addWebUiSection(ArrayNodeDefinition $rootNode): void
+    {
+        $rootNode
+            ->children()
                 ->arrayNode('web_ui')
                     ->addDefaultsIfNotSet()
                     ->info('Since 2.0.0: the UiKit page contract (REQ-UI-003).')
@@ -646,6 +783,16 @@ final class Configuration implements ConfigurationInterface
                         ->end()
                     ->end()
                 ->end()
+            ->end();
+    }
+
+    /**
+     * Adds the `templates` section.
+     */
+    private function addTemplatesSection(ArrayNodeDefinition $rootNode): void
+    {
+        $rootNode
+            ->children()
                 ->arrayNode('templates')
                     ->addDefaultsIfNotSet()
                     ->children()
@@ -705,6 +852,16 @@ final class Configuration implements ConfigurationInterface
                         ->end()
                     ->end()
                 ->end()
+            ->end();
+    }
+
+    /**
+     * Adds the `database` to `tenancy` settings.
+     */
+    private function addDatabaseToTenancySections(ArrayNodeDefinition $rootNode): void
+    {
+        $rootNode
+            ->children()
                 ->arrayNode('database')
                     ->addDefaultsIfNotSet()
                     ->children()
@@ -775,6 +932,16 @@ final class Configuration implements ConfigurationInterface
                         ->end()
                     ->end()
                 ->end()
+            ->end();
+    }
+
+    /**
+     * Adds the `search` to `member_badge_provider` settings.
+     */
+    private function addSearchToMemberBadgeProviderSections(ArrayNodeDefinition $rootNode): void
+    {
+        $rootNode
+            ->children()
                 ->arrayNode('search')
                     ->info('Since 2.16.0 (spec 234): the text search of the Task API (GET /v2/team/{id}/task?query=…, GET /v2/list/{id}/task?query=…).')
                     ->addDefaultsIfNotSet()
@@ -824,6 +991,16 @@ final class Configuration implements ConfigurationInterface
                     ->defaultNull()
                     ->info('Service id of a Nowo\\TaskBoardBundle\\Member\\MemberBadgeProviderInterface (since 2.18.0, Beacon spec 234): badges next to a member\'s name (history, comments, assignees), e.g. "Agent" for a service account. Plain-text values with an allow-listed variant, asked once per page. null = no badge.')
                 ->end()
+            ->end();
+    }
+
+    /**
+     * Adds the `write_provenance_provider` to `assignee_provider` settings.
+     */
+    private function addWriteProvenanceProviderToAssigneeProviderSections(ArrayNodeDefinition $rootNode): void
+    {
+        $rootNode
+            ->children()
                 ->scalarNode('write_provenance_provider')
                     ->defaultNull()
                     ->info('Service id of a Nowo\\TaskBoardBundle\\Provenance\\WriteProvenanceProviderInterface (since 2.18.0, Beacon spec 234): the channel (web, app, api, mcp; decided by the host from the path it serves, never from client input) and actor label stored on every task history row, task and comment write. null = the columns stay NULL.')
@@ -837,85 +1014,122 @@ final class Configuration implements ConfigurationInterface
                     ->defaultNull()
                     ->info('Service id of a Nowo\\TaskBoardBundle\\Assignee\\TaskAssigneeProviderInterface (since 1.10): who may be a member of a task on a board. null = every user of user_class.')
                 ->end()
-                ->arrayNode('board')
-                    ->addDefaultsIfNotSet()
-                    ->children()
-                        ->arrayNode('default_columns')
-                            ->info('Columns of a new board, in order (the last one is "done"). Since 1.10.')
-                            ->arrayPrototype()
-                                ->children()
-                                    ->scalarNode('name')->isRequired()->cannotBeEmpty()->end()
-                                    ->scalarNode('color')->defaultNull()->end()
-                                    ->scalarNode('icon')
-                                        ->defaultNull()
-                                        ->info('Icon name such as tabler:bug (since 1.11), or since 2.9.0 one emoji such as 📝 (printed as text, aria-hidden; the name stays the accessible text).')
-                                        ->validate()
-                                            ->ifTrue(static fn (mixed $icon): bool => $icon !== null && (!is_string($icon) || !ColumnIcon::isStorable($icon)))
-                                            ->thenInvalid('A default column icon is one emoji (at most 16 bytes) or an icon name such as tabler:bug: %s')
-                                        ->end()
-                                    ->end()
-                                ->end()
-                            ->end()
-                            ->requiresAtLeastOneElement()
-                            ->defaultValue([
-                                ['name' => 'To do', 'color' => '#94a3b8'],
-                                ['name' => 'In progress', 'color' => '#3b82f6'],
-                                ['name' => 'Done', 'color' => '#22c55e'],
-                            ])
-                        ->end()
-                        ->arrayNode('column_icons')
-                            ->info('Icons offered in the add / edit column dialogs (since 1.11), as <set>:<name> (e.g. tabler:bug) for UiKit components/_icon (ux_icon) or the Tabler webfont. Empty: no icon field.')
-                            ->scalarPrototype()
+            ->end();
+    }
+
+    /**
+     * Adds the `default_columns` to `node` settings.
+     */
+    private function addBoardDefaultColumnsAndFollowingSections(ArrayNodeDefinition $board): void
+    {
+        $board
+            ->children()
+                ->arrayNode('default_columns')
+                    ->info('Columns of a new board, in order (the last one is "done"). Since 1.10.')
+                    ->arrayPrototype()
+                        ->children()
+                            ->scalarNode('name')->isRequired()->cannotBeEmpty()->end()
+                            ->scalarNode('color')->defaultNull()->end()
+                            ->scalarNode('icon')
+                                ->defaultNull()
+                                ->info('Icon name such as tabler:bug (since 1.11), or since 2.9.0 one emoji such as 📝 (printed as text, aria-hidden; the name stays the accessible text).')
                                 ->validate()
-                                    ->ifTrue(static fn (mixed $icon): bool => !is_string($icon) || preg_match(self::ICON_PATTERN, $icon) !== 1)
-                                    ->thenInvalid('A column icon is "<set>:<name>" in lowercase letters, digits and dashes, e.g. tabler:bug: %s')
+                                    ->ifTrue(static fn (mixed $icon): bool => $icon !== null && (!is_string($icon) || !ColumnIcon::isStorable($icon)))
+                                    ->thenInvalid('A default column icon is one emoji (at most 16 bytes) or an icon name such as tabler:bug: %s')
                                 ->end()
                             ->end()
-                            ->defaultValue(self::DEFAULT_COLUMN_ICONS)
-                        ->end()
-                        ->scalarNode('column_icon_form_type')
-                            ->defaultNull()
-                            ->info('Since 2.9.0: form type of the column icon field in the add / edit column dialogs, e.g. Nowo\\UiKitBundle\\Form\\EmojiPickerType. The bundle\'s constraint always applies: one emoji, or one of board.column_icons / board.default_columns icons. null = the grid of board.column_icons.')
-                        ->end()
-                        ->arrayNode('column_icon_form_options')->variablePrototype()->end()->defaultValue([])->info('Since 2.9.0: options of column_icon_form_type.')->end()
-                        ->booleanNode('column_humans_only_field')
-                            ->defaultNull()
-                            ->info('Since 2.16.0 (spec 234): the "Only people can move tasks here" toggle in the add / edit column dialogs. null = shown when column_transition_policy is set.')
-                        ->end()
-                        ->booleanNode('top_level_only')
-                            ->defaultFalse()
-                            ->info('The Kanban board shows top-level tasks only (subtasks are counted on their parent card). Since 1.10.')
-                        ->end()
-                        ->integerNode('max_tasks')
-                            ->defaultValue(self::DEFAULT_MAX_TASKS)
-                            ->min(1)
-                            ->info('Since 1.21 (REQ-PERF-001): the most tasks the board, list, Gantt and task pages load per board (the first cards of every column, in position order). A board with more shows "Showing N of M tasks". Raise it for very large boards; keep it bounded.')
-                        ->end()
-                        ->scalarNode('default_view_resolver')
-                            ->defaultNull()
-                            ->info('Since 1.24: service id of a Nowo\\TaskBoardBundle\\View\\TaskBoardDefaultViewResolverInterface (the view a board opens in for a user: board, list, gantt or, with calendar.enabled, calendar). The plain board route redirects to that route; ?view=board, XHR and links from the same board keep the board view. null = always the board view.')
-                        ->end()
-                        ->booleanNode('toolbar')->defaultTrue()->info('Since 2.0.0: false leaves the strip above the board out. The column-set dialogs stay; a host button opens them with data-nowo-task-board-open.')->end()
-                        // Since 1.30.0 (spec 211).
-                        ->booleanNode('icon')->defaultFalse()->info('Since 1.30.0: true = the New board form asks for an icon, one emoji of at most 16 bytes. An icon a board already has always shows.')->end()
-                        ->scalarNode('icon_form_type')->defaultNull()->info('Since 1.30.0: form type of the icon field, e.g. an emoji picker. The bundle\'s constraints always apply. null = a text input.')->end()
-                        ->arrayNode('icon_form_options')->variablePrototype()->end()->defaultValue([])->end()
-                        ->enumNode('description_format')->values(['text', 'markdown'])->defaultValue('text')->info('Since 1.30.0: the format of the description of new boards. markdown goes through the text renderer (nowo_task_board_text), folded after three lines in the board header. Existing boards stay text.')->end()
-                        ->scalarNode('description_form_type')->defaultNull()->info('Since 1.30.0: form type of the description field, with no Twig override, e.g. a Markdown editor. null = a textarea.')->end()
-                        ->arrayNode('description_form_options')->variablePrototype()->end()->defaultValue([])->end()
-                        ->booleanNode('advanced_slug')->defaultFalse()->info('Since 1.30.0: true = the slug is folded under Advanced and generated with transliteration.')->end()
-                        ->scalarNode('scope_provider')->defaultNull()->info('Since 1.30.0: service id of a Nowo\\TaskBoardBundle\\Board\\BoardScopeProviderInterface: the New board form gets a scope step. null = none.')->end()
-                        ->scalarNode('tenant_label_provider')->defaultNull()->info('Since 1.30.0: service id of a Nowo\\TaskBoardBundle\\Board\\BoardTenantLabelProviderInterface: board lists show the tenant label and icon. null = none.')->end()
-                        ->scalarNode('create_dialog_header')
-                            ->defaultNull()
-                            ->validate()
-                                ->ifTrue(static fn (mixed $header): bool => $header !== null && (!is_string($header) || preg_match('/^[A-Za-z0-9-]+$/', $header) !== 1))
-                                ->thenInvalid('board.create_dialog_header is an HTTP header name (letters, digits and dashes), e.g. X-Requested-Dialog: %s')
-                            ->end()
-                            ->info('Since 1.24: request header of the host dialogs (e.g. X-Beacon-Dialog). An invalid New board submission carrying it answers 422 with only the create form (manage/_board_create_form.html.twig) for the dialog; without it, 422 with the index page and the New board dialog open. null = always the index page.')
                         ->end()
                     ->end()
+                    ->requiresAtLeastOneElement()
+                    ->defaultValue([
+                        ['name' => 'To do', 'color' => '#94a3b8'],
+                        ['name' => 'In progress', 'color' => '#3b82f6'],
+                        ['name' => 'Done', 'color' => '#22c55e'],
+                    ])
                 ->end()
+                ->arrayNode('column_icons')
+                    ->info('Icons offered in the add / edit column dialogs (since 1.11), as <set>:<name> (e.g. tabler:bug) for UiKit components/_icon (ux_icon) or the Tabler webfont. Empty: no icon field.')
+                    ->scalarPrototype()
+                        ->validate()
+                            ->ifTrue(static fn (mixed $icon): bool => !is_string($icon) || preg_match(self::ICON_PATTERN, $icon) !== 1)
+                            ->thenInvalid('A column icon is "<set>:<name>" in lowercase letters, digits and dashes, e.g. tabler:bug: %s')
+                        ->end()
+                    ->end()
+                    ->defaultValue(self::DEFAULT_COLUMN_ICONS)
+                ->end()
+                ->scalarNode('column_icon_form_type')
+                    ->defaultNull()
+                    ->info('Since 2.9.0: form type of the column icon field in the add / edit column dialogs, e.g. Nowo\\UiKitBundle\\Form\\EmojiPickerType. The bundle\'s constraint always applies: one emoji, or one of board.column_icons / board.default_columns icons. null = the grid of board.column_icons.')
+                ->end()
+                ->arrayNode('column_icon_form_options')->variablePrototype()->end()->defaultValue([])->info('Since 2.9.0: options of column_icon_form_type.')->end()
+                ->booleanNode('column_humans_only_field')
+                    ->defaultNull()
+                    ->info('Since 2.16.0 (spec 234): the "Only people can move tasks here" toggle in the add / edit column dialogs. null = shown when column_transition_policy is set.')
+                ->end()
+                ->booleanNode('top_level_only')
+                    ->defaultFalse()
+                    ->info('The Kanban board shows top-level tasks only (subtasks are counted on their parent card). Since 1.10.')
+                ->end()
+                ->integerNode('max_tasks')
+                    ->defaultValue(self::DEFAULT_MAX_TASKS)
+                    ->min(1)
+                    ->info('Since 1.21 (REQ-PERF-001): the most tasks the board, list, Gantt and task pages load per board (the first cards of every column, in position order). A board with more shows "Showing N of M tasks". Raise it for very large boards; keep it bounded.')
+                ->end()
+                ->scalarNode('default_view_resolver')
+                    ->defaultNull()
+                    ->info('Since 1.24: service id of a Nowo\\TaskBoardBundle\\View\\TaskBoardDefaultViewResolverInterface (the view a board opens in for a user: board, list, gantt or, with calendar.enabled, calendar). The plain board route redirects to that route; ?view=board, XHR and links from the same board keep the board view. null = always the board view.')
+                ->end()
+                ->booleanNode('toolbar')->defaultTrue()->info('Since 2.0.0: false leaves the strip above the board out. The column-set dialogs stay; a host button opens them with data-nowo-task-board-open.')->end()
+                // Since 1.30.0 (spec 211).
+                ->booleanNode('icon')->defaultFalse()->info('Since 1.30.0: true = the New board form asks for an icon, one emoji of at most 16 bytes. An icon a board already has always shows.')->end()
+                ->scalarNode('icon_form_type')->defaultNull()->info('Since 1.30.0: form type of the icon field, e.g. an emoji picker. The bundle\'s constraints always apply. null = a text input.')->end()
+                ->arrayNode('icon_form_options')->variablePrototype()->end()->defaultValue([])->end()
+                ->enumNode('description_format')->values(['text', 'markdown'])->defaultValue('text')->info('Since 1.30.0: the format of the description of new boards. markdown goes through the text renderer (nowo_task_board_text), folded after three lines in the board header. Existing boards stay text.')->end()
+                ->scalarNode('description_form_type')->defaultNull()->info('Since 1.30.0: form type of the description field, with no Twig override, e.g. a Markdown editor. null = a textarea.')->end()
+                ->arrayNode('description_form_options')->variablePrototype()->end()->defaultValue([])->end()
+                ->booleanNode('advanced_slug')->defaultFalse()->info('Since 1.30.0: true = the slug is folded under Advanced and generated with transliteration.')->end()
+                ->scalarNode('scope_provider')->defaultNull()->info('Since 1.30.0: service id of a Nowo\\TaskBoardBundle\\Board\\BoardScopeProviderInterface: the New board form gets a scope step. null = none.')->end()
+            ->end();
+    }
+
+    /**
+     * Adds a part of the tree.
+     */
+    private function addBoardPart(ArrayNodeDefinition $board): void
+    {
+        $board
+            ->children()
+                ->scalarNode('tenant_label_provider')->defaultNull()->info('Since 1.30.0: service id of a Nowo\\TaskBoardBundle\\Board\\BoardTenantLabelProviderInterface: board lists show the tenant label and icon. null = none.')->end()
+                ->scalarNode('create_dialog_header')
+                    ->defaultNull()
+                    ->validate()
+                        ->ifTrue(static fn (mixed $header): bool => $header !== null && (!is_string($header) || preg_match('/^[A-Za-z0-9-]+$/', $header) !== 1))
+                        ->thenInvalid('board.create_dialog_header is an HTTP header name (letters, digits and dashes), e.g. X-Requested-Dialog: %s')
+                    ->end()
+                    ->info('Since 1.24: request header of the host dialogs (e.g. X-Beacon-Dialog). An invalid New board submission carrying it answers 422 with only the create form (manage/_board_create_form.html.twig) for the dialog; without it, 422 with the index page and the New board dialog open. null = always the index page.')
+                ->end()
+            ->end();
+    }
+
+    /**
+     * Adds the `board` section; its large children have their own methods.
+     */
+    private function addBoardSection(ArrayNodeDefinition $rootNode): void
+    {
+        $board = $rootNode->children()->arrayNode('board');
+        $board
+            ->addDefaultsIfNotSet();
+        $this->addBoardDefaultColumnsAndFollowingSections($board);
+        $this->addBoardPart($board);
+    }
+
+    /**
+     * Adds the `task_panel` to `import` settings.
+     */
+    private function addTaskPanelToImportSections(ArrayNodeDefinition $rootNode): void
+    {
+        $rootNode
+            ->children()
                 ->arrayNode('task_panel')
                     ->addDefaultsIfNotSet()
                     ->children()
@@ -968,6 +1182,16 @@ final class Configuration implements ConfigurationInterface
                         ->end()
                     ->end()
                 ->end()
+            ->end();
+    }
+
+    /**
+     * Adds the `comments` to `calendar` settings.
+     */
+    private function addCommentsToCalendarSections(ArrayNodeDefinition $rootNode): void
+    {
+        $rootNode
+            ->children()
                 ->arrayNode('comments')
                     ->addDefaultsIfNotSet()
                     ->info('Task comments and @mentions (since 1.16).')
@@ -1045,6 +1269,16 @@ final class Configuration implements ConfigurationInterface
                         ->end()
                     ->end()
                 ->end()
+            ->end();
+    }
+
+    /**
+     * Adds the `multi_board` to `task_templates` settings.
+     */
+    private function addMultiBoardToTaskTemplatesSections(ArrayNodeDefinition $rootNode): void
+    {
+        $rootNode
+            ->children()
                 ->arrayNode('multi_board')
                     ->addDefaultsIfNotSet()
                     ->info('Since 2.13.0 (Beacon D-20261112-01): the tasks of several boards in one list ("All tasks"), with a Board / Project column, filters, pagination, the workload per person and a CSV / XLSX export. Opt-in: false = no routes, services or output change.')
@@ -1103,6 +1337,16 @@ final class Configuration implements ConfigurationInterface
                         ->scalarNode('permission')->defaultNull()->info('Service id of a Nowo\\TaskBoardBundle\\Template\\TaskTemplatePermissionInterface: who manages and who uses templates. null = DefaultTaskTemplatePermission (manage a board\'s templates with the right to manage the board, a tenant\'s with security.manage_roles; use them with the right to add tasks).')->end()
                     ->end()
                 ->end()
+            ->end();
+    }
+
+    /**
+     * Adds the `task_questions` to `restructure` settings.
+     */
+    private function addTaskQuestionsToRestructureSections(ArrayNodeDefinition $rootNode): void
+    {
+        $rootNode
+            ->children()
                 ->arrayNode('task_questions')
                     ->addDefaultsIfNotSet()
                     ->info('Since 2.23.0 (Beacon spec 242): questions on tasks for the business to answer — options (one recommended), single or multiple choice, an Other text, recipients from the host, a due date; answers superseded and kept; withdraw with a reason. The question tables, TaskQuestionManager, the Questions section of the task page, the Waiting for answer badge and filter, My open questions, the task menu entry and the API routes. Opt-in: false = no table mapping, service, route or output change.')
@@ -1137,174 +1381,232 @@ final class Configuration implements ConfigurationInterface
                         ->scalarNode('policy')->defaultNull()->info('Service id of a Nowo\\TaskBoardBundle\\Folder\\TaskBoardRestructurePolicyInterface: who may manage folders and restructure a board. null = ManageRightRestructurePolicy (the create-board decision for folders, canManageBoard() for a board).')->end()
                     ->end()
                 ->end()
-                ->arrayNode('sync')
+            ->end();
+    }
+
+    /**
+     * Adds a part of the tree.
+     */
+    private function addSyncPart(ArrayNodeDefinition $sync): void
+    {
+        $sync
+            ->children()
+                ->booleanNode('enabled')->defaultFalse()->end()
+                ->scalarNode('credential_resolver')->defaultNull()->info('Service id of a Nowo\\TaskBoardBundle\\Sync\\Hook\\ProviderCredentialResolverInterface. Required when enabled: the host keeps the tokens.')->end()
+                ->scalarNode('attachment_storage')->defaultNull()->info('Service id of a TaskAttachmentStorageInterface. null = files are counted as refused (storage_disabled).')->end()
+                ->scalarNode('inline_image_rewriter')->defaultNull()->info('Service id of an InlineImageRewriterInterface. null = MapInlineImageRewriter.')->end()
+                ->scalarNode('limit_checker')->defaultNull()->info('Service id of a SyncLimitCheckerInterface (host quotas). null = no host limit.')->end()
+                ->scalarNode('runner')->defaultNull()->info('Service id of a SyncRunnerInterface (e.g. Messenger). null = InlineSyncRunner (one slice per request, the progress page advances the run).')->end()
+                ->scalarNode('actor_resolver')->defaultNull()->info('Service id of a SyncActorResolverInterface. null = the user of the request, else the user who linked the board; a disabled user (isEnabled() false) is refused since 1.24.')->end()
+                ->scalarNode('actor_checker')->defaultNull()->info('Since 1.24: service id of a Symfony UserCheckerInterface (e.g. security.user_checker.main) run with checkPreAuth() on the actor of the default actor_resolver; an exception refuses the run. null = only isEnabled().')->end()
+                ->arrayNode('providers')
                     ->addDefaultsIfNotSet()
-                    ->info('Since 1.23: provider connections (ClickUp first). Opt-in: false = no routes, services, mapping or header change.')
                     ->children()
-                        ->booleanNode('enabled')->defaultFalse()->end()
-                        ->scalarNode('credential_resolver')->defaultNull()->info('Service id of a Nowo\\TaskBoardBundle\\Sync\\Hook\\ProviderCredentialResolverInterface. Required when enabled: the host keeps the tokens.')->end()
-                        ->scalarNode('attachment_storage')->defaultNull()->info('Service id of a TaskAttachmentStorageInterface. null = files are counted as refused (storage_disabled).')->end()
-                        ->scalarNode('inline_image_rewriter')->defaultNull()->info('Service id of an InlineImageRewriterInterface. null = MapInlineImageRewriter.')->end()
-                        ->scalarNode('limit_checker')->defaultNull()->info('Service id of a SyncLimitCheckerInterface (host quotas). null = no host limit.')->end()
-                        ->scalarNode('runner')->defaultNull()->info('Service id of a SyncRunnerInterface (e.g. Messenger). null = InlineSyncRunner (one slice per request, the progress page advances the run).')->end()
-                        ->scalarNode('actor_resolver')->defaultNull()->info('Service id of a SyncActorResolverInterface. null = the user of the request, else the user who linked the board; a disabled user (isEnabled() false) is refused since 1.24.')->end()
-                        ->scalarNode('actor_checker')->defaultNull()->info('Since 1.24: service id of a Symfony UserCheckerInterface (e.g. security.user_checker.main) run with checkPreAuth() on the actor of the default actor_resolver; an exception refuses the run. null = only isEnabled().')->end()
-                        ->arrayNode('providers')
+                        ->arrayNode('clickup')
                             ->addDefaultsIfNotSet()
                             ->children()
-                                ->arrayNode('clickup')
-                                    ->addDefaultsIfNotSet()
-                                    ->children()
-                                        ->booleanNode('enabled')->defaultTrue()->end()
-                                        ->arrayNode('attachment_hosts')
-                                            ->scalarPrototype()
-                                                ->validate()
-                                                    ->ifTrue(static fn (mixed $pattern): bool => !is_string($pattern) || !HostAllowlist::isValidPattern($pattern))
-                                                    ->thenInvalid('An attachment host must be a host name of two labels at least, optionally behind "*." (not "*.com"): %s')
-                                                ->end()
-                                            ->end()
-                                            ->defaultValue(ClickUpTaskProvider::DEFAULT_ATTACHMENT_HOSTS)
-                                            ->info('Hosts ClickUp attachments and inline images may be downloaded from (exact, or *.suffix of two labels at least).')
+                                ->booleanNode('enabled')->defaultTrue()->end()
+                                ->arrayNode('attachment_hosts')
+                                    ->scalarPrototype()
+                                        ->validate()
+                                            ->ifTrue(static fn (mixed $pattern): bool => !is_string($pattern) || !HostAllowlist::isValidPattern($pattern))
+                                            ->thenInvalid('An attachment host must be a host name of two labels at least, optionally behind "*." (not "*.com"): %s')
                                         ->end()
                                     ->end()
+                                    ->defaultValue(ClickUpTaskProvider::DEFAULT_ATTACHMENT_HOSTS)
+                                    ->info('Hosts ClickUp attachments and inline images may be downloaded from (exact, or *.suffix of two labels at least).')
                                 ->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('http')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('client')->defaultNull()->info('Service id of an untraced HttpClientInterface (e.g. through a proxy). null = the bundle\'s own client (never the profiler-traced http_client).')->end()
-                                ->floatNode('timeout')->defaultValue(10.0)->min(1.0)->end()
-                                ->floatNode('max_duration')->defaultValue(30.0)->min(1.0)->end()
-                                ->integerNode('max_response_bytes')->defaultValue(8_388_608)->min(1024)->end()
-                                ->integerNode('max_inline_wait')->defaultValue(30)->min(0)->info('Seconds a rate-limited call waits inline; a longer wait pauses the run (RateLimited, resumable).')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('attachments')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->booleanNode('enabled')->defaultTrue()->end()
-                                ->integerNode('max_bytes')->defaultValue(26_214_400)->min(1)->end()
-                                ->integerNode('max_bytes_per_run')->defaultValue(1_073_741_824)->min(1)->end()
-                                ->integerNode('max_redirects')->defaultValue(3)->min(0)->max(10)->end()
-                                ->arrayNode('allowed_mime_types')
-                                    ->scalarPrototype()->end()
-                                    ->defaultValue(RemoteFileFetcher::DEFAULT_ALLOWED_MIME_TYPES)
-                                    ->info('Sniffed types allowed; SVG, HTML and executables are always refused.')
-                                ->end()
-                            ->end()
-                        ->end()
-                        ->integerNode('max_tasks_per_run')->defaultValue(5000)->min(1)->end()
-                        ->integerNode('max_pages_per_run')->defaultValue(1000)->min(1)
-                            ->info('Since 1.23 (audit EG-L2): the most task pages one run reads over all its slices; past it the run fails with response_too_large.')
-                        ->end()
-                        ->integerNode('max_comments_per_task')->defaultValue(500)->min(0)->end()
-                        ->integerNode('max_description_length')->defaultValue(100_000)->min(1000)->end()
-                        ->floatNode('max_archive_ratio')->defaultValue(0.5)->min(0.0)->max(1.0)->end()
-                        ->integerNode('history_keep')->defaultValue(50)->min(1)->end()
-                        ->integerNode('container_cache_ttl')->defaultValue(300)->min(0)->end()
-                        ->integerNode('inline_slice_pages')->defaultValue(5)->min(1)->info('Task pages the inline runner writes per request.')->end()
-                        ->arrayNode('progress')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->integerNode('poll_interval_ms')->defaultValue(2000)->min(500)->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('badge')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->booleanNode('connect_link')->defaultTrue()->info('Since 1.25.2: false = the connection badge shows nothing for an unlinked board (no "Connect provider" link, no empty strip); a linked board keeps its badge.')->end()
-                                ->enumNode('style')->values(['badge', 'strip'])->defaultValue('badge')->info('Since 2.5.0 (TB-16): badge = the inline badge (as before); strip = one UiKit notice strip (provider · list and the status on the left, a progress bar while a run is going, Refresh and Connection on the right). Applies to the bundle\'s own templates.connection_badge partial.')->end()
-                                ->booleanNode('progress')->defaultFalse()->info('Since 1.26.3: true = the bundle\'s own connection badge shows a determinate progress bar of the running run (polling board_connection_progress, managers only). The badge data (activeRunId, progressUrl, total, processed, pollInterval) is given either way, for a host template.')->end()
-                            ->end()
-                        ->end()
-                        // Since 1.25: the people directory, watchers, checklists, tracked time and source lookups.
-                        ->booleanNode('import_archived')->defaultTrue()->info('Since 1.27.0 (TB-SYNC-3): archived provider tasks are read (ClickUp: a second pass with archived=true) and imported archived. false = 1.26 (an archived task is not created).')->end()
-                        ->arrayNode('status_history')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->integerNode('max_calls_per_run')->defaultValue(200)->min(0)->info('Since 1.27.0 (TB-SYNC-3): "time in status" requests a run may spend on the tasks it creates or changes (0 = never).')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('comments')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->integerNode('max_reply_calls_per_run')->defaultValue(500)->min(0)->info('Since 1.27.0: requests for comment threads per run (0 = no replies). The threads past it are reported, and read when the comment or task next changes.')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('custom_fields')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->enumNode('mode')->values(['typed', 'text', 'both'])->defaultValue('typed')->info('Since 1.27.0 (TB-SYNC-3): typed = board-level field definitions and typed values per task (task panel, list search); text = the 1.23 "Fields (<provider>)" task document only; both.')->end()
-                                ->arrayNode('exclude_types')
-                                    ->info('Since 1.27.0: field types never imported, e.g. [email, phone, text] to minimise personal data (RGPD Art. 5, 25). Default: none, everything is imported. What is stored of these types goes when the task is next written.')
-                                    ->enumPrototype()->values(array_map(static fn (SyncFieldType $type): string => $type->value, SyncFieldType::cases()))->end()
-                                ->end()
-                            ->end()
-                        ->end()
-                        ->booleanNode('list_as_tag')->defaultFalse()->info('Since 1.25: tag "list:<name>" on tasks synced from a folder or space source.')->end()
-                        ->arrayNode('lookup')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('cache_pool')->defaultNull()->info('Since 1.25: service id of a PSR-6 pool caching the list search (300 s, keyed by a hash of the connection reference, never the token). null = no cache.')->end()
-                            ->end()
-                        ->end()
-                        ->booleanNode('people_bulk_former')->defaultFalse()->info('Since 1.28.0: true = the People page offers "Mark every unmapped person as a former person" (mapping external, changeable person by person). false = no button, and the route answers 404.')->end()
-                        ->booleanNode('include_multi_list_tasks')->defaultFalse()->info('Since 1.28.0: true = a ClickUp list source also reads the tasks added to it from other lists (include_timl). Each still appears once, with all its lists; a task belongs to one board.')->end()
-                        ->booleanNode('full_sync_rereads_details')->defaultFalse()->info('Since 1.28.0: true = a full sync reads each task\'s detail again even when its date did not move (within sync.watchers.max_detail_calls_per_run). For when a new file does not move ClickUp\'s date_updated.')->end()
-                        ->booleanNode('unmatched_columns_choice')->defaultFalse()->info('Since 1.28.0: true = the link page offers "Columns no status uses" (keep, or delete the empty ones after the first import). false = not drawn; a posted task_board_sync_link[unmatchedColumns] is accepted either way (a host drawing its own dialog).')->end()
-                        ->arrayNode('people')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('resolver')->defaultNull()->info('Since 1.25: service id of a Nowo\\TaskBoardBundle\\Sync\\Hook\\SyncPersonResolverInterface (tenant scope, candidates, verified e-mail match). null = DefaultSyncPersonResolver (1.23 e-mail semantics, one directory per board).')->end()
-                                ->booleanNode('require_verified_email')->defaultTrue()->info('Since 1.25: an e-mail match is applied automatically only for a verified account; otherwise it is only suggested. false = 1.23 parity for users without isVerified().')->end()
-                                ->integerNode('reassign_batch_size')->defaultValue(500)->min(50)->max(2000)->end()
-                                // Since 1.27.0 (TB-SYNC-2): the People page / step.
-                                ->booleanNode('step')->defaultFalse()->info('Since 1.27.0: true = linking a board does not start the first import: the people are scanned and the manager lands on the People page ("Save and start the import"). false = the import starts at once (1.26); the People page is reachable from the connection page either way.')->end()
-                                ->scalarNode('inviter')->defaultNull()->info('Since 1.27.0: service id of a Nowo\\TaskBoardBundle\\Sync\\Hook\\PeopleInviterInterface ("Invite by e-mail" on the People page). null = no invite option.')->end()
-                                ->integerNode('page_size')->defaultValue(50)->min(10)->max(200)->info('Since 1.27.0: people per page of the People page.')->end()
-                                ->integerNode('candidate_limit')->defaultValue(200)->min(1)->max(1000)->info('Since 1.27.0: the most host users offered in each People select (SyncPersonResolverInterface::candidates()).')->end()
-                                ->floatNode('reapply_seconds')->defaultValue(10.0)->min(0.0)->max(60.0)->info('Since 1.27.0: seconds a People save (and the end of each sync) spends re-applying changed mappings to already imported tasks; the rest continues on the next save or sync.')->end()
-                                ->arrayNode('scan')
-                                    ->addDefaultsIfNotSet()
-                                    ->children()
-                                        ->integerNode('max_task_pages')->defaultValue(1)->min(1)->max(5)->end()
-                                        ->integerNode('max_comment_tasks')->defaultValue(10)->min(0)->max(50)->end()
-                                        ->booleanNode('time_window')->defaultTrue()->info('One 30-day time window in the pre-scan when the token is a workspace admin.')->end()
-                                    ->end()
-                                ->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('watchers')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->booleanNode('enabled')->defaultTrue()->end()
-                                ->integerNode('max_detail_calls_per_run')->defaultValue(500)->min(0)->info('Since 1.25: task detail requests (E5) a run may spend on rows that leave out watchers or checklists.')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('checklists')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->booleanNode('enabled')->defaultTrue()->end()
-                                ->integerNode('max_items_per_run')->defaultValue(2000)->min(0)->info('Since 1.25 (audit FP-L1): checklist subtasks a run may create; also counted against sync.limit_checker.')->end()
-                            ->end()
-                        ->end()
-                        ->arrayNode('time_entries')
-                            ->addDefaultsIfNotSet()
-                            ->children()
-                                ->scalarNode('sink')->defaultNull()->info('Since 1.25: service id of a Nowo\\TaskBoardBundle\\Sync\\Hook\\ImportedTimeEntrySinkInterface. null = the time_entries phase never runs (the bundle never writes time itself).')->end()
-                                ->integerNode('window_days')->defaultValue(30)->min(1)->max(30)->end()
-                                ->integerNode('max_assignees_per_call')->defaultValue(25)->min(1)->max(100)->end()
-                                ->integerNode('max_entries_per_window')->defaultValue(10_000)->min(10)->info('Above it the window is halved and read again (down to one hour).')->end()
-                                ->integerNode('max_windows_per_run')->defaultValue(200)->min(1)->end()
-                                ->integerNode('fallback_max_tasks_per_run')->defaultValue(500)->min(1)->end()
-                                ->integerNode('max_calls_per_run')->defaultValue(500)->min(1)->info('Since 1.25 (audit FP-L4): time-entry requests one slice may spend, splits included; the run then pauses and resumes from the last delivered split.')->end()
                             ->end()
                         ->end()
                     ->end()
                 ->end()
+                ->arrayNode('http')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('client')->defaultNull()->info('Service id of an untraced HttpClientInterface (e.g. through a proxy). null = the bundle\'s own client (never the profiler-traced http_client).')->end()
+                        ->floatNode('timeout')->defaultValue(10.0)->min(1.0)->end()
+                        ->floatNode('max_duration')->defaultValue(30.0)->min(1.0)->end()
+                        ->integerNode('max_response_bytes')->defaultValue(8_388_608)->min(1024)->end()
+                        ->integerNode('max_inline_wait')->defaultValue(30)->min(0)->info('Seconds a rate-limited call waits inline; a longer wait pauses the run (RateLimited, resumable).')->end()
+                    ->end()
+                ->end()
             ->end();
+    }
 
-        return $treeBuilder;
+    /**
+     * Adds the `attachments` to `node` settings.
+     */
+    private function addSyncAttachmentsAndFollowingSections(ArrayNodeDefinition $sync): void
+    {
+        $sync
+            ->children()
+                ->arrayNode('attachments')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->booleanNode('enabled')->defaultTrue()->end()
+                        ->integerNode('max_bytes')->defaultValue(26_214_400)->min(1)->end()
+                        ->integerNode('max_bytes_per_run')->defaultValue(1_073_741_824)->min(1)->end()
+                        ->integerNode('max_redirects')->defaultValue(3)->min(0)->max(10)->end()
+                        ->arrayNode('allowed_mime_types')
+                            ->scalarPrototype()->end()
+                            ->defaultValue(RemoteFileFetcher::DEFAULT_ALLOWED_MIME_TYPES)
+                            ->info('Sniffed types allowed; SVG, HTML and executables are always refused.')
+                        ->end()
+                    ->end()
+                ->end()
+                ->integerNode('max_tasks_per_run')->defaultValue(5000)->min(1)->end()
+                ->integerNode('max_pages_per_run')->defaultValue(1000)->min(1)
+                    ->info('Since 1.23 (audit EG-L2): the most task pages one run reads over all its slices; past it the run fails with response_too_large.')
+                ->end()
+                ->integerNode('max_comments_per_task')->defaultValue(500)->min(0)->end()
+                ->integerNode('max_description_length')->defaultValue(100_000)->min(1000)->end()
+                ->floatNode('max_archive_ratio')->defaultValue(0.5)->min(0.0)->max(1.0)->end()
+                ->integerNode('history_keep')->defaultValue(50)->min(1)->end()
+                ->integerNode('container_cache_ttl')->defaultValue(300)->min(0)->end()
+                ->integerNode('inline_slice_pages')->defaultValue(5)->min(1)->info('Task pages the inline runner writes per request.')->end()
+                ->arrayNode('progress')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->integerNode('poll_interval_ms')->defaultValue(2000)->min(500)->end()
+                    ->end()
+                ->end()
+                ->arrayNode('badge')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->booleanNode('connect_link')->defaultTrue()->info('Since 1.25.2: false = the connection badge shows nothing for an unlinked board (no "Connect provider" link, no empty strip); a linked board keeps its badge.')->end()
+                        ->enumNode('style')->values(['badge', 'strip'])->defaultValue('badge')->info('Since 2.5.0 (TB-16): badge = the inline badge (as before); strip = one UiKit notice strip (provider · list and the status on the left, a progress bar while a run is going, Refresh and Connection on the right). Applies to the bundle\'s own templates.connection_badge partial.')->end()
+                        ->booleanNode('progress')->defaultFalse()->info('Since 1.26.3: true = the bundle\'s own connection badge shows a determinate progress bar of the running run (polling board_connection_progress, managers only). The badge data (activeRunId, progressUrl, total, processed, pollInterval) is given either way, for a host template.')->end()
+                    ->end()
+                ->end()
+                // Since 1.25: the people directory, watchers, checklists, tracked time and source lookups.
+                ->booleanNode('import_archived')->defaultTrue()->info('Since 1.27.0 (TB-SYNC-3): archived provider tasks are read (ClickUp: a second pass with archived=true) and imported archived. false = 1.26 (an archived task is not created).')->end()
+            ->end();
+    }
+
+    /**
+     * Adds the `status_history` to `node` settings.
+     */
+    private function addSyncStatusHistoryAndFollowingSections(ArrayNodeDefinition $sync): void
+    {
+        $sync
+            ->children()
+                ->arrayNode('status_history')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->integerNode('max_calls_per_run')->defaultValue(200)->min(0)->info('Since 1.27.0 (TB-SYNC-3): "time in status" requests a run may spend on the tasks it creates or changes (0 = never).')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('comments')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->integerNode('max_reply_calls_per_run')->defaultValue(500)->min(0)->info('Since 1.27.0: requests for comment threads per run (0 = no replies). The threads past it are reported, and read when the comment or task next changes.')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('custom_fields')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->enumNode('mode')->values(['typed', 'text', 'both'])->defaultValue('typed')->info('Since 1.27.0 (TB-SYNC-3): typed = board-level field definitions and typed values per task (task panel, list search); text = the 1.23 "Fields (<provider>)" task document only; both.')->end()
+                        ->arrayNode('exclude_types')
+                            ->info('Since 1.27.0: field types never imported, e.g. [email, phone, text] to minimise personal data (RGPD Art. 5, 25). Default: none, everything is imported. What is stored of these types goes when the task is next written.')
+                            ->enumPrototype()->values(array_map(static fn (SyncFieldType $type): string => $type->value, SyncFieldType::cases()))->end()
+                        ->end()
+                    ->end()
+                ->end()
+                ->booleanNode('list_as_tag')->defaultFalse()->info('Since 1.25: tag "list:<name>" on tasks synced from a folder or space source.')->end()
+                ->arrayNode('lookup')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('cache_pool')->defaultNull()->info('Since 1.25: service id of a PSR-6 pool caching the list search (300 s, keyed by a hash of the connection reference, never the token). null = no cache.')->end()
+                    ->end()
+                ->end()
+                ->booleanNode('people_bulk_former')->defaultFalse()->info('Since 1.28.0: true = the People page offers "Mark every unmapped person as a former person" (mapping external, changeable person by person). false = no button, and the route answers 404.')->end()
+                ->booleanNode('include_multi_list_tasks')->defaultFalse()->info('Since 1.28.0: true = a ClickUp list source also reads the tasks added to it from other lists (include_timl). Each still appears once, with all its lists; a task belongs to one board.')->end()
+                ->booleanNode('full_sync_rereads_details')->defaultFalse()->info('Since 1.28.0: true = a full sync reads each task\'s detail again even when its date did not move (within sync.watchers.max_detail_calls_per_run). For when a new file does not move ClickUp\'s date_updated.')->end()
+                ->booleanNode('unmatched_columns_choice')->defaultFalse()->info('Since 1.28.0: true = the link page offers "Columns no status uses" (keep, or delete the empty ones after the first import). false = not drawn; a posted task_board_sync_link[unmatchedColumns] is accepted either way (a host drawing its own dialog).')->end()
+            ->end();
+    }
+
+    /**
+     * Adds the `people` to `checklists` settings.
+     */
+    private function addSyncPeopleToChecklistsSections(ArrayNodeDefinition $sync): void
+    {
+        $sync
+            ->children()
+                ->arrayNode('people')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('resolver')->defaultNull()->info('Since 1.25: service id of a Nowo\\TaskBoardBundle\\Sync\\Hook\\SyncPersonResolverInterface (tenant scope, candidates, verified e-mail match). null = DefaultSyncPersonResolver (1.23 e-mail semantics, one directory per board).')->end()
+                        ->booleanNode('require_verified_email')->defaultTrue()->info('Since 1.25: an e-mail match is applied automatically only for a verified account; otherwise it is only suggested. false = 1.23 parity for users without isVerified().')->end()
+                        ->integerNode('reassign_batch_size')->defaultValue(500)->min(50)->max(2000)->end()
+                        // Since 1.27.0 (TB-SYNC-2): the People page / step.
+                        ->booleanNode('step')->defaultFalse()->info('Since 1.27.0: true = linking a board does not start the first import: the people are scanned and the manager lands on the People page ("Save and start the import"). false = the import starts at once (1.26); the People page is reachable from the connection page either way.')->end()
+                        ->scalarNode('inviter')->defaultNull()->info('Since 1.27.0: service id of a Nowo\\TaskBoardBundle\\Sync\\Hook\\PeopleInviterInterface ("Invite by e-mail" on the People page). null = no invite option.')->end()
+                        ->integerNode('page_size')->defaultValue(50)->min(10)->max(200)->info('Since 1.27.0: people per page of the People page.')->end()
+                        ->integerNode('candidate_limit')->defaultValue(200)->min(1)->max(1000)->info('Since 1.27.0: the most host users offered in each People select (SyncPersonResolverInterface::candidates()).')->end()
+                        ->floatNode('reapply_seconds')->defaultValue(10.0)->min(0.0)->max(60.0)->info('Since 1.27.0: seconds a People save (and the end of each sync) spends re-applying changed mappings to already imported tasks; the rest continues on the next save or sync.')->end()
+                        ->arrayNode('scan')
+                            ->addDefaultsIfNotSet()
+                            ->children()
+                                ->integerNode('max_task_pages')->defaultValue(1)->min(1)->max(5)->end()
+                                ->integerNode('max_comment_tasks')->defaultValue(10)->min(0)->max(50)->end()
+                                ->booleanNode('time_window')->defaultTrue()->info('One 30-day time window in the pre-scan when the token is a workspace admin.')->end()
+                            ->end()
+                        ->end()
+                    ->end()
+                ->end()
+                ->arrayNode('watchers')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->booleanNode('enabled')->defaultTrue()->end()
+                        ->integerNode('max_detail_calls_per_run')->defaultValue(500)->min(0)->info('Since 1.25: task detail requests (E5) a run may spend on rows that leave out watchers or checklists.')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('checklists')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->booleanNode('enabled')->defaultTrue()->end()
+                        ->integerNode('max_items_per_run')->defaultValue(2000)->min(0)->info('Since 1.25 (audit FP-L1): checklist subtasks a run may create; also counted against sync.limit_checker.')->end()
+                    ->end()
+                ->end()
+            ->end();
+    }
+
+    /**
+     * Adds the `time_entries` section.
+     */
+    private function addSyncTimeEntriesSection(ArrayNodeDefinition $sync): void
+    {
+        $sync
+            ->children()
+                ->arrayNode('time_entries')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('sink')->defaultNull()->info('Since 1.25: service id of a Nowo\\TaskBoardBundle\\Sync\\Hook\\ImportedTimeEntrySinkInterface. null = the time_entries phase never runs (the bundle never writes time itself).')->end()
+                        ->integerNode('window_days')->defaultValue(30)->min(1)->max(30)->end()
+                        ->integerNode('max_assignees_per_call')->defaultValue(25)->min(1)->max(100)->end()
+                        ->integerNode('max_entries_per_window')->defaultValue(10_000)->min(10)->info('Above it the window is halved and read again (down to one hour).')->end()
+                        ->integerNode('max_windows_per_run')->defaultValue(200)->min(1)->end()
+                        ->integerNode('fallback_max_tasks_per_run')->defaultValue(500)->min(1)->end()
+                        ->integerNode('max_calls_per_run')->defaultValue(500)->min(1)->info('Since 1.25 (audit FP-L4): time-entry requests one slice may spend, splits included; the run then pauses and resumes from the last delivered split.')->end()
+                    ->end()
+                ->end()
+            ->end();
+    }
+
+    /**
+     * Adds the `sync` section; its large children have their own methods.
+     */
+    private function addSyncSection(ArrayNodeDefinition $rootNode): void
+    {
+        $sync = $rootNode->children()->arrayNode('sync');
+        $sync
+            ->addDefaultsIfNotSet()
+            ->info('Since 1.23: provider connections (ClickUp first). Opt-in: false = no routes, services, mapping or header change.');
+        $this->addSyncPart($sync);
+        $this->addSyncAttachmentsAndFollowingSections($sync);
+        $this->addSyncStatusHistoryAndFollowingSections($sync);
+        $this->addSyncPeopleToChecklistsSections($sync);
+        $this->addSyncTimeEntriesSection($sync);
     }
 }

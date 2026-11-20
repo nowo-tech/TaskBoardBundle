@@ -188,7 +188,7 @@ final readonly class SyncTaskWriter
         private ?TaskReparenterInterface $reparenter = null,
         // Since 2.21.1 (REQ-DI-001): the time a task was archived remotely.
         private ClockInterface $clock = new NativeClock(),
-        // Since 2.26.1 (audit WA-1): told when the TaskBoard rows of a dry run cannot be detached safely.
+        // Since 2.27.0 (audit WA-1): told when the TaskBoard rows of a dry run cannot be detached safely.
         private ?LoggerInterface $logger = null,
     ) {
     }
@@ -311,7 +311,7 @@ final readonly class SyncTaskWriter
         $level      = $connection->getTransactionNestingLevel();
         $connection->beginTransaction();
         $this->events?->begin();
-        // Since 2.26.1 (audit WA-2): a dry run records the application rows the page writes, to forget them after the rollback.
+        // Since 2.27.0 (audit WA-2): a dry run records the application rows the page writes, to forget them after the rollback.
         $hostRows = $ctx->options->dryRun ? RolledBackHostRows::start($this->entityManager) : null;
         try {
             $columns   = $this->columns($ctx, $plan);
@@ -346,7 +346,7 @@ final readonly class SyncTaskWriter
                 $this->events?->rollBack();
                 $ctx->taskEvents = [];
                 $ctx->pending    = [];
-                // Since 2.26.1 (REQ-RUNTIME-003 rule 2, audits WA-1/WA-2): the application rows the page wrote are forgotten,
+                // Since 2.27.0 (REQ-RUNTIME-003 rule 2, audits WA-1/WA-2): the application rows the page wrote are forgotten,
                 // the TaskBoard rows an application entity still holds are read again, and the others leave the manager.
                 $hostRows?->forget();
                 BundleEntityDetacher::detach($this->entityManager, $this->logger, refreshKept: true);
