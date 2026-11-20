@@ -10,6 +10,7 @@ use Nowo\TaskBoardBundle\Number\Entity\TaskNumberCounter;
 use Nowo\TaskBoardBundle\Number\Entity\TaskNumberEntry;
 use Nowo\TaskBoardBundle\Number\TaskNumberBackfiller;
 use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\AppUser;
+use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\HostProject;
 use Nowo\TaskBoardBundle\Tests\Support\PrivateEntityManagerReplay;
 
 use function sprintf;
@@ -58,5 +59,35 @@ final class BackfillHostEntityManagerTest extends TaskNumberTestCase
         self::assertSame('Edited by the application', $db->fetchOne('SELECT display_name FROM ' . $users . ' WHERE email = ?', ['bystander@example.com']));
         self::assertSame(1, (int) $db->fetchOne('SELECT COUNT(*) FROM ' . $users . ' WHERE email = ?', ['added@example.com']));
         self::assertSame(1, $host->find(Task::class, $task->getId())?->getNumber());
+    }
+
+    /** Audit WA-1, probe G: a task an application entity references stays managed, and the application's flush works. */
+    public function testATaskAnApplicationEntityReferencesStaysManaged(): void
+    {
+        if (PrivateEntityManagerReplay::enabled()) {
+            self::markTestSkipped('The private-manager replay turns the option on.');
+        }
+        $board = $this->board('One', tenantKey: 'acme');
+        $task  = $this->task($board, 'old');
+        $db    = $this->em->getConnection();
+        $db->executeStatement(sprintf('UPDATE %s SET number = NULL WHERE id = ?', $this->em->getClassMetadata(Task::class)->getTableName()), [$task->getId()]);
+        $db->executeStatement('DELETE FROM ' . TaskNumberEntry::TABLE);
+        $db->executeStatement('DELETE FROM ' . TaskNumberCounter::TABLE);
+        $project       = new HostProject();
+        $project->task = $task;
+        $this->em->persist($project);
+        $this->em->flush();
+
+        $backfiller = self::getContainer()->get(TaskNumberBackfiller::class);
+        self::assertInstanceOf(TaskNumberBackfiller::class, $backfiller);
+        self::assertSame(1, $backfiller->runBatch(10));
+
+        self::assertTrue($this->em->contains($task), 'the referenced task stays managed');
+        self::assertTrue($this->em->contains($board), 'with its board');
+        $project->name = 'changed after the batch';
+        $this->em->flush();
+        self::assertSame('changed after the batch', $db->fetchOne('SELECT name FROM app_host_project WHERE id = ?', [$project->id]));
+        $this->em->refresh($task);
+        self::assertSame(1, $task->getNumber());
     }
 }

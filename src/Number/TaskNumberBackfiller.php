@@ -9,6 +9,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Doctrine\BundleEntityDetacher;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Number\Entity\TaskNumberEntry;
+use Psr\Log\LoggerInterface;
 use SortDirection;
 
 use function sprintf;
@@ -24,6 +25,8 @@ final readonly class TaskNumberBackfiller
         private EntityManagerInterface $entityManager,
         private TaskNumberScope $scope,
         private TaskNumberReserver $reserver,
+        // Since 2.26.1 (audit WA-1): told when the loaded tasks cannot be detached safely.
+        private ?LoggerInterface $logger = null,
     ) {
     }
 
@@ -85,9 +88,10 @@ final readonly class TaskNumberBackfiller
             return $done;
         });
 
-        // The tasks loaded above are stale now, and a long run must not keep them. Since 2.26.1 (REQ-RUNTIME-003 rule 2):
-        // only the TaskBoard rows leave the manager, never the application's entities.
-        BundleEntityDetacher::detach($this->entityManager);
+        // The tasks loaded above are stale now, and a long run must not keep them. Since 2.26.1 (REQ-RUNTIME-003 rule 2,
+        // audit WA-1): only the TaskBoard rows no application entity holds leave the manager, never the application's
+        // entities. A task an application entity holds keeps the number it had in memory (load it again to read it).
+        BundleEntityDetacher::detach($this->entityManager, $this->logger);
 
         return $done;
     }

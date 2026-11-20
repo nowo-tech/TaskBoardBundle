@@ -117,23 +117,44 @@ With `database.private_entity_manager: true` the sync, the import and the backfi
 manager, which they may clear: the application's manager is never flushed, cleared or reset.
 
 Without it (the 2.x default, deprecated) they write through `database.entity_manager`, which is the application's.
-Since 2.26.1 (REQ-RUNTIME-003 rule 2) a long run keeps its memory flat by detaching only the TaskBoard rows
-(`BundleEntityDetacher`): after each sync page, after a dry-run rollback and after each backfill batch. The
-application's entities stay managed and keep their pending changes; the manager is never cleared, closed or reset. A
-manager that a failed flush closed is replaced (`RecoveringFlusher`), as before. The import detaches its own batch
+Since 2.26.1 (REQ-RUNTIME-003 rule 2) a long run keeps its memory flat with `BundleEntityDetacher`, after each sync
+page, after a dry-run rollback and after each backfill batch, and never clears, closes or resets the manager:
+
+- The application's entities stay managed, with their pending changes. This includes the application entities the sync
+  loaded itself, such as assignee users.
+- A TaskBoard row that a managed application entity references stays managed: a to-one value, or an element of an
+  initialized collection. So does every TaskBoard row it reaches through initialized TaskBoard associations: a kept
+  task keeps its board and its column. The sync then finds the same instances again.
+- Every other TaskBoard row is detached. If the rows to keep cannot be worked out, nothing is detached for that batch
+  and a warning is logged.
+- After a dry-run rollback, the kept TaskBoard rows are read again from the database. Application rows that the
+  rolled-back page inserted (for example from an application `onFlush` listener) are detached, and the ones it updated
+  are read again.
+
+A manager that a failed flush closed is replaced (`RecoveringFlusher`), as before. The import detaches its own batch
 classes only (1.22.2).
 
 ## Residual risks
 
-Accepted for 2.x; each one is a contention issue with no leak or permission impact.
+Accepted for 2.x. None of them leaks data or bypasses a permission.
 
 - **Shared manager flushes the application's changes.** Without the private manager, a TaskBoard flush (sync, import,
   any write) also writes what the application left pending in that manager. This is the deprecated 2.14 behaviour;
   the private manager becomes the only mode in 3.0 (REQ-ARCH-001 rule 6). A dry run commits the application's pending
   changes too, with the run row, before its pages are rolled back.
-- **Application objects that hold TaskBoard rows.** After a sync page or a backfill batch, a TaskBoard row the
-  application still holds (in a variable or through one of its own entities) is detached. Load it again by id before
-  changing it.
+- **TaskBoard rows the application holds only in a variable.** After a sync page or a backfill batch, a TaskBoard row
+  that no managed application entity references is detached, even if the application holds it in a variable. Load it
+  again by id before changing it.
+- **The application's pending changes to TaskBoard rows.** "Pending changes are kept" applies to the application's own
+  entities only. The backfill writes with plain SQL and never flushes, so a change the application left unflushed on a
+  detached TaskBoard row, or a new TaskBoard row it persisted without flushing, is dropped, as it was in 2.26.0. A task
+  that stays managed (an application entity references it) keeps the number it had in memory: load it again to read the
+  new number.
+- **More rows stay in memory.** Kept TaskBoard rows (and everything they reach through initialized collections) and
+  the application entities the sync loaded stay in the manager for the whole run.
+- **Dry run: application collections.** After a dry-run rollback, the rows the page wrote are forgotten in the manager
+  TaskBoard writes through. An application entity that holds one of them in a collection it has already loaded (and that
+  the page did not update) may still list it until it is loaded again.
 - **Local edit during a sync page.** A sync page does not lock the task rows it updates. A local edit of the same field
   committed between the page's read and its commit is overwritten by the provider's value (last writer wins on that
   field only; other fields keep the local edit). The window is one page.
@@ -153,6 +174,7 @@ Accepted for 2.x; each one is a contention issue with no leak or permission impa
 | `tests/Functional/Api/ApiLockOrderTest.php`, `ApiLockConflictTest.php` | fixed lock order, conflict answers | all |
 | `tests/Functional/Question/TaskQuestionWorkerTest.php` | one kept-alive kernel, a forced failure, flat memory | all |
 | `tests/Functional/Sync/SyncHostEntityManagerTest.php`, `Number/BackfillHostEntityManagerTest.php` | a sync, a dry run and a backfill batch on the application's manager keep its entities managed and its pending changes | all |
+| `tests/Functional/Sync/SyncHostReferencesTest.php`, `Number/BackfillHostEntityManagerTest.php` | application entities that reference a board or a task (also with cascade persist) across a one-page and a two-page sync, a dry run and a backfill batch; application rows an `onFlush` listener wrote in a rolled-back dry-run page | SQLite, MySQL, MariaDB, PostgreSQL |
 | `tests/Functional/Sync/SyncPrivateEntityManagerHostTest.php` | a sync and a dry run with the private manager leave the application's manager untouched | all |
 | `tests/Functional/Sync/SyncServiceTest.php`, `Number/TaskNumberConcurrencyTest.php` | the run lock (`busy`), concurrent number reservations | all; two processes on a server |
 

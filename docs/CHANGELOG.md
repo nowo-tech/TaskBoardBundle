@@ -127,10 +127,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A remote sync and the number backfill no longer clear the application's entity manager** (REQ-RUNTIME-003 rule 2).
   Without `database.private_entity_manager`, they write through `database.entity_manager`, which is the application's
   manager. Up to 2.26.0 they called `clear()` on it after each sync page, after a dry-run rollback and after each
-  backfill batch, which detached every application entity and dropped the changes the application had left pending. They
-  now detach only the TaskBoard rows (new internal `Doctrine\BundleEntityDetacher`). The private manager is still cleared
-  as before (it is the bundle's own). A TaskBoard row the application holds is still detached after a page: load it
-  again by id.
+  backfill batch. That detached every application entity, so the application's later edits to them were silently not
+  written, and it dropped the changes the application had left pending on them.
+  - They now detach only the TaskBoard rows that no managed application entity references (new internal
+    `Doctrine\BundleEntityDetacher`). A TaskBoard row an application entity holds stays managed, together with the
+    TaskBoard rows it reaches (a kept task keeps its board and column), so the run finishes and the application's next
+    flush works. If those rows cannot be worked out, nothing is detached for that batch and a warning is logged.
+  - After a dry-run rollback, the kept TaskBoard rows are read again. Application rows the rolled-back page wrote (for
+    example from an application `onFlush` listener) leave the manager when they were inserted, or are read again when
+    they were updated.
+  - The application entities the sync loads (assignee users, for example) now stay in the manager after a page.
+  - The private manager is still cleared as before (it is the bundle's own).
+  - Not changed: changes the application left pending on **TaskBoard** rows are still dropped by the backfill and by a
+    sync page, unless an application entity references those rows. A TaskBoard row that no application entity references
+    is still detached after a page: load it again by id.
 
 ### Documentation
 

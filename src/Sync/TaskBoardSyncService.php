@@ -645,15 +645,16 @@ final readonly class TaskBoardSyncService
     }
 
     /**
-     * Detaches the TaskBoard rows (memory stays flat; since 2.26.1 the application's entities stay managed, REQ-RUNTIME-003
-     * rule 2) and loads the run's board, connection and actor again.
+     * Detaches the TaskBoard rows no application entity holds (memory stays flat; since 2.26.1 the application's entities
+     * and the TaskBoard rows they reference stay managed, REQ-RUNTIME-003 rule 2, audit WA-1) and loads the run's board,
+     * connection and actor again (the same instances when they stayed managed).
      */
     private function reload(SyncRunContext $ctx): void
     {
         $boardId      = $ctx->board->getId();
         $connectionId = $ctx->connection->getId();
         $actor        = $this->identity($ctx->actor);
-        BundleEntityDetacher::detach($this->entityManager);
+        BundleEntityDetacher::detach($this->entityManager, $this->logger);
         $board      = $this->entityManager->find(TaskBoard::class, $boardId);
         $connection = $this->entityManager->find(TaskBoardConnection::class, $connectionId);
         if (!$board instanceof TaskBoard || !$connection instanceof TaskBoardConnection) {
