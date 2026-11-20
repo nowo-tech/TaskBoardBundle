@@ -1,37 +1,17 @@
-{#- REQ-DEMO-014: the demo shell is UiKit's admin layout with UiKit's default theme (nowo-ui.css from the bundle's own
-    asset package, no CSS framework, no CDN, inline SVG icons). The TaskBoard pages render in it too
-    (nowo_ui_kit.layouts.admin). -#}
-{% extends '@NowoUiKit/layout/admin.html.twig' %}
+{#- REQ-DEMO-014: the demo runs inside UiKit's shared demo platform shell (@NowoUiKit/demo_platform/layout.html.twig):
+    the same top bar, aside, content width, theme and footer as every other nowo-tech bundle demo. This file only
+    declares the demo (nowo_ui_demo_platform); the TaskBoard pages render through it too (nowo_ui_kit.layouts).
+    Focus mode (UiKit 2.55, theme.focus_mode.enabled) is the shell's own. -#}
+{% extends '@NowoUiKit/demo_platform/layout.html.twig' %}
+{% set nowo_ui_demo_platform = {
+    bundle: 'Task Board',
+    home_route: 'nowo_task_board_index',
+    repository: 'https://github.com/nowo-tech/TaskBoardBundle',
+    translation_domain: false,
+    locales: [],
+    nav: [
+        {label: 'Boards', route: 'nowo_task_board_index', active: ['nowo_task_board*']},
+    ],
+} %}
 
-{% block nowo_ui_document_title %}{% block title %}Task Board Demo{% endblock %}{% endblock %}
-
-{#- Since TaskBoard 2.22.0: the admin page as the focus mode shell root (UiKit 2.55): its header hides in focus mode, the
-    focus bar keeps the Exit button. -#}
-{% block nowo_ui_body %}
-    {% set _bundle = nowo_ui_bundle|default(null) %}
-    <div class="{{ nowo_ui_class('page', _bundle) }} nowo-ui-page--admin" data-nowo-ui-shell data-nowo-ui-focus-regions="header" data-nowo-ui-focus-shortcut="F" data-nowo-ui-focus-fullscreen="false" data-testid="demo-shell">
-        {{ block('nowo_ui_navigation') }}
-        <main class="{{ nowo_ui_class('content', _bundle) }}" id="nowo-ui-content"{% if _bundle %} data-nowo-ui-bundle="{{ _bundle }}"{% endif %}>
-            {{ include(nowo_ui_partial('focus_mode_bar', _bundle), {fullscreen: false, bundle: _bundle}) }}
-            {{ block('nowo_ui_page_header') }}
-            {% block nowo_ui_flashes %}{{ include(nowo_ui_partial('flashes', _bundle), {bundle: _bundle}) }}{% endblock %}
-            {{ block('nowo_ui_content') }}
-        </main>
-        {{ block('nowo_ui_modals') }}
-    </div>
-{% endblock %}
-
-{% block nowo_ui_navigation %}
-    {% set _route = app.request.attributes.get('_route')|default('') %}
-    <header class="nowo-ui-header" data-testid="demo-masthead">
-        <a class="nowo-ui-brand" href="{{ path('nowo_task_board_index') }}">Task Board Bundle Demo</a>
-        <nav class="nowo-ui-menu" aria-label="Task Board Bundle">
-            <a class="nowo-ui-link" href="{{ path('nowo_task_board_index') }}"{% if _route starts with 'nowo_task_board' %} aria-current="page"{% endif %}>Boards</a>
-        </nav>
-        <div class="nowo-ui-header__end">
-            {{ include('@NowoUiKitBundle/partials/_theme_toggle.html.twig', { compact: true }, false) }}
-        </div>
-    </header>
-{% endblock %}
-
-{% block nowo_ui_content %}{% block body %}{% endblock %}{% endblock %}
+{% block nowo_ui_document_title %}{% block title %}Task Board Demo{% endblock %} — Symfony 8{% endblock %}

@@ -5,10 +5,9 @@ import { resolve } from 'node:path';
 /** REQ-DEMO-013: README screenshots (captured as PNG, converted to WebP by scripts/to-webp.mjs). */
 const outDir = process.env.SCREENSHOT_DIR ? resolve(process.env.SCREENSHOT_DIR) : resolve(__dirname, '../../../../docs/images/demo');
 
-/** Wait until the Symfony Web Debug Toolbar has loaded, then hide it so it does not cover the page. */
+/** The Symfony Web Debug Toolbar is not part of the demo platform: hide it so it never appears in a capture. */
 async function settle(page: Page): Promise<void> {
-  await page.waitForSelector('.sf-toolbar', { state: 'visible', timeout: 20000 }).catch(() => undefined);
-  await page.evaluate(() => document.querySelectorAll('.sf-toolbar').forEach((el) => ((el as HTMLElement).style.display = 'none')));
+  await page.addStyleTag({ content: '.sf-toolbar,.sf-minitoolbar,[id^="sfwdt"]{display:none!important}' });
   await page.waitForTimeout(300);
 }
 
