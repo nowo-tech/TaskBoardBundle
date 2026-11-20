@@ -2047,7 +2047,7 @@ the viewer (`getSubject()`, `getSubjectId()`), the group (`getGroup()`: `tasks` 
 
 ### SearchKit groups: tasks and boards
 
-With `nowo-tech/search-kit-bundle` 1.9 or later installed (PHP 8.3 or later; `composer require nowo-tech/search-kit-bundle`),
+With `nowo-tech/search-kit-bundle` installed (1.9 or later; suggested and tested ^1.11, which reports a bounded search as partial; PHP 8.3 or later; `composer require nowo-tech/search-kit-bundle`),
 the bundle registers two SearchKit groups, built on SearchKit's `EntitySearchDefinition`:
 
 | Group | Searches | Row |
@@ -2066,8 +2066,9 @@ There is no "see all" link, because no list page searches across boards by text.
 decides itself is filtered in SQL (the boards the viewer may open, archived tasks, the scope); a host's `TASK_ACCESS_CHECK`
 veto runs in PHP on the candidates, so vetoed tasks still take slots of SearchKit's candidate window
 (`search_kit.max_candidates`) and can make its total a lower bound. SearchKit computes the total within its
-candidate window; a scope that stopped at `max_boards` / `max_scanned_boards` is not visible to it, so its total counts the
-boards that were read (SearchKit marks a full window inexact on its own).
+candidate window. With SearchKit 1.11 or later, a scope that stopped at `max_boards` / `max_scanned_boards` (or at the team
+cap) marks the search partial (`SearchCandidateContext::markPartial()`), so the group's total is shown as inexact; with
+1.9 or 1.10 its total counts only the boards that were read.
 
 Options: [CONFIGURATION](CONFIGURATION.md#header-search-and-searchkit-groups-since-225).
 

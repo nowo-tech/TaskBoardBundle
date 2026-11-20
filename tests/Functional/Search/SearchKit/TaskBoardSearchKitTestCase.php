@@ -123,7 +123,17 @@ abstract class TaskBoardSearchKitTestCase extends EntitySearchProviderTestCase
         if (!class_exists(QueryCounter::class)) {
             self::markTestSkipped('nowo-tech/search-kit-bundle >= 1.9 is not installed (PHP >= 8.3).');
         }
-        $this->bootKernel();
+        $this->bootKernel($this->kernelConfig());
+    }
+
+    /**
+     * The `nowo_task_board` options of this contract's kernel, merged over the tenancy and scoping defaults.
+     *
+     * @return array<string, mixed>
+     */
+    protected function kernelConfig(): array
+    {
+        return [];
     }
 
     protected function tearDown(): void

@@ -20,6 +20,22 @@ final class BoardSearchContractTest extends TaskBoardSearchKitTestCase
         return $this->definitionService(BoardSearchDefinition::class);
     }
 
+    /**
+     * SearchKit >= 1.11: more matching boards than `search_kit.max_boards` (200) pass the scope's bound: the search is
+     * partial (markPartial()). The scope only reads boards whose name matches, so the other contract tests never reach it.
+     */
+    protected function seedBeyondTheBound(int|string $tenant, string $text): bool
+    {
+        for ($i = 0; $i <= 200; ++$i) {
+            $board = new TaskBoard($text . 'b' . $i, 'bound-' . $i, $this->users[self::VIEWER_A]);
+            $board->setTenantKey((string) $tenant);
+            $this->em->persist($board);
+        }
+        $this->em->flush();
+
+        return true;
+    }
+
     protected function seed(int|string $tenant, string $text): int|string
     {
         return $this->board($tenant, $text)->getId();

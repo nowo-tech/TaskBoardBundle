@@ -109,7 +109,7 @@
         }
     },
     "suggest": {
-        "nowo-tech/search-kit-bundle": "Since 2.25: the header search groups tasks and boards (SearchKit >= 1.9, PHP >= 8.3).",
+        "nowo-tech/search-kit-bundle": "Since 2.25: the header search groups tasks and boards (SearchKit ^1.11, PHP >= 8.3).",
         "nowo-tech/time-track-bundle": "Optional time tracking: task provider, team context, and automatic total_time_seconds aggregation.",
         "nowo-tech/tiptap-editor-bundle": "Optional rich-text description editor (TiptapEditorType).",
         "nowo-tech/tag-input-bundle": "Optional Tagify tags field (TagType).",

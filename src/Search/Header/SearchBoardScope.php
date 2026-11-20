@@ -21,6 +21,7 @@ use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
+use function array_chunk;
 use function array_intersect;
 use function array_map;
 use function array_merge;
@@ -51,6 +52,13 @@ final readonly class SearchBoardScope
 
     /** The scope prefix of one tenant (`tenant:<tenant key>`). */
     public const SCOPE_TENANT = 'tenant';
+
+    /**
+     * Since 2.25.1 (audit VL2-1): the most team ids of the viewer the default rule puts in SQL (in lists of
+     * {@see ExactKey::CHUNK}). When the rule filters in SQL (no BOARD_ACCESS_CHECK listener), the boards of further teams are
+     * left out and the search is partial.
+     */
+    public const MAX_TEAMS = 10 * ExactKey::CHUNK;
 
     /** Upper bound of `search_kit.max_boards` (one `IN (...)` list of {@see ExactKey::CHUNK} ids). */
     public const MAX_BOARDS = ExactKey::CHUNK;
@@ -135,7 +143,12 @@ final readonly class SearchBoardScope
             return new SearchableBoards([]);
         }
 
-        $reach    = $this->accessChecker->defaultBoardReach($user, $viewer->manageRoles);
+        $reach = $this->accessChecker->defaultBoardReach($user, $viewer->manageRoles);
+        // Audit VL2-1: a team list past MAX_TEAMS cannot be applied whole when the default rule filters in SQL.
+        $teamsCut = !$reach->all && !$reach->listenersMayGrant && count($reach->teamIds) > self::MAX_TEAMS;
+        if ($teamsCut) {
+            $this->logger->warning('TaskBoard header search team list cut', ['bundle' => 'nowo_task_board', 'teams' => count($reach->teamIds), 'kept' => self::MAX_TEAMS]);
+        }
         $viewable = $this->accessChecker->boardViewDecider($user, $viewer->manageRoles, $reach);
         $limit    = max(1, min($this->maxBoards, self::MAX_BOARDS));
         $scanned  = 0;
@@ -179,7 +192,7 @@ final readonly class SearchBoardScope
             $this->logger->warning('TaskBoard header search scope capped', ['bundle' => 'nowo_task_board', 'max_boards' => $limit, 'max_scanned_boards' => $bound, 'scanned' => $scanned]);
         }
 
-        return new SearchableBoards($found, $more);
+        return new SearchableBoards($found, $more || $teamsCut);
     }
 
     /**
@@ -297,9 +310,11 @@ final readonly class SearchBoardScope
             $parts[] = ($this->users instanceof TaskBoardUsers ? $this->users->identity('b.creator') : 'IDENTITY(b.creator)') . ' = :searchViewer';
             $qb->setParameter('searchViewer', $creator);
         }
-        if ($reach->teamIds !== []) {
-            $parts[] = 'IDENTITY(b.team) IN (:searchTeams)';
-            $qb->setParameter('searchTeams', array_slice($reach->teamIds, 0, ExactKey::CHUNK));
+        // Audit VL2-1: every team, in IN lists of at most ExactKey::CHUNK ids each (one bound parameter per list), up to
+        // MAX_TEAMS; boards() reports a search past that cap as partial.
+        foreach (array_chunk(array_slice($reach->teamIds, 0, self::MAX_TEAMS), ExactKey::CHUNK) as $index => $teamIds) {
+            $parts[] = "IDENTITY(b.team) IN (:searchTeams{$index})";
+            $qb->setParameter('searchTeams' . $index, $teamIds);
         }
 
         return $parts === [] ? '1 = 0' : '(' . implode(' OR ', $parts) . ')';
