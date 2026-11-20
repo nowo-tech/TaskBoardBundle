@@ -16,6 +16,7 @@ use Nowo\TaskBoardBundle\Question\TaskQuestionState;
 use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
+use SortDirection;
 
 use function array_values;
 
@@ -96,17 +97,17 @@ class TaskQuestion
 
     /** @var Collection<int, TaskQuestionOption> */
     #[ORM\OneToMany(targetEntity: TaskQuestionOption::class, mappedBy: 'question', cascade: ['persist'])]
-    #[ORM\OrderBy(['position' => 'ASC'])]
+    #[ORM\OrderBy(['position' => SortDirection::Ascending])]
     private Collection $options;
 
     /** @var Collection<int, TaskQuestionRecipient> */
     #[ORM\OneToMany(targetEntity: TaskQuestionRecipient::class, mappedBy: 'question', cascade: ['persist'])]
-    #[ORM\OrderBy(['position' => 'ASC'])]
+    #[ORM\OrderBy(['position' => SortDirection::Ascending])]
     private Collection $recipients;
 
     /** @var Collection<int, TaskQuestionAnswer> */
     #[ORM\OneToMany(targetEntity: TaskQuestionAnswer::class, mappedBy: 'question', cascade: ['persist'])]
-    #[ORM\OrderBy(['sequence' => 'ASC'])]
+    #[ORM\OrderBy(['sequence' => SortDirection::Ascending])]
     private Collection $answers;
 
     public function __construct(
