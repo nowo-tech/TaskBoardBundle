@@ -21,6 +21,7 @@ use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncItem;
 use Nowo\TaskBoardBundle\Sync\People\SyncUser;
 use Nowo\TaskBoardBundle\User\TaskBoardUsers;
 use Psr\Clock\ClockInterface;
+use SortDirection;
 use Symfony\Component\Clock\NativeClock;
 
 use function array_filter;
@@ -415,7 +416,7 @@ final readonly class TaskRecurrenceManager
         $rows = $this->entityManager->createQueryBuilder()
             ->select('o')->from(TaskOccurrence::class, 'o')
             ->where('o.recurrence = :series')->andWhere('o.task IS NOT NULL')
-            ->setParameter('series', $series)->orderBy('o.createdAt', 'DESC')->setMaxResults(1)
+            ->setParameter('series', $series)->orderBy('o.createdAt', SortDirection::Descending)->setMaxResults(1)
             ->getQuery()->getResult();
         $row = $rows[0] ?? null;
 
@@ -516,7 +517,7 @@ final readonly class TaskRecurrenceManager
             ->select('o.occurrenceKey AS k')->from(TaskOccurrence::class, 'o')
             ->where('o.recurrence = :series')->andWhere('o.occurrenceKey LIKE :prefix')
             ->setParameter('series', $series)->setParameter('prefix', 'date:%')
-            ->orderBy('o.occurrenceKey', 'DESC')->setMaxResults(1)
+            ->orderBy('o.occurrenceKey', SortDirection::Descending)->setMaxResults(1)
             ->getQuery()->getArrayResult();
 
         return isset($rows[0]['k']) ? new DateTimeImmutable(substr((string) $rows[0]['k'], 5)) : $series->rule()->anchor->modify('-1 day');

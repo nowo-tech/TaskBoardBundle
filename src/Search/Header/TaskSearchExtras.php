@@ -10,6 +10,7 @@ use Nowo\TaskBoardBundle\Entity\TaskMember;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\User\TaskBoardUsers;
+use SortDirection;
 
 use function array_map;
 use function array_slice;
@@ -60,8 +61,8 @@ final readonly class TaskSearchExtras
             ->andWhere('m.memberRole = :role')
             ->setParameter('tasks', array_map(static fn (Task $task): string => $task->getId(), $tasks))
             ->setParameter('role', TaskMemberRole::Assignee)
-            ->orderBy('m.createdAt', 'ASC')
-            ->addOrderBy('m.id', 'ASC');
+            ->orderBy('m.createdAt', SortDirection::Ascending)
+            ->addOrderBy('m.id', SortDirection::Ascending);
         if ($this->users instanceof TaskBoardUsers) {
             $this->users->eager($qb, 'm.user', 'searchAssignee');
         } else {

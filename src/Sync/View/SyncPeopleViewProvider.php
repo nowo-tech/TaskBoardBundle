@@ -20,6 +20,7 @@ use Nowo\TaskBoardBundle\Sync\Hook\SyncPersonResolverInterface;
 use Nowo\TaskBoardBundle\Sync\People\PersonToken;
 use Nowo\TaskBoardBundle\Sync\SyncTaskDetailsWriter;
 use Nowo\TaskBoardBundle\User\TaskBoardUsers;
+use SortDirection;
 use Symfony\Contracts\Service\ResetInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
@@ -203,7 +204,7 @@ final class SyncPeopleViewProvider implements ResetInterface
         $item = $this->items[$key] ??= $this->entityManager->createQueryBuilder()
             ->select('i')->from(TaskSyncItem::class, 'i')
             ->where('i.task = :task OR i.detachedTask = :task')->setParameter('task', $task)
-            ->orderBy('i.remoteUpdatedAt', 'DESC')->setMaxResults(1)
+            ->orderBy('i.remoteUpdatedAt', SortDirection::Descending)->setMaxResults(1)
             ->getQuery()->getOneOrNullResult() ?? false;
 
         return $item instanceof TaskSyncItem ? $item : null;

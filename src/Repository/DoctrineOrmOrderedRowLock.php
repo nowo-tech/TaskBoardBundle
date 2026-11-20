@@ -19,6 +19,7 @@ use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Service\OrderedRowLockInterface;
 use Nowo\TaskBoardBundle\Tree\TaskTreeRefusedException;
+use SortDirection;
 use Throwable;
 
 use function array_chunk;
@@ -90,7 +91,7 @@ final readonly class DoctrineOrmOrderedRowLock implements OrderedRowLockInterfac
         $qb = $this->entityManager->createQueryBuilder()
             ->select('t.id AS id', 't.position AS position', 'IDENTITY(t.column) AS col', 't.revision AS revision', 't.archivedAt AS archivedAt')
             ->from(Task::class, 't')
-            ->orderBy('t.id', 'ASC');
+            ->orderBy('t.id', SortDirection::Ascending);
         if (!$withArchived) {
             $qb->andWhere('t.archivedAt IS NULL');
         }

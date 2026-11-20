@@ -21,6 +21,7 @@ use Nowo\TaskBoardBundle\Search\Header\TaskReference;
 use Nowo\TaskBoardBundle\Search\Header\TaskSearchExtras;
 use Nowo\TaskBoardBundle\Search\Header\TaskTextMatch;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
+use SortDirection;
 
 use function array_filter;
 use function array_values;
@@ -92,8 +93,8 @@ final class TaskSearchDefinition extends TaskBoardSearchDefinition
             // Since 2.26.0: the column of each row (its status badge) in the same query.
             ->leftJoin('t.column', 'searchColumn')
             ->where('t.archivedAt IS NULL')
-            ->orderBy('t.updatedAt', 'DESC')
-            ->addOrderBy('t.id', 'ASC');
+            ->orderBy('t.updatedAt', SortDirection::Descending)
+            ->addOrderBy('t.id', SortDirection::Ascending);
         $viewer = $this->viewer($query);
         $scope  = $viewer instanceof SearchViewer ? $this->scope->boards($viewer, SearchScopeEvent::GROUP_TASKS) : null;
         if ($scope?->capped === true) {
