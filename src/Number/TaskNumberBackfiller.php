@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\Number;
 
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
+use Nowo\TaskBoardBundle\Doctrine\BundleEntityDetacher;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Number\Entity\TaskNumberEntry;
 use SortDirection;
@@ -84,8 +85,9 @@ final readonly class TaskNumberBackfiller
             return $done;
         });
 
-        // The tasks loaded above are stale now, and a long run must not keep them.
-        $this->entityManager->clear();
+        // The tasks loaded above are stale now, and a long run must not keep them. Since 2.26.1 (REQ-RUNTIME-003 rule 2):
+        // only the TaskBoard rows leave the manager, never the application's entities.
+        BundleEntityDetacher::detach($this->entityManager);
 
         return $done;
     }

@@ -13,6 +13,9 @@ and which tests prove it on which databases. Worker mode (kernel not reset) is c
 - [Questions on tasks (2.23)](#questions-on-tasks-223)
 - [Task API writes](#task-api-writes)
 - [Lock conflicts and replays](#lock-conflicts-and-replays)
+- [Remote sync, imports and the number backfill](#remote-sync-imports-and-the-number-backfill)
+- [The application's entity manager](#the-applications-entity-manager)
+- [Residual risks](#residual-risks)
 - [Tests](#tests)
 
 ## Databases tested
@@ -94,6 +97,52 @@ ledger sees only DBAL writes on DoctrineBundle connections (SU2-I2). A write uni
 writes the principal's user as the manager manages it now (2.22.0); a stored attachment is reused only when its store
 committed (SU2-I1).
 
+## Remote sync, imports and the number backfill
+
+| Write | Transaction | Concurrency control | Loser |
+|---|---|---|---|
+| Remote sync run ([sync.md](sync.md)) | one transaction per page of tasks, at the connection's current level (a savepoint inside a host's transaction); the run row, heartbeat and cursor are separate small writes | the board's run lock: an atomic conditional `UPDATE` of the connection row (`running_run_id`, heartbeat); a lock without heartbeat for 10 minutes is taken over | a second run gets status `busy` and writes nothing |
+| Remote sync, files, comments and task details | after the page commit, outside any transaction | the provider's version per task (a version already read is not read again) | a failure marks the tasks not reached for a new read on the next run |
+| Dry run | the page is written, then rolled back to the entry level | as a run | — |
+| CSV / JSON import | one transaction for the whole import (rows flushed in batches of 200 inside it) | idempotent upsert on (import scope, source id) or the row's fingerprint; the board quota is checked before anything is written | a failure leaves nothing behind |
+| Number backfill (`nowo:task-board:numbers-backfill`) | one transaction per batch | numbers reserved with the atomic counter (`TaskNumberReserver`); each row is updated only `WHERE number IS NULL` | a task numbered meanwhile is skipped (a gap, never a duplicate) |
+
+No provider HTTP call, file download or mail runs inside a sync page's transaction or under a row lock: the page is
+fetched before the transaction, and files, comments and details are read after the commit. Events are dispatched after
+the commit (`TaskEventDeferral`).
+
+## The application's entity manager
+
+With `database.private_entity_manager: true` the sync, the import and the backfill write through the bundle's private
+manager, which they may clear: the application's manager is never flushed, cleared or reset.
+
+Without it (the 2.x default, deprecated) they write through `database.entity_manager`, which is the application's.
+Since 2.26.1 (REQ-RUNTIME-003 rule 2) a long run keeps its memory flat by detaching only the TaskBoard rows
+(`BundleEntityDetacher`): after each sync page, after a dry-run rollback and after each backfill batch. The
+application's entities stay managed and keep their pending changes; the manager is never cleared, closed or reset. A
+manager that a failed flush closed is replaced (`RecoveringFlusher`), as before. The import detaches its own batch
+classes only (1.22.2).
+
+## Residual risks
+
+Accepted for 2.x; each one is a contention issue with no leak or permission impact.
+
+- **Shared manager flushes the application's changes.** Without the private manager, a TaskBoard flush (sync, import,
+  any write) also writes what the application left pending in that manager. This is the deprecated 2.14 behaviour;
+  the private manager becomes the only mode in 3.0 (REQ-ARCH-001 rule 6). A dry run commits the application's pending
+  changes too, with the run row, before its pages are rolled back.
+- **Application objects that hold TaskBoard rows.** After a sync page or a backfill batch, a TaskBoard row the
+  application still holds (in a variable or through one of its own entities) is detached. Load it again by id before
+  changing it.
+- **Local edit during a sync page.** A sync page does not lock the task rows it updates. A local edit of the same field
+  committed between the page's read and its commit is overwritten by the provider's value (last writer wins on that
+  field only; other fields keep the local edit). The window is one page.
+- **Long imports hold their locks.** An import is one transaction (all or nothing), so a large file keeps its row locks
+  until the end. `import.max_rows` bounds it.
+- **Stale run lock.** A run that stops without releasing its lock blocks the board's sync for up to 10 minutes; a run
+  that lives longer without a heartbeat can be overtaken by a second one (pages stay idempotent: items are keyed by
+  connection and external id).
+
 ## Tests
 
 | Test | What | Databases |
@@ -103,6 +152,9 @@ committed (SU2-I1).
 | `tests/Functional/Api/ApiTaskQuestionReplayTest.php`, `ApiWriteUnitReplayTest.php` | write-unit replays after a deadlock | all |
 | `tests/Functional/Api/ApiLockOrderTest.php`, `ApiLockConflictTest.php` | fixed lock order, conflict answers | all |
 | `tests/Functional/Question/TaskQuestionWorkerTest.php` | one kept-alive kernel, a forced failure, flat memory | all |
+| `tests/Functional/Sync/SyncHostEntityManagerTest.php`, `Number/BackfillHostEntityManagerTest.php` | a sync, a dry run and a backfill batch on the application's manager keep its entities managed and its pending changes | all |
+| `tests/Functional/Sync/SyncPrivateEntityManagerHostTest.php` | a sync and a dry run with the private manager leave the application's manager untouched | all |
+| `tests/Functional/Sync/SyncServiceTest.php`, `Number/TaskNumberConcurrencyTest.php` | the run lock (`busy`), concurrent number reservations | all; two processes on a server |
 
 Run them on a server with `make test-with-db` (MySQL and PostgreSQL) or with `TASK_BOARD_TEST_DATABASE_URL` set to a
 MariaDB URL (`mysql://…?serverVersion=11.4.0-MariaDB`).

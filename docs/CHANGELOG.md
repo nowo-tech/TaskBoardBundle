@@ -122,6 +122,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A remote sync and the number backfill no longer clear the application's entity manager** (REQ-RUNTIME-003 rule 2).
+  Without `database.private_entity_manager`, they write through `database.entity_manager`, which is the application's
+  manager. Up to 2.26.0 they called `clear()` on it after each sync page, after a dry-run rollback and after each
+  backfill batch, which detached every application entity and dropped the changes the application had left pending. They
+  now detach only the TaskBoard rows (new internal `Doctrine\BundleEntityDetacher`). The private manager is still cleared
+  as before (it is the bundle's own). A TaskBoard row the application holds is still detached after a page: load it
+  again by id.
+
+### Documentation
+
+- `docs/CONCURRENCY.md`: the remote sync, import and number-backfill writes (transactions, run lock, conflicts), the
+  application's entity manager, and the accepted residual risks.
+
 ## [2.26.0] - 2026-11-20
 
 ### Added

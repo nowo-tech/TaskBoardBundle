@@ -9,6 +9,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Persistence\ManagerRegistry;
 use LogicException;
 use Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface;
+use Nowo\TaskBoardBundle\Doctrine\BundleEntityDetacher;
 use Nowo\TaskBoardBundle\Doctrine\RecoveringFlusher;
 use Nowo\TaskBoardBundle\Doctrine\TransactionRollback;
 use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
@@ -339,7 +340,8 @@ final readonly class SyncTaskWriter
                 $this->events?->rollBack();
                 $ctx->taskEvents = [];
                 $ctx->pending    = [];
-                $this->entityManager->clear();
+                // Since 2.26.1 (REQ-RUNTIME-003 rule 2): only the TaskBoard rows of the rolled-back page leave the manager.
+                BundleEntityDetacher::detach($this->entityManager);
                 $this->closeSession($ctx, $session);
 
                 return;
