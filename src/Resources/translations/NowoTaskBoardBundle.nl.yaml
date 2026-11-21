@@ -1,39 +1,39 @@
 nav:
   brand: Task Board
-  board: Task board
-task_board.index.title: Task Boards
-task_board.index.subtitle: Organize work with kanban boards, lists, and task details.
-task_board.board.title: Board
-task_board.list.title: List
-task_board.task.title: Task
-task_board.index.create_board: Create board
-task_board.index.your_boards: Your boards
-task_board.index.no_boards: No boards yet.
-task_board.board.add_task: Add task
-task_board.board.add_column: Add column
+  board: "Takenbord"
+task_board.index.title: "Taakborden"
+task_board.index.subtitle: "Organiseer je werk met kanbanborden, lijsten en taakdetails."
+task_board.board.title: "Bord"
+task_board.list.title: "Lijst"
+task_board.task.title: "Taak"
+task_board.index.create_board: "Bord aanmaken"
+task_board.index.your_boards: "Je borden"
+task_board.index.no_boards: "Nog geen borden."
+task_board.board.add_task: "Taak toevoegen"
+task_board.board.add_column: "Kolom toevoegen"
 task_board.board.task_placeholder: Titel van nieuwe taak…
-task_board.board.add_task_modal_title: Add task to %column%
-task_board.action.cancel: Cancel
-task_board.action.close: Close
-task_board.board.reorder_hint: Drag column headers to reorder. Drag tasks between columns.
-task_board.board.drag_column: Drag to reorder column
-task_board.action.add_column: Add column
-task_board.form.column.name: Column name
-task_board.form.column.color: Color
-task_board.flash.column_added: Column added.
-task_board.view.list: List view
-task_board.view.board: Board view
-task_board.list.filter_search: Search
-task_board.list.filter_priority: Priority
-task_board.list.filter_column: Column
-task_board.list.filter_all: All
+task_board.board.add_task_modal_title: "Taak toevoegen aan %column%"
+task_board.action.cancel: "Annuleren"
+task_board.action.close: "Sluiten"
+task_board.board.reorder_hint: "Sleep de kolomkoppen om ze te herordenen. Sleep taken tussen kolommen."
+task_board.board.drag_column: "Slepen om de kolom te herordenen"
+task_board.action.add_column: "Kolom toevoegen"
+task_board.form.column.name: "Kolomnaam"
+task_board.form.column.color: "Kleur"
+task_board.flash.column_added: "Kolom toegevoegd."
+task_board.view.list: "Lijstweergave"
+task_board.view.board: "Bordweergave"
+task_board.list.filter_search: "Zoeken"
+task_board.list.filter_priority: "Prioriteit"
+task_board.list.filter_column: "Kolom"
+task_board.list.filter_all: "Alle"
 task_board.list.filter_search_placeholder: 'Taken zoeken…'
 task_board.list.filter_any_priority: 'Elke prioriteit'
 task_board.list.filter_any_column: 'Elke kolom'
 task_board.list.filters: Filters
-task_board.list.empty: No tasks yet.
-task_board.task.toggle_subtasks: Toggle subtasks
-task_board.view.all_boards: All boards
+task_board.list.empty: "Nog geen taken."
+task_board.task.toggle_subtasks: "Subtaken in-/uitklappen"
+task_board.view.all_boards: "Alle borden"
 task_board.view.back_board: Terug naar board
 task_board.task.status: Status
 task_board.task.dates: Datums
@@ -44,100 +44,100 @@ task_board.task.subtasks_progress: '%done% van %total% voltooid'
 task_board.task.add_subtask_placeholder: Subtaak toevoegen…
 task_board.task.edit: Taak bewerken
 task_board.task.workflow: Workflow
-task_board.task.change_column: Change column
-task_board.task.no_column: No column
-task_board.task.no_columns: No columns configured.
-task_board.flash.task_moved_column: Task moved to the selected column.
-task_board.task.current_column: Current column
-task_board.task.completed_badge: Completed
-task_board.action.previous_column: Move back
-task_board.action.previous_column_to: Move to %column%
-task_board.action.next_column: Move forward
-task_board.action.next_column_to: Move to %column%
-task_board.action.mark_done: Mark as done
-task_board.action.mark_done_column: Move to %column%
-task_board.flash.task_moved_previous: Task moved to the previous column.
-task_board.flash.task_moved_next: Task moved to the next column.
-task_board.flash.task_moved_done: Task marked as done.
-task_board.task.subtasks: Subtasks
-task_board.task.no_subtasks: No subtasks.
+task_board.task.change_column: "Kolom wijzigen"
+task_board.task.no_column: "Geen kolom"
+task_board.task.no_columns: "Geen kolommen geconfigureerd."
+task_board.flash.task_moved_column: "Taak verplaatst naar de geselecteerde kolom."
+task_board.task.current_column: "Huidige kolom"
+task_board.task.completed_badge: "Voltooid"
+task_board.action.previous_column: "Terugzetten"
+task_board.action.previous_column_to: "Verplaatsen naar %column%"
+task_board.action.next_column: "Vooruit zetten"
+task_board.action.next_column_to: "Verplaatsen naar %column%"
+task_board.action.mark_done: "Markeren als voltooid"
+task_board.action.mark_done_column: "Verplaatsen naar %column%"
+task_board.flash.task_moved_previous: "Taak verplaatst naar de vorige kolom."
+task_board.flash.task_moved_next: "Taak verplaatst naar de volgende kolom."
+task_board.flash.task_moved_done: "Taak gemarkeerd als voltooid."
+task_board.task.subtasks: "Subtaken"
+task_board.task.no_subtasks: "Geen subtaken."
 task_board.task.links: Links
-task_board.task.no_links: No links yet.
-task_board.task.dependencies: Dependencies
-task_board.task.no_dependencies: No dependencies.
-task_board.task.people: People
-task_board.task.no_members: No members assigned.
-task_board.task.time: Time tracking
-task_board.task.documentation: Documentation
-task_board.task.no_docs: No documentation pages.
-task_board.action.create: Create
-task_board.action.back: Back
-task_board.action.add_task: Add task
+task_board.task.no_links: "Nog geen links."
+task_board.task.dependencies: "Afhankelijkheden"
+task_board.task.no_dependencies: "Geen afhankelijkheden."
+task_board.task.people: "Mensen"
+task_board.task.no_members: "Geen leden toegewezen."
+task_board.task.time: "Tijdregistratie"
+task_board.task.documentation: "Documentatie"
+task_board.task.no_docs: "Geen documentatiepagina’s."
+task_board.action.create: "Aanmaken"
+task_board.action.back: "Terug"
+task_board.action.add_task: "Taak toevoegen"
 task_board.action.new_task: 'Nieuwe taak'
-task_board.action.save: Save
-task_board.action.add_subtask: Add subtask
-task_board.action.add_link: Add link
-task_board.action.add_member: Add member
+task_board.action.save: "Opslaan"
+task_board.action.add_subtask: "Subtaak toevoegen"
+task_board.action.add_link: "Link toevoegen"
+task_board.action.add_member: "Lid toevoegen"
 task_board.link.url: URL
 task_board.link.merge_request: Merge request
 task_board.link.pull_request: Pull request
 task_board.link.issue: Issue
-task_board.link.documentation: Documentation
-task_board.link.other: Other
-task_board.member.assignee: Assignee
-task_board.member.reviewer: Reviewer
+task_board.link.documentation: "Documentatie"
+task_board.link.other: "Overig"
+task_board.member.assignee: "Toegewezene"
+task_board.member.reviewer: "Beoordelaar"
 task_board.member.stakeholder: Stakeholder
-task_board.member.watcher: Watcher
-task_board.time.estimate: Estimate
-task_board.time.logged: Logged
-task_board.flash.task_updated: Task updated.
-task_board.flash.link_added: Link added.
-task_board.flash.member_added: Member added.
-task_board.flash.subtask_created: Subtask created.
+task_board.member.watcher: "Volger"
+task_board.time.estimate: "Schatting"
+task_board.time.logged: "Geregistreerd"
+task_board.flash.task_updated: "Taak bijgewerkt."
+task_board.flash.link_added: "Link toegevoegd."
+task_board.flash.member_added: "Lid toegevoegd."
+task_board.flash.subtask_created: "Subtaak aangemaakt."
 task_board.flash.subtask_too_deep: "De subtaak is niet aangemaakt: die zou dieper liggen dan toegestaan."
 task_board.flash.subtask_conflict: "De subtaak is niet aangemaakt: de takenboom is intussen gewijzigd. Probeer het opnieuw."
 task_board.flash.task_changed_meanwhile: "De taak is intussen gewijzigd: er is niets opgeslagen. Probeer het opnieuw."
 task_board.flash.column_changed_meanwhile: "De taken van de kolom zijn intussen gewijzigd: er is niets opgeslagen. Probeer het opnieuw."
-task_board.form.board.name: Board name
+task_board.form.board.name: "Bordnaam"
 task_board.form.board.slug: Slug
-task_board.form.board.slug_help: Leave empty to auto-generate from name.
-task_board.form.board.description: Description
-task_board.form.task.title: Title
-task_board.form.task.description: Description
-task_board.form.task.priority: Priority
-task_board.form.task.column: Column ID
+task_board.form.board.slug_help: "Laat leeg om automatisch uit de naam te genereren."
+task_board.form.board.description: "Beschrijving"
+task_board.form.task.title: "Titel"
+task_board.form.task.description: "Beschrijving"
+task_board.form.task.priority: "Prioriteit"
+task_board.form.task.column: "Kolom-ID"
 task_board.form.task.estimate: "Schatting"
-task_board.form.task.due: Due date
+task_board.form.task.due: "Vervaldatum"
 task_board.form.task.tags: Tags
-task_board.form.task.due_invalid: Invalid due date.
-task_board.form.link.type: Link type
+task_board.form.task.due_invalid: "Ongeldige vervaldatum."
+task_board.form.link.type: "Linktype"
 task_board.form.link.url: URL
 task_board.form.link.label: Label
-task_board.form.link.external_id: External ID
-task_board.form.link.external_id_help: e.g. GitLab MR IID or GitHub PR number.
-task_board.form.member.user: User
-task_board.form.member.role: Role
-task_board.import.action: Import tasks
-task_board.import.title: Import tasks
-task_board.import.subtitle: Bring tasks from ClickUp, Jira, Trello, or other supported exports into this board.
-task_board.import.form.title: Upload export file
-task_board.import.form.source: Source
-task_board.import.form.file: Export file
-task_board.import.form.file_invalid: Upload a valid CSV or JSON export (max 20 MB).
-task_board.import.form.create_columns: Create missing status columns automatically
-task_board.import.form.skip_existing: Skip tasks that were already imported
-task_board.import.form.submit: Import into board
+task_board.form.link.external_id: "Externe ID"
+task_board.form.link.external_id_help: "bijv. GitLab MR-IID of GitHub PR-nummer."
+task_board.form.member.user: "Gebruiker"
+task_board.form.member.role: "Rol"
+task_board.import.action: "Taken importeren"
+task_board.import.title: "Taken importeren"
+task_board.import.subtitle: "Haal taken uit ClickUp, Jira, Trello of andere ondersteunde exports binnen in dit bord."
+task_board.import.form.title: "Exportbestand uploaden"
+task_board.import.form.source: "Bron"
+task_board.import.form.file: "Exportbestand"
+task_board.import.form.file_invalid: "Upload een geldige CSV- of JSON-export (max. 20 MB)."
+task_board.import.form.create_columns: "Ontbrekende statuskolommen automatisch aanmaken"
+task_board.import.form.skip_existing: "Reeds geïmporteerde taken overslaan"
+task_board.import.form.submit: "Importeren in het bord"
 task_board.import.source.clickup_csv: ClickUp (CSV)
 task_board.import.source.clickup_json: ClickUp (JSON)
 task_board.import.source.jira_csv: Jira (CSV)
 task_board.import.source.trello_json: Trello (JSON)
-task_board.import.help.title: How to export
+task_board.import.help.title: "Zo exporteer je"
 task_board.import.help.clickup_title: ClickUp
-task_board.import.help.clickup_step_1: In ClickUp, open your List or Table view (or Workspace Settings → Imports / Exports).
-task_board.import.help.clickup_step_2: Export as CSV with Task Name, Status, Priority, Assignee, Due Date, and Task ID columns.
-task_board.import.help.clickup_step_3: Upload the file here and choose ClickUp (CSV).
-task_board.import.help.supported_title: Supported formats
-task_board.flash.import_file_required: Please choose a file to import.
+task_board.import.help.clickup_step_1: "Open in ClickUp je lijst- of tabelweergave (of Workspace Settings → Imports / Exports)."
+task_board.import.help.clickup_step_2: "Exporteer als CSV met de kolommen Task Name, Status, Priority, Assignee, Due Date en Task ID."
+task_board.import.help.clickup_step_3: "Upload het bestand hier en kies ClickUp (CSV)."
+task_board.import.help.supported_title: "Ondersteunde formaten"
+task_board.flash.import_file_required: "Kies een bestand om te importeren."
 task_board.flash.import_summary: "Import klaar: %created% aangemaakt, %updated% bijgewerkt, %unchanged% ongewijzigd, %skipped% overgeslagen; %columns% kolom(men) aangemaakt."
 task_board.action.open_link: "Link openen"
 task_board.action.remove_link: "Link verwijderen"

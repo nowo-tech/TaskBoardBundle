@@ -1,39 +1,39 @@
 nav:
   brand: Task Board
-  board: Task board
-task_board.index.title: Task Boards
-task_board.index.subtitle: Organize work with kanban boards, lists, and task details.
+  board: "Aufgabenboard"
+task_board.index.title: "Aufgabenboards"
+task_board.index.subtitle: "Organisieren Sie Ihre Arbeit mit Kanban-Boards, Listen und Aufgabendetails."
 task_board.board.title: Board
-task_board.list.title: List
-task_board.task.title: Task
-task_board.index.create_board: Create board
-task_board.index.your_boards: Your boards
-task_board.index.no_boards: No boards yet.
-task_board.board.add_task: Add task
-task_board.board.add_column: Add column
+task_board.list.title: "Liste"
+task_board.task.title: "Aufgabe"
+task_board.index.create_board: "Board erstellen"
+task_board.index.your_boards: "Ihre Boards"
+task_board.index.no_boards: "Noch keine Boards."
+task_board.board.add_task: "Aufgabe hinzufügen"
+task_board.board.add_column: "Spalte hinzufügen"
 task_board.board.task_placeholder: Neuer Aufgabentitel…
-task_board.board.add_task_modal_title: Add task to %column%
-task_board.action.cancel: Cancel
-task_board.action.close: Close
-task_board.board.reorder_hint: Drag column headers to reorder. Drag tasks between columns.
-task_board.board.drag_column: Drag to reorder column
-task_board.action.add_column: Add column
-task_board.form.column.name: Column name
-task_board.form.column.color: Color
-task_board.flash.column_added: Column added.
-task_board.view.list: List view
-task_board.view.board: Board view
-task_board.list.filter_search: Search
-task_board.list.filter_priority: Priority
-task_board.list.filter_column: Column
-task_board.list.filter_all: All
+task_board.board.add_task_modal_title: "Aufgabe zu %column% hinzufügen"
+task_board.action.cancel: "Abbrechen"
+task_board.action.close: "Schließen"
+task_board.board.reorder_hint: "Ziehen Sie die Spaltenköpfe, um sie neu anzuordnen. Ziehen Sie Aufgaben zwischen Spalten."
+task_board.board.drag_column: "Ziehen, um die Spalte neu anzuordnen"
+task_board.action.add_column: "Spalte hinzufügen"
+task_board.form.column.name: "Spaltenname"
+task_board.form.column.color: "Farbe"
+task_board.flash.column_added: "Spalte hinzugefügt."
+task_board.view.list: "Listenansicht"
+task_board.view.board: "Board-Ansicht"
+task_board.list.filter_search: "Suchen"
+task_board.list.filter_priority: "Priorität"
+task_board.list.filter_column: "Spalte"
+task_board.list.filter_all: "Alle"
 task_board.list.filter_search_placeholder: 'Aufgaben suchen…'
 task_board.list.filter_any_priority: 'Jede Priorität'
 task_board.list.filter_any_column: 'Jede Spalte'
-task_board.list.filters: Filters
-task_board.list.empty: No tasks yet.
-task_board.task.toggle_subtasks: Toggle subtasks
-task_board.view.all_boards: All boards
+task_board.list.filters: "Filter"
+task_board.list.empty: "Noch keine Aufgaben."
+task_board.task.toggle_subtasks: "Unteraufgaben ein-/ausblenden"
+task_board.view.all_boards: "Alle Boards"
 task_board.view.back_board: Zurück zum Board
 task_board.task.status: Status
 task_board.task.dates: Termine
@@ -44,100 +44,100 @@ task_board.task.subtasks_progress: '%done% von %total% erledigt'
 task_board.task.add_subtask_placeholder: Unteraufgabe hinzufügen…
 task_board.task.edit: Aufgabe bearbeiten
 task_board.task.workflow: Workflow
-task_board.task.change_column: Change column
-task_board.task.no_column: No column
-task_board.task.no_columns: No columns configured.
-task_board.flash.task_moved_column: Task moved to the selected column.
-task_board.task.current_column: Current column
-task_board.task.completed_badge: Completed
-task_board.action.previous_column: Move back
-task_board.action.previous_column_to: Move to %column%
-task_board.action.next_column: Move forward
-task_board.action.next_column_to: Move to %column%
-task_board.action.mark_done: Mark as done
-task_board.action.mark_done_column: Move to %column%
-task_board.flash.task_moved_previous: Task moved to the previous column.
-task_board.flash.task_moved_next: Task moved to the next column.
-task_board.flash.task_moved_done: Task marked as done.
-task_board.task.subtasks: Subtasks
-task_board.task.no_subtasks: No subtasks.
+task_board.task.change_column: "Spalte wechseln"
+task_board.task.no_column: "Keine Spalte"
+task_board.task.no_columns: "Keine Spalten konfiguriert."
+task_board.flash.task_moved_column: "Aufgabe in die gewählte Spalte verschoben."
+task_board.task.current_column: "Aktuelle Spalte"
+task_board.task.completed_badge: "Erledigt"
+task_board.action.previous_column: "Zurück verschieben"
+task_board.action.previous_column_to: "Nach %column% verschieben"
+task_board.action.next_column: "Vorwärts verschieben"
+task_board.action.next_column_to: "Nach %column% verschieben"
+task_board.action.mark_done: "Als erledigt markieren"
+task_board.action.mark_done_column: "Nach %column% verschieben"
+task_board.flash.task_moved_previous: "Aufgabe in die vorherige Spalte verschoben."
+task_board.flash.task_moved_next: "Aufgabe in die nächste Spalte verschoben."
+task_board.flash.task_moved_done: "Aufgabe als erledigt markiert."
+task_board.task.subtasks: "Unteraufgaben"
+task_board.task.no_subtasks: "Keine Unteraufgaben."
 task_board.task.links: Links
-task_board.task.no_links: No links yet.
-task_board.task.dependencies: Dependencies
-task_board.task.no_dependencies: No dependencies.
-task_board.task.people: People
-task_board.task.no_members: No members assigned.
-task_board.task.time: Time tracking
-task_board.task.documentation: Documentation
-task_board.task.no_docs: No documentation pages.
-task_board.action.create: Create
-task_board.action.back: Back
-task_board.action.add_task: Add task
+task_board.task.no_links: "Noch keine Links."
+task_board.task.dependencies: "Abhängigkeiten"
+task_board.task.no_dependencies: "Keine Abhängigkeiten."
+task_board.task.people: "Personen"
+task_board.task.no_members: "Keine Mitglieder zugewiesen."
+task_board.task.time: "Zeiterfassung"
+task_board.task.documentation: "Dokumentation"
+task_board.task.no_docs: "Keine Dokumentationsseiten."
+task_board.action.create: "Erstellen"
+task_board.action.back: "Zurück"
+task_board.action.add_task: "Aufgabe hinzufügen"
 task_board.action.new_task: 'Neue Aufgabe'
-task_board.action.save: Save
-task_board.action.add_subtask: Add subtask
-task_board.action.add_link: Add link
-task_board.action.add_member: Add member
+task_board.action.save: "Speichern"
+task_board.action.add_subtask: "Unteraufgabe hinzufügen"
+task_board.action.add_link: "Link hinzufügen"
+task_board.action.add_member: "Mitglied hinzufügen"
 task_board.link.url: URL
-task_board.link.merge_request: Merge request
-task_board.link.pull_request: Pull request
+task_board.link.merge_request: "Merge Request"
+task_board.link.pull_request: "Pull Request"
 task_board.link.issue: Issue
-task_board.link.documentation: Documentation
-task_board.link.other: Other
-task_board.member.assignee: Assignee
-task_board.member.reviewer: Reviewer
+task_board.link.documentation: "Dokumentation"
+task_board.link.other: "Sonstiges"
+task_board.member.assignee: "Zugewiesen"
+task_board.member.reviewer: "Prüfer"
 task_board.member.stakeholder: Stakeholder
-task_board.member.watcher: Watcher
-task_board.time.estimate: Estimate
-task_board.time.logged: Logged
-task_board.flash.task_updated: Task updated.
-task_board.flash.link_added: Link added.
-task_board.flash.member_added: Member added.
-task_board.flash.subtask_created: Subtask created.
+task_board.member.watcher: "Beobachter"
+task_board.time.estimate: "Schätzung"
+task_board.time.logged: "Erfasst"
+task_board.flash.task_updated: "Aufgabe aktualisiert."
+task_board.flash.link_added: "Link hinzugefügt."
+task_board.flash.member_added: "Mitglied hinzugefügt."
+task_board.flash.subtask_created: "Unteraufgabe erstellt."
 task_board.flash.subtask_too_deep: "Die Unteraufgabe wurde nicht angelegt: Sie läge tiefer als erlaubt."
 task_board.flash.subtask_conflict: "Die Unteraufgabe wurde nicht angelegt: Der Aufgabenbaum hat sich inzwischen geändert. Bitte erneut versuchen."
 task_board.flash.task_changed_meanwhile: "Die Aufgabe hat sich inzwischen geändert: Es wurde nichts gespeichert. Bitte erneut versuchen."
 task_board.flash.column_changed_meanwhile: "Die Aufgaben der Spalte haben sich inzwischen geändert: Es wurde nichts gespeichert. Bitte erneut versuchen."
-task_board.form.board.name: Board name
+task_board.form.board.name: "Board-Name"
 task_board.form.board.slug: Slug
-task_board.form.board.slug_help: Leave empty to auto-generate from name.
-task_board.form.board.description: Description
-task_board.form.task.title: Title
-task_board.form.task.description: Description
-task_board.form.task.priority: Priority
-task_board.form.task.column: Column ID
+task_board.form.board.slug_help: "Leer lassen, um ihn automatisch aus dem Namen zu erzeugen."
+task_board.form.board.description: "Beschreibung"
+task_board.form.task.title: "Titel"
+task_board.form.task.description: "Beschreibung"
+task_board.form.task.priority: "Priorität"
+task_board.form.task.column: "Spalten-ID"
 task_board.form.task.estimate: "Schätzung"
-task_board.form.task.due: Due date
+task_board.form.task.due: "Fälligkeitsdatum"
 task_board.form.task.tags: Tags
-task_board.form.task.due_invalid: Invalid due date.
-task_board.form.link.type: Link type
+task_board.form.task.due_invalid: "Ungültiges Fälligkeitsdatum."
+task_board.form.link.type: "Link-Typ"
 task_board.form.link.url: URL
-task_board.form.link.label: Label
-task_board.form.link.external_id: External ID
-task_board.form.link.external_id_help: e.g. GitLab MR IID or GitHub PR number.
-task_board.form.member.user: User
-task_board.form.member.role: Role
-task_board.import.action: Import tasks
-task_board.import.title: Import tasks
-task_board.import.subtitle: Bring tasks from ClickUp, Jira, Trello, or other supported exports into this board.
-task_board.import.form.title: Upload export file
-task_board.import.form.source: Source
-task_board.import.form.file: Export file
-task_board.import.form.file_invalid: Upload a valid CSV or JSON export (max 20 MB).
-task_board.import.form.create_columns: Create missing status columns automatically
-task_board.import.form.skip_existing: Skip tasks that were already imported
-task_board.import.form.submit: Import into board
+task_board.form.link.label: "Bezeichnung"
+task_board.form.link.external_id: "Externe ID"
+task_board.form.link.external_id_help: "z. B. GitLab-MR-IID oder GitHub-PR-Nummer."
+task_board.form.member.user: "Benutzer"
+task_board.form.member.role: "Rolle"
+task_board.import.action: "Aufgaben importieren"
+task_board.import.title: "Aufgaben importieren"
+task_board.import.subtitle: "Übernehmen Sie Aufgaben aus ClickUp, Jira, Trello oder anderen unterstützten Exporten in dieses Board."
+task_board.import.form.title: "Exportdatei hochladen"
+task_board.import.form.source: "Quelle"
+task_board.import.form.file: "Exportdatei"
+task_board.import.form.file_invalid: "Laden Sie einen gültigen CSV- oder JSON-Export hoch (max. 20 MB)."
+task_board.import.form.create_columns: "Fehlende Statusspalten automatisch erstellen"
+task_board.import.form.skip_existing: "Bereits importierte Aufgaben überspringen"
+task_board.import.form.submit: "In das Board importieren"
 task_board.import.source.clickup_csv: ClickUp (CSV)
 task_board.import.source.clickup_json: ClickUp (JSON)
 task_board.import.source.jira_csv: Jira (CSV)
 task_board.import.source.trello_json: Trello (JSON)
-task_board.import.help.title: How to export
+task_board.import.help.title: "So exportieren Sie"
 task_board.import.help.clickup_title: ClickUp
-task_board.import.help.clickup_step_1: In ClickUp, open your List or Table view (or Workspace Settings → Imports / Exports).
-task_board.import.help.clickup_step_2: Export as CSV with Task Name, Status, Priority, Assignee, Due Date, and Task ID columns.
-task_board.import.help.clickup_step_3: Upload the file here and choose ClickUp (CSV).
-task_board.import.help.supported_title: Supported formats
-task_board.flash.import_file_required: Please choose a file to import.
+task_board.import.help.clickup_step_1: "Öffnen Sie in ClickUp Ihre Listen- oder Tabellenansicht (oder Workspace Settings → Imports / Exports)."
+task_board.import.help.clickup_step_2: "Exportieren Sie als CSV mit den Spalten Task Name, Status, Priority, Assignee, Due Date und Task ID."
+task_board.import.help.clickup_step_3: "Laden Sie die Datei hier hoch und wählen Sie ClickUp (CSV)."
+task_board.import.help.supported_title: "Unterstützte Formate"
+task_board.flash.import_file_required: "Bitte wählen Sie eine Datei zum Importieren aus."
 task_board.flash.import_summary: "Import abgeschlossen: %created% erstellt, %updated% aktualisiert, %unchanged% unverändert, %skipped% übersprungen; %columns% Spalte(n) erstellt."
 task_board.action.open_link: "Link öffnen"
 task_board.action.remove_link: "Link entfernen"
