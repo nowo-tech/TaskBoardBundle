@@ -12,6 +12,7 @@ and which tests prove it on which databases. Worker mode (kernel not reset) is c
 - [Lock order](#lock-order)
 - [Questions on tasks (2.23)](#questions-on-tasks-223)
 - [Task API writes](#task-api-writes)
+- [Host ports by id (2.29)](#host-ports-by-id-229)
 - [Lock conflicts and replays](#lock-conflicts-and-replays)
 - [Remote sync, imports and the number backfill](#remote-sync-imports-and-the-number-backfill)
 - [The application's entity manager](#the-applications-entity-manager)
@@ -88,6 +89,25 @@ locking read sees rows a concurrent ask committed after the snapshot.
 - Updates with `base_revision` and bulk updates lock the columns they enter, then the task rows (ascending id), and
   compare the locked revision (`TASK_409`).
 - Creates (with assignees) and deletes are one transaction.
+
+## Host ports by id (2.29)
+
+`Service\TaskCommands` (the id-based `TaskCommandsInterface`) follows the rules above:
+
+- **Check, then lock.** The user, the resources and the access rule are checked before the write unit; inside it a task
+  write locks the column it enters (if any), then the task's row, and decides on the locked row (fixed order).
+- **Revision conflicts are 409.** With `$expectedRevision` (`updateTask`, `moveTask`) another revision on the locked row
+  is `TaskChangedException` (`currentRevision`): nothing is written. Under REPEATABLE READ a refresh that still gives
+  the old revision (an outer host transaction's snapshot) is refused the same way, never written from.
+- **Lock conflicts are transient.** A deadlock, lock wait timeout or PostgreSQL `lock_timeout` inside the unit rolls it
+  back and throws `Nowo\TransactionContract\TransientStorageFailure` (retry; HTTP 503 + `Retry-After`).
+- **No read-modify-write in PHP.** `adjustTotalTime()` is one `UPDATE … SET total_time_seconds = total_time_seconds + ?`
+  (then a clamp at 0 in the same unit, the row already locked); concurrent adjustments add up.
+- **Host object links are added once.** `addHostObjectLink()` locks the task's row before looking for an existing link
+  to the same object, so two concurrent calls add one link.
+- **Erasure is batched and idempotent.** `clearTimeEntrySnapshotsForUser()` selects at most 500 detached entries of the
+  exact user id per batch (keyset on the id) and clears them by id; a second run changes nothing.
+- **Events after the host's commit** (opt-in `events.after_host_commit`): see [Configuration](CONFIGURATION.md#database).
 
 ## Lock conflicts and replays
 
@@ -178,6 +198,8 @@ Accepted for 2.x. None of them leaks data or bypasses a permission.
 | `tests/Functional/Sync/SyncHostEntityManagerTest.php`, `Number/BackfillHostEntityManagerTest.php` | a sync, a dry run and a backfill batch on the application's manager keep its entities managed and its pending changes | all |
 | `tests/Functional/Sync/SyncHostReferencesTest.php`, `Number/BackfillHostEntityManagerTest.php` | application entities that reference a board or a task (also with cascade persist) across a one-page and a two-page sync, a dry run and a backfill batch; application rows an `onFlush` listener wrote in a rolled-back dry-run page | SQLite, MySQL, MariaDB, PostgreSQL |
 | `tests/Functional/Sync/SyncPrivateEntityManagerHostTest.php` | a sync and a dry run with the private manager leave the application's manager untouched | all |
+| `tests/Functional/HostPorts/HostPortsConcurrencyTest.php` (group `host-ports-db`) | two processes adjusting one task's total (no lost adjustment); a task row another connection holds (lock wait timeout: transient failure, nothing written, the retry succeeds); a revision another connection committed (409, nothing written) | MySQL, MariaDB, PostgreSQL (two connections / processes; skipped on SQLite) |
+| `tests/Functional/HostPorts/HostPortsTest.php`, `EventsAfterHostCommitTest.php`, `HostPortsWorkerTest.php` | conflicts on one connection, events held until the host's commit and dropped on rollback, a kept-alive worker | all |
 | `tests/Functional/Sync/SyncServiceTest.php`, `Number/TaskNumberConcurrencyTest.php` | the run lock (`busy`), concurrent number reservations | all; two processes on a server |
 
 Run them on a server with `make test-with-db` (MySQL and PostgreSQL) or with `TASK_BOARD_TEST_DATABASE_URL` set to a

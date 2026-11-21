@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Event;
 
+use DateTimeImmutable;
 use Nowo\TaskBoardBundle\Service\TaskChangeContext;
 use Symfony\Contracts\EventDispatcher\Event;
 
@@ -22,9 +23,31 @@ abstract class AbstractColumnEvent extends Event
         /**
          * Since 2.19.0 (audit PW-H1): the person or service account that made the change (null: a worker, an import), so
          * a listener that writes more on its behalf (the shared status set of a folder) can ask its rights. Not for
-         * serialisation: copy `actorId`.
+         * serialisation: copy `actorId`. Deprecated since 2.29.0: use {@see self::getActorId()}; removed in 3.0.
          */
         public readonly ?object $actor = null,
     ) {
+        $this->occurredAt = new DateTimeImmutable();
+    }
+
+    /** Since 2.29.0 (DDD-host checklist B4): when the change happened (the event's creation, right after the write). */
+    public readonly DateTimeImmutable $occurredAt;
+
+    /** Since 2.29.0 (DDD-host checklist B4). */
+    public function getBoardId(): string
+    {
+        return $this->boardId;
+    }
+
+    /** Since 2.29.0 (DDD-host checklist B4): the acting user's id; null for a write without a user. */
+    public function getActorId(): ?string
+    {
+        return $this->actorId;
+    }
+
+    /** Since 2.29.0 (DDD-host checklist B4). */
+    public function getOccurredAt(): DateTimeImmutable
+    {
+        return $this->occurredAt;
     }
 }

@@ -20,6 +20,15 @@ services:
             - '../../Api/'
             - '../../Exception/'
             - '../../ValueObject/'
+            # Since 2.29.0: read models of the id-based host ports (values, not services).
+            - '../../View/BoardPage.php'
+            - '../../View/BoardView.php'
+            - '../../View/TaskPage.php'
+            - '../../View/TaskView.php'
+            - '../../View/TaskFlowDay.php'
+            - '../../View/TaskCompletionSample.php'
+            - '../../View/TaskColumnEntry.php'
+            - '../../View/Views.php'
             - '../../Import/Dto/'
             - '../../Import/TaskImportSource.php'
             # Since 1.22: per-run helper built by the orchestrator (holds the board of the run).
@@ -176,6 +185,7 @@ services:
     Nowo\TaskBoardBundle\Service\TaskMemberAssigner:
         arguments:
             $eventDispatcher: '@Nowo\TaskBoardBundle\Service\TaskEventDeferral'
+            $users: '@Nowo\TaskBoardBundle\User\TaskBoardUserLocator'
 
     # Since 2.10.0 (spec 216): column and comment events, held until the commit of a write that defers them.
     Nowo\TaskBoardBundle\Service\BoardColumnManager:
@@ -237,6 +247,28 @@ services:
         public: true
     Nowo\TaskBoardBundle\Service\TaskBoardEraserInterface:
         alias: Nowo\TaskBoardBundle\Service\TaskBoardEraser
+        public: true
+
+    # Since 2.29.0 (DDD-host checklist B1 / B7 / B8): the id-based host ports (UserRef, ids, views; public for hosts).
+    Nowo\TaskBoardBundle\User\TaskBoardUserLocator:
+        arguments:
+            $userClass: '%nowo_task_board.user_class%'
+            $managerRegistry: '@?doctrine'
+    Nowo\TaskBoardBundle\Service\TaskCommands:
+        arguments:
+            $managerRegistry: '@?doctrine'
+            $rowLock: '@?Nowo\TaskBoardBundle\Service\OrderedRowLockInterface'
+    Nowo\TaskBoardBundle\Service\TaskCommandsInterface:
+        alias: Nowo\TaskBoardBundle\Service\TaskCommands
+        public: true
+    Nowo\TaskBoardBundle\Service\TaskBoardAccessInterface:
+        alias: Nowo\TaskBoardBundle\Service\TaskBoardIdAccessChecker
+        public: true
+    Nowo\TaskBoardBundle\Service\TaskBoardQueryInterface:
+        alias: Nowo\TaskBoardBundle\Service\TaskBoardQuery
+        public: true
+    Nowo\TaskBoardBundle\Service\TaskFlowStatsInterface:
+        alias: Nowo\TaskBoardBundle\Service\TaskFlowStats
         public: true
 
     # Since 2.19.0 (Beacon spec 234, FR-031 / FR-045): folders and the restructure service (public for a host's command);

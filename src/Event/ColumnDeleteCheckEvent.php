@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Event;
 
+use DateTimeImmutable;
+use Nowo\TaskBoardBundle\Support\ActorId;
 use Symfony\Contracts\EventDispatcher\Event;
 
 use function in_array;
@@ -22,7 +24,7 @@ final class ColumnDeleteCheckEvent extends Event
 
     /**
      * @param list<string> $columnIds the board's columns, in order
-     * @param object $user who views the board
+     * @param object $user who views the board (deprecated since 2.29.0, use {@see self::getUserId()}; removed in 3.0)
      */
     public function __construct(
         public readonly string $boardId,
@@ -30,6 +32,22 @@ final class ColumnDeleteCheckEvent extends Event
         public readonly array $columnIds,
         public readonly object $user,
     ) {
+        $this->occurredAt = new DateTimeImmutable();
+    }
+
+    /** Since 2.29.0 (DDD-host checklist B4). */
+    public readonly DateTimeImmutable $occurredAt;
+
+    /** Since 2.29.0: the id of the user who views the board (`getId()` as a string; null without a usable id). */
+    public function getUserId(): ?string
+    {
+        return ActorId::of($this->user);
+    }
+
+    /** Since 2.29.0. */
+    public function getOccurredAt(): DateTimeImmutable
+    {
+        return $this->occurredAt;
     }
 
     /** Adds a warning for a column of this board; an unknown column or a blank text is ignored. */

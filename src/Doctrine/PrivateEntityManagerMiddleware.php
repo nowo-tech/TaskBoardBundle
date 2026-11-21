@@ -21,11 +21,13 @@ final readonly class PrivateEntityManagerMiddleware implements Middleware
 {
     public function __construct(
         private TaskBoardEntityManager $entityManager,
+        // Since 2.29.0 (`events.after_host_commit`).
+        private ?HostCommitEventRelay $relay = null,
     ) {
     }
 
     public function wrap(Driver $driver): Driver
     {
-        return new PrivateEntityManagerDriver($driver, $this->entityManager);
+        return new PrivateEntityManagerDriver($driver, $this->entityManager, $this->relay);
     }
 }

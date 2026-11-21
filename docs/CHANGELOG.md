@@ -126,9 +126,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Host ports by id (DDD-host checklist B1, B7, B8; Beacon's list for `private_entity_manager: true`).** Four public
+  services so a host uses TaskBoard by id only, without entities, user objects or DQL over TaskBoard tables (see
+  USAGE "Host ports by id"):
+  - `Service\TaskCommandsInterface` (`TaskCommands`): `createTask` (all task form fields, a parent, `completed: true`),
+    `updateTask` / `moveTask` (optional expected revision: `TaskChangedException`, 409), `completeTask` (also on a board
+    without columns), `archiveTask`, `restoreTask`, `deleteTask`, `addMember` / `removeMember`, `addComment`, `addLink`,
+    `addHostObjectLink`, `addDependency`, `addDocument`, `logTime`, `addColumn` (at a position), `reorderColumns`, and
+    the system calls `adjustTotalTime` (atomic, clamped at 0) and `clearTimeEntrySnapshotsForUser` (erasure, batched,
+    idempotent). The user is a `ValueObject\UserRef` (id only, looked up again per call); each call re-checks the page's
+    access rule, runs in one write unit (a savepoint inside the host's transaction) with row locks in the bundle's
+    fixed order, and returns a `View\TaskView` or an id. With `tenancy.enabled` a board is reached only through a tenant
+    the user may open (audit YJ-M1, as the pages and the Task API); a task deleted meanwhile is the one refusal, one moved
+    to another board meanwhile a `TaskChangedException`. Unknown user, unknown id and refusal are one
+    `TaskBoardAccessDeniedException`; a lock conflict is `TransientStorageFailure`.
+  - `Service\TaskBoardAccessInterface` (`TaskBoardIdAccessChecker`): `canAccess`, `canViewBoard`, `canEditBoard`,
+    `canManageBoard`, `canViewTask`, `canEditTask`, `canTrackTime`, `filterBoardIds` by `UserRef` and id.
+  - `Service\TaskBoardQueryInterface` (`TaskBoardQuery`): boards and tasks by tenant keys or board ids
+    (`Dto\BoardCriteria`, `Dto\TaskCriteria`: completed, archived, due window, column, creator, top level, `Enum\TaskSort`,
+    pages of at most 500), counts per tenant (`countActiveBoards`, `countOpenTasks`), `tagCounts`, look-ups by id.
+    Tenant keys and ids are matched byte for byte (the database selects candidates, PHP keeps the `===` ones).
+  - `Service\TaskFlowStatsInterface` (`TaskFlowStats`): created / completed per tenant and day (time zone aware),
+    completion samples (lead time) and the first entry of each task into a column.
+- **Events after the host's commit (DDD-host checklist B4), opt-in.** `events.after_host_commit: true` (default false;
+  with `database.private_entity_manager: true` and doctrine/dbal 4): the change events of a TaskBoard write inside the
+  application's transaction wait for its commit and are dropped on its rollback (internal `Doctrine\HostCommitEventRelay`,
+  fed by the private manager's DBAL middleware; released or dropped at every unit-of-work boundary and at `kernel.reset`).
+- `TaskMemberFormData::$userId` (the member by id); `TaskManager::complete()`; `TaskAccessGuard::canTrack()` accepts any
+  user object; id getters and `getOccurredAt()` on the three hook events that carried objects only:
+  `BoardListQueryEvent::getSubjectId()`, `ColumnDeleteCheckEvent::getUserId()`, `AbstractColumnEvent::getActorId()` /
+  `getBoardId()`.
+- Docs: USAGE "Host ports by id" (with host entities that point at TaskBoard rows: `getReference()` by id, no cascade
+  persist, under the private manager), CONFIGURATION `events.after_host_commit`, CONCURRENCY, FRANKENPHP-WORKER-AUDIT,
+  UPGRADING "To 2.29.0".
+- Tests: `HostPortsTest`, `EventsAfterHostCommitTest` (incl. a host entity flushed with a reference to a task: its
+  foreign key written, no TaskBoard row inserted), `EventsInsideHostTransactionTest`, `HostPortsConcurrencyTest` (group
+  `host-ports-db`: two processes, two connections), `HostPortsWorkerTest` (kept-alive kernel without the resetter),
+  `HostCommitEventRelayTest`.
+
 ### Changed
 
 - Demo: runs in UiKit's demo platform shell (`nowo-tech/ui-kit-bundle` ^2.60; shared top bar, aside, page header and section cards; no demo stylesheet or `<style>`). Demo only, no bundle change.
+
+### Deprecated
+
+- `BoardListQueryEvent::getSubject()`, `ColumnDeleteCheckEvent::$user`, `AbstractColumnEvent::$actor` and
+  `TaskMemberFormData::$user`: use the id getters / `$userId` (docblock only; removed in 3.0).
+
+### Fixed
+
+- **Role rules judged the signed-in user instead of the user asked about (DDD-host audit B8).**
+  `ConfigurableTaskBoardAccessChecker` (`security.access_roles`, `create_roles`, `list_roles`) and the
+  `security.manage_roles` bypass of `TaskBoardResourceAccessChecker` asked `isGranted()` on the **current token**,
+  whatever user they were given. A check made on behalf of another user during an administrator's request was granted
+  with the administrator's roles (a cross-user permission leak for a host that checks other users, e.g. a list of who
+  may see a board, or a handler that runs inside such a request), and a check without a token (Messenger handler,
+  console command, worker) refused every user. The roles are now those of the given user: the signed-in user (the
+  token's user object, or an object with exactly the same `getId()`) is still judged by the token, as before; any other
+  user by Symfony's `isGrantedForUser()` with their own roles (role hierarchy and voters apply); a host user object that
+  is not a Symfony `UserInterface` by the roles its `getRoles()` reports, and a user without roles holds none. Requests
+  where the bundle checks the signed-in user (every page and the API) answer as before. A hand-built checker without
+  the new optional `$tokenStorage` argument keeps the 2.28 rule; the container always passes it. Internal
+  `Security\UserRoleCheck`. Tests: `RolesOfTheGivenUserTest`.
+- `TaskMemberAssigner::assign()` recognises an existing member by exact user id too, not only by the same object: with
+  the private entity manager, assigning a user again through the application's copy of that user no longer fails on the
+  members' unique key.
 
 ## [2.28.0] - 2026-11-21
 
