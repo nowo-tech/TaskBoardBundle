@@ -42,6 +42,7 @@ use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use function array_map;
 use function array_slice;
 use function count;
+use function ksort;
 
 /**
  * Since 2.29.0 (DDD-host checklist B1 / B7 / B8): the id-based host ports on the functional kernel: a host passes ids and
@@ -217,7 +218,10 @@ final class HostPortsTest extends FunctionalTestCase
         foreach ($loaded->getDocuments() as $document) {
             $positions[$document->getId()] = $document->getPosition();
         }
-        self::assertSame([$first => 0, $second => 5], $positions);
+        $expected = [$first => 0, $second => 5];
+        ksort($expected);
+        ksort($positions);
+        self::assertSame($expected, $positions, 'the collection order is the database\'s');
         self::assertSame(45, $this->em->find(TaskTimeEntry::class, $entry)?->getMinutes());
     }
 
