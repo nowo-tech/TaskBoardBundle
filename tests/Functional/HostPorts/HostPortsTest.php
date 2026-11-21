@@ -68,7 +68,7 @@ final class HostPortsTest extends FunctionalTestCase
         $data  = new TaskFormData('Write the spec', 'Body', TaskPriority::High, $board->getColumns()->get(0)?->getId(), 30, new DateTimeImmutable('2026-12-01'), ['spec', 'q4'], '#112233', new DateTimeImmutable('2026-11-25'));
 
         $view = $this->commands->createTask($this->ownerRef, $board->getId(), $data);
-        self::assertSame(['Write the spec', 'Body', TaskPriority::High, 30, ['spec', 'q4'], '#112233', 'acme', (string) $this->owner->getId()], [$view->title, $view->description, $view->priority, $view->estimatedMinutes, $view->tags, $view->color, $view->tenantKey, $view->creatorId]);
+        self::assertSame(['Write the spec', 'Body', TaskPriority::High, 30, ['q4', 'spec'], '#112233', 'acme', (string) $this->owner->getId()], [$view->title, $view->description, $view->priority, $view->estimatedMinutes, $view->tags, $view->color, $view->tenantKey, $view->creatorId]);
         self::assertFalse($view->isCompleted());
         self::assertFalse($view->isArchived());
 

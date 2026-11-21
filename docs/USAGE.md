@@ -32,6 +32,7 @@
   - [Events after writes](#events-after-writes)
   - [Template blocks and partials](#template-blocks-and-partials)
 - [Using it from a DDD / hexagonal application](#using-it-from-a-ddd--hexagonal-application)
+  - [Host ports by id (since 2.29)](#host-ports-by-id-since-229)
 - [Board index and default view (since 1.24)](#board-index-and-default-view-since-124)
 - [Columns, column sets and the task panel (since 1.11)](#columns-column-sets-and-the-task-panel-since-111)
   - [Column icon, rename, colour, delete](#column-icon-rename-colour-delete)
@@ -768,10 +769,123 @@ them. You still check the tenant, the plan and CSRF, as the API does.
 - The older write events still carry the entities and the user object beside their scalar getters (deprecated since
   2.15, removed in 3.0); use the id getters and the `get*Snapshot()` accessors and do not keep the entities.
 - The remaining services (`TaskLinkAttacher`, `TaskDependencyManager`, `TaskMemberAssigner`, `TaskCopier`, ...) are
-  `final` without a port; the ports take the bundle's entities and form DTOs (`Task`, `TaskBoard`, `TaskFormData`), not
-  ids (no id-based command methods).
+  `final` without a port and take the bundle's entities. Since 2.29 the id-based ports below cover the writes a host
+  needs (create, update, move, complete, members, comments, links, dependencies, documents, time, columns).
 - `BOARD_LIST_RESULT`, `TASK_LIST_QUERY`, `TASK_LIST_RESULT`, `TASK_READ_ONLY_RESOLVE` and `MEMBER_LIST_QUERY` are
   declared but never dispatched (deprecated since 2.10; removed in 3.0).
+
+### Host ports by id (since 2.29)
+
+Four public services let a host use TaskBoard **by id only** (DDD-host checklist B1, B4, B7, B8): no entity, no user
+object and no DQL over TaskBoard tables in your code.
+
+| Port | What |
+|---|---|
+| `Service\TaskCommandsInterface` | writes, as a user given by id; returns `View\TaskView` or the new row's id |
+| `Service\TaskBoardAccessInterface` | the bundle's access decisions by id |
+| `Service\TaskBoardQueryInterface` | lists and counts (system read, no access check) |
+| `Service\TaskFlowStatsInterface` | flow statistics for analytics (system read) |
+
+**The user: `ValueObject\UserRef`.** `UserRef::ofId('42')` (or `UserRef::of($user)`) holds the id only. TaskBoard looks
+it up again on every call (`user_directory` with `database.user_reference: id`, the `user_class` entity otherwise; the
+answer must have exactly that id) and judges that user with that user's own roles, never the signed-in session's.
+
+```php
+use Nowo\TaskBoardBundle\Dto\TaskFormData;
+use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
+use Nowo\TaskBoardBundle\Exception\TaskBoardAccessDeniedException;
+use Nowo\TaskBoardBundle\Exception\TaskChangedException;
+use Nowo\TaskBoardBundle\Service\TaskCommandsInterface;
+use Nowo\TaskBoardBundle\ValueObject\UserRef;
+use Nowo\TransactionContract\TransientStorageFailure;
+
+final class EscalateIncident
+{
+    public function __construct(private TaskCommandsInterface $tasks)
+    {
+    }
+
+    public function __invoke(string $boardId, string $actorId, string $assigneeId, string $title): string
+    {
+        $actor = UserRef::ofId($actorId);
+        $task  = $this->tasks->createTask($actor, $boardId, new TaskFormData($title, tags: ['incident']));
+        $this->tasks->addMember($actor, $task->id, UserRef::ofId($assigneeId), TaskMemberRole::Assignee);
+        $this->tasks->addHostObjectLink($actor, $task->id, 'monitor', '17', 'API monitor');
+
+        return $task->id;
+    }
+}
+```
+
+**Commands** (`TaskCommandsInterface`): `createTask` (all task form fields, a parent, `completed: true` to create it
+done), `updateTask`, `moveTask`, `completeTask` (also on a board without columns), `archiveTask`, `restoreTask`,
+`deleteTask`, `addMember` / `removeMember`, `addComment`, `addLink`, `addHostObjectLink` (`TaskLink::forHostObject()`),
+`addDependency`, `addDocument`, `logTime`, `addColumn` (at a position) and `reorderColumns`. Two **system calls** take no
+user and check no access: `adjustTotalTime(taskId, deltaSeconds)` (one atomic `UPDATE`, clamped at 0: concurrent
+adjustments never lose one) and `clearTimeEntrySnapshotsForUser(userId)` (erasure: clears the task title and external id
+copies of the user's detached time entries, in batches; idempotent).
+
+- **Access at every call.** The rule of the page: the global gate (`security.access_roles` or your checker), then edit
+  rights on the board (create, columns: also `canManageColumns`) or the task (every task change), comment rights for a
+  comment (`comments.readers_can_comment`), `canTrackTime` for time, the board's manage right to delete; your
+  `BOARD_ACCESS_CHECK` / `TASK_ACCESS_CHECK` listeners decide as on the pages. An unknown user, an unknown id (ids are
+  compared byte for byte) and a refusal all throw `TaskBoardAccessDeniedException` with the same message.
+- **One write unit per call.** One transaction, or a savepoint inside yours; the task events are held until it
+  commits and dropped when it rolls back.
+- **Concurrency.** A task write locks the task's row first (after the column it enters, in the bundle's fixed lock
+  order). Pass the `TaskView::$revision` you read as `$expectedRevision` to `updateTask` / `moveTask`: a task changed
+  meanwhile throws `TaskChangedException` (map it to **409 Conflict**, with `currentRevision`) and nothing is written.
+  A lock conflict (deadlock, lock wait timeout) throws `Nowo\TransactionContract\TransientStorageFailure`: nothing was
+  written, retry (an HTTP edge answers 503 with `Retry-After`).
+- The other errors are the pages' ones: `TaskReopenRefusedException` (your active-task limit),
+  `ColumnTransitionRefusedException`, `UnassignableUserException`, `TaskLinkedToProviderException`, and
+  `InvalidArgumentException` for invalid input (checked before anything is written).
+
+**Access by id** (`TaskBoardAccessInterface`): `canAccess`, `canViewBoard`, `canEditBoard`, `canManageBoard`,
+`canViewTask`, `canEditTask`, `canTrackTime`, `filterBoardIds` (at most 500). An unknown user or id answers `false`.
+
+**Queries** (`TaskBoardQueryInterface`): `findBoards(BoardCriteria)`, `findBoardById`, `countActiveBoards(tenantKeys)`,
+`findTasks(TaskCriteria)` / `countTasks`, `findTaskById`, `findTasksByIds`, `countOpenTasks(tenantKeys)` and
+`tagCounts(tenantKeys)`. `TaskCriteria::forTenants([...])` or `forBoards([...])`, then `withCompleted()`,
+`withArchived()`, `dueBetween($from, $to)`, `inColumn()`, `createdBy($userId)`, `topLevelOnly()`, `sortedBy(TaskSort)`
+and `page($offset, $limit)` (at most 500 per page; every order ends with the id, so pages are stable). Tenant keys and
+ids are matched **byte for byte**: the database selects candidates and PHP keeps only the rows whose key is `===` one
+you asked, so a case-insensitive collation never mixes `acme` and `ACME`; counts are summed per exact key.
+
+```php
+$due = $query->findTasks(
+    TaskCriteria::forTenants(['org-7'])
+        ->withCompleted(false)
+        ->dueBetween(new DateTimeImmutable('today'), new DateTimeImmutable('+1 day'))
+        ->sortedBy(TaskSort::DueAsc)
+        ->page(0, 100),
+);
+foreach ($due->items as $task) { /* TaskView: ids, scalars, dates */ }
+$open = $query->countOpenTasks(['org-7', 'org-8']); // ['org-7' => 12, 'org-8' => 0]
+```
+
+**Flow statistics** (`TaskFlowStatsInterface`): `dailyFlow(tenantKeys, from, to, timeZone)` (created and completed per
+tenant and day), `completedSamples(...)` (created and completed dates of the tasks completed in the window: lead time)
+and `firstEntries(tenantKeys, columnName, from, to)` (the first time each task entered a column, from the task history).
+Windows are `[from, to)`, at most 400 days; at most 5,000 samples per call.
+
+**Events after your commit.** With `database.private_entity_manager: true`, `events.after_host_commit: true` (opt-in)
+and doctrine/dbal 4, a TaskBoard write you wrap in your own transaction dispatches its change events after **your**
+commit, and never when you roll back ([CONFIGURATION](CONFIGURATION.md#database)). The three hook events that carried
+objects only also have ids now: `BoardListQueryEvent::getSubjectId()`, `ColumnDeleteCheckEvent::getUserId()`,
+`AbstractColumnEvent::getActorId()`, each with `getOccurredAt()`; the object accessors are deprecated (removed in 3.0).
+
+**Your entities that point at TaskBoard rows.** With the private entity manager, TaskBoard rows live in TaskBoard's own
+unit of work. An entity of yours with a `ManyToOne` to `Task`, `TaskComment`, `TaskBoard`, ... gets the row as a
+**reference by id**, and never cascades persist to it:
+
+```php
+$note->task = $entityManager->getReference(Task::class, $taskId); // no query, no TaskBoard entity in your unit of work
+$entityManager->persist($note);
+$entityManager->flush(); // writes your row and its foreign key; never inserts or updates a TaskBoard row
+```
+
+Read the task through `TaskBoardQueryInterface` when you need its fields; write it through `TaskCommandsInterface`.
 
 ## Board index and default view (since 1.24)
 

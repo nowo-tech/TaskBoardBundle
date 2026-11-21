@@ -5,6 +5,9 @@
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [Preparing for 3.0](#preparing-for-30)
+- [To 2.29.0](#to-2290)
+  - [Role rules judge the given user (fix)](#role-rules-judge-the-given-user-fix)
+  - [Host ports by id (additive)](#host-ports-by-id-additive)
 - [To 2.28.0](#to-2280)
   - [Unset `private_entity_manager`](#unset-private_entity_manager)
   - [The host-flush probe: your migration list](#the-host-flush-probe-your-migration-list)
@@ -245,6 +248,54 @@ change before 3.0. What 3.0 removes:
 **2.x security support.** After 3.0.0 is tagged, the 2.x line gets security fixes for 6 months: Moderate and higher are
 backported to the last 2.x minor; Low ones are fixed in 3.x only, with the advice to upgrade. Advisories name both
 lines.
+
+## To 2.29.0
+
+From **2.28.x**:
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
+
+Additive: no configuration change, no schema change, no migration. Defaults are unchanged.
+
+### Role rules judge the given user (fix)
+
+`ConfigurableTaskBoardAccessChecker` (`security.access_roles`, `create_roles`, `list_roles`) and the
+`security.manage_roles` bypass of `TaskBoardResourceAccessChecker` now judge the **user they are given**: the signed-in
+user by the token, as before; anyone else by their own roles (Symfony's `isGrantedForUser()`, role hierarchy included).
+Up to 2.28 the token decided for every user. Check your code if it relied on that:
+
+- a check made for another user while an administrator is signed in no longer inherits the administrator's roles;
+- a check without a token (Messenger handler, console command) now grants a user who holds the role (it refused before);
+- a host user object that is not a Symfony `UserInterface` is judged on its `getRoles()`; without it, it holds no role.
+
+A checker you build by hand without the new optional `$tokenStorage` argument keeps the old rule.
+
+### Host ports by id (additive)
+
+New public services for hosts that keep TaskBoard entities out of their code (DDD-host checklist B1, B4, B7, B8); see
+[USAGE "Host ports by id"](USAGE.md#host-ports-by-id-since-229):
+
+| Service | For |
+|---|---|
+| `Service\TaskCommandsInterface` | writes by id with a `ValueObject\UserRef`, returning `View\TaskView` or ids |
+| `Service\TaskBoardAccessInterface` | access checks by id |
+| `Service\TaskBoardQueryInterface` | board and task lists, counts, tag histograms (`Dto\TaskCriteria`, `Dto\BoardCriteria`) |
+| `Service\TaskFlowStatsInterface` | created / completed per day, lead time samples, first entry into a column |
+
+Also: `TaskMemberFormData::$userId`; `TaskManager::complete()` (completes on a board without columns too);
+`TaskAccessGuard::canTrack()` takes any user object; `BoardListQueryEvent::getSubjectId()`,
+`ColumnDeleteCheckEvent::getUserId()`, `AbstractColumnEvent::getActorId()` / `getBoardId()`, and `getOccurredAt()` on
+the three. Deprecated (docblock only, removed in 3.0): `BoardListQueryEvent::getSubject()`, `ColumnDeleteCheckEvent::$user`,
+`AbstractColumnEvent::$actor`, `TaskMemberFormData::$user`.
+
+Opt-in: `events.after_host_commit: true` (with `database.private_entity_manager: true` and doctrine/dbal 4) holds the
+change events until your transaction commits. Recommended for DDD hosts, planned as the 3.0 default.
+
+With the private entity manager, a host entity that points at a TaskBoard row (`ManyToOne` to `Task`, `TaskComment`,
+`TaskBoard`, ...) must get it with `$entityManager->getReference(Task::class, $id)` and must not cascade persist to it:
+TaskBoard rows are written by TaskBoard only.
 
 ## To 2.28.0
 

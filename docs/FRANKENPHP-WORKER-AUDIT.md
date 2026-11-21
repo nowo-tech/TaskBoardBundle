@@ -27,6 +27,7 @@
 - [Multi-board list (2.13.0)](#multi-board-list-2130)
 - [AI Flow features (2.16.0)](#ai-flow-features-2160)
 - [Task templates (2.16.0)](#task-templates-2160)
+- [Host ports by id (2.29.0)](#host-ports-by-id-2290)
 - [Findings](#findings)
   - [W-01 — Unique-constraint violations close the EntityManager (Medium)](#w-01--unique-constraint-violations-close-the-entitymanager-medium)
   - [W-02 — Doctrine identity map is never cleared by the bundle (Medium)](#w-02--doctrine-identity-map-is-never-cleared-by-the-bundle-medium)
@@ -178,6 +179,21 @@ the manager stays open, and the revision goes up by one per accepted write.
 The host's `TaskTemplatePermissionInterface` must decide per call too (stated on the interface). **Worker test:**
 `tests/Functional/Api/ApiTaskTemplateWorkerTest.php` alternates two tenants' tokens through `http_kernel` without the
 services resetter; each answer holds only its own tenant's templates.
+
+## Host ports by id (2.29.0)
+
+| Service | State | Notes |
+|---------|-------|-------|
+| `Service\TaskCommands`, `TaskBoardIdAccessChecker`, `TaskBoardQuery`, `TaskFlowStats` | none (`final readonly`) | The user (`UserRef`) and every resource are loaded per call by id; nothing memoised. A failed write unit rolls back to its entry level, drops its held events, resets a closed manager through the registry and reloads the task it touched |
+| `User\TaskBoardUserLocator` | none (`final readonly`) | Through `TaskBoardUsers` (its memo is one of the boundary memos) or a `find()` on the `user_class` manager per call |
+| `Security\UserRoleCheck` | none | Reads the token per call (2.29.0 fix: role rules judge the given user) |
+| `Doctrine\HostCommitEventRelay` (`events.after_host_commit`) | held / released events, a re-entrance flag | Request state: released or dropped at every boundary of the boundary subscriber (before the private manager) and at `kernel.reset`; a held event is never dispatched in a later request. Registered only with the private manager and DBAL 4 |
+
+**Worker test:** `tests/Functional/HostPorts/HostPortsWorkerTest.php` runs one kept-alive kernel built as production
+(`TASK_BOARD_TEST_DEBUG=0`), never reset by `services_resetter`: two users alternate 200 times through the ports inside
+the application's transaction with `events.after_host_commit` on; each moves only their own task and is refused the
+other's, the event of a committed transaction runs once with that user's id, nothing of a rolled-back transaction
+reaches the next request, no private-manager row survives a boundary, and memory stays flat after a warm-up.
 
 ## Findings
 
