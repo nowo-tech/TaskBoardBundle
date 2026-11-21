@@ -61,6 +61,7 @@ use Nowo\TaskBoardBundle\Copy\TaskCopier;
 use Nowo\TaskBoardBundle\DependencyInjection\Compiler\PrivateEntityManagerPass;
 use Nowo\TaskBoardBundle\DependencyInjection\Compiler\PrivateEntityManagerReferencesPass;
 use Nowo\TaskBoardBundle\DependencyInjection\Compiler\TaskBoardPortsPass;
+use Nowo\TaskBoardBundle\Doctrine\HostCommitEventRelay;
 use Nowo\TaskBoardBundle\Doctrine\PrivateEntityManagerMiddleware;
 use Nowo\TaskBoardBundle\Doctrine\TaskBoardEntityManager;
 use Nowo\TaskBoardBundle\Doctrine\TaskBoardHostFlushProbe;
@@ -416,6 +417,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $this->registerHostHooks($container, $config);
         $this->registerApi($container, $loader, $config, $emName);
         $this->registerPrivateEntityManager($container, $config['database']['private_entity_manager'], $emName);
+        $this->registerHostCommitEvents($container, (bool) $config['events']['after_host_commit']);
         $this->registerRequestBoundary($container);
     }
 
@@ -458,6 +460,26 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
     }
 
     /**
+     * Since 2.29.0 (REQ-ARCH-001 rule 7, opt-in `events.after_host_commit: true`): with the private entity manager and
+     * doctrine/dbal 4 (the rollback middleware is registered), {@see TaskEventDeferral} dispatches through
+     * {@see HostCommitEventRelay}, which holds the change events while the application's transaction is open and
+     * releases them after its commit (dropped on rollback). Otherwise nothing changes: every event is dispatched at once.
+     */
+    private function registerHostCommitEvents(ContainerBuilder $container, bool $afterHostCommit): void
+    {
+        if (!$afterHostCommit || !$container->hasDefinition(PrivateEntityManagerMiddleware::class)) {
+            return;
+        }
+
+        $container->register(HostCommitEventRelay::class, HostCommitEventRelay::class)
+            ->setArguments([new Reference('event_dispatcher'), new Reference(TaskBoardEntityManager::class), new Reference('logger', ContainerInterface::NULL_ON_INVALID_REFERENCE)])
+            ->addTag('kernel.event_subscriber')
+            ->addTag('kernel.reset', ['method' => 'reset']);
+        $container->getDefinition(PrivateEntityManagerMiddleware::class)->setArgument('$relay', new Reference(HostCommitEventRelay::class));
+        $container->getDefinition(TaskEventDeferral::class)->setArgument('$dispatcher', new Reference(HostCommitEventRelay::class));
+    }
+
+    /**
      * Since 2.28.0 (REQ-ARCH-001 rule 6 deprecation layer): the notice of an unset `database.private_entity_manager`.
      *
      * @param string $emName `database.entity_manager`
@@ -493,7 +515,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $values     = $state instanceof IteratorArgument ? $state->getValues() : [];
         // Since 2.15.0: the private entity manager last, after the memos that may still hold its rows.
         // Since 2.28.0: the host-flush probe (registered without the private manager only).
-        foreach ([TaskRecurrenceView::class, SyncPeopleViewProvider::class, TaskBoardUsers::class, TaskBoardHostFlushProbe::class, TaskBoardEntityManager::class] as $id) {
+        // Since 2.29.0: the host-commit relay (events.after_host_commit) before the private manager it reads.
+        foreach ([TaskRecurrenceView::class, SyncPeopleViewProvider::class, TaskBoardUsers::class, TaskBoardHostFlushProbe::class, HostCommitEventRelay::class, TaskBoardEntityManager::class] as $id) {
             if ($container->hasDefinition($id)) {
                 $values[] = new Reference($id, ContainerInterface::IGNORE_ON_UNINITIALIZED_REFERENCE);
             }

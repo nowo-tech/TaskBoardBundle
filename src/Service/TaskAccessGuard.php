@@ -10,8 +10,8 @@ use Nowo\TaskBoardBundle\Doctrine\ManagerOf;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\Team;
 use Nowo\TaskBoardBundle\Repository\TeamMemberRepositoryInterface;
-use Nowo\TaskBoardBundle\Support\UserIdResolver;
-use Symfony\Component\Security\Core\User\UserInterface;
+use Nowo\TaskBoardBundle\Support\ActorId;
+use Nowo\TaskBoardBundle\ValueObject\UserRef;
 
 final readonly class TaskAccessGuard
 {
@@ -21,11 +21,18 @@ final readonly class TaskAccessGuard
     ) {
     }
 
-    public function canTrack(UserInterface $user, Task $task): bool
+    /**
+     * @param object $user since 2.29.0 any host user object with `getId()` (a {@see UserRef} too), not only a Symfony
+     *                     `UserInterface`; a user without a usable id may not track
+     */
+    public function canTrack(object $user, Task $task): bool
     {
+        $userId = ActorId::of($user);
+        if ($userId === null) {
+            return false;
+        }
         $this->refreshForDecision($task);
 
-        $userId   = UserIdResolver::getId($user);
         $assignee = $task->getAssignee();
 
         if ($assignee !== null && method_exists($assignee, 'getId') && (string) $assignee->getId() === $userId) {

@@ -35,6 +35,8 @@ final class PrivateEntityManagerConnection extends AbstractConnectionMiddleware
     public function __construct(
         Connection $connection,
         private readonly TaskBoardEntityManager $entityManager,
+        // Since 2.29.0 (`events.after_host_commit`): the events held until the application's commit.
+        private readonly ?HostCommitEventRelay $relay = null,
     ) {
         parent::__construct($connection);
     }
@@ -45,10 +47,12 @@ final class PrivateEntityManagerConnection extends AbstractConnectionMiddleware
             parent::commit();
         } catch (Throwable $exception) {
             $this->entityManager->connectionRolledBack(1);
+            $this->relay?->connectionRolledBack(1);
 
             throw $exception;
         }
         $this->entityManager->connectionCommitted();
+        $this->relay?->connectionCommitted();
     }
 
     public function rollBack(): void
@@ -57,6 +61,7 @@ final class PrivateEntityManagerConnection extends AbstractConnectionMiddleware
             parent::rollBack();
         } finally {
             $this->entityManager->connectionRolledBack(1);
+            $this->relay?->connectionRolledBack(1);
         }
     }
 
@@ -65,9 +70,12 @@ final class PrivateEntityManagerConnection extends AbstractConnectionMiddleware
         $result = parent::exec($sql);
         if (preg_match(self::SAVEPOINT_ROLLBACK, $sql, $match) === 1 && !str_starts_with(strtolower($match[1]), self::OWN_SAVEPOINT)) {
             // A savepoint of unknown level (opened by the application itself): treated as undoing everything pending.
-            $this->entityManager->connectionRolledBack(preg_match(self::NESTED, $match[1], $level) === 1 ? (int) $level[1] : null);
+            $rolledBack = preg_match(self::NESTED, $match[1], $level) === 1 ? (int) $level[1] : null;
+            $this->entityManager->connectionRolledBack($rolledBack);
+            $this->relay?->connectionRolledBack($rolledBack);
         } elseif (preg_match(self::SAVEPOINT_RELEASE, $sql, $match) === 1 && preg_match(self::NESTED, $match[1], $level) === 1) {
             $this->entityManager->savepointReleased((int) $level[1]);
+            $this->relay?->savepointReleased((int) $level[1]);
         }
 
         return $result;

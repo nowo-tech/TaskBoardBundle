@@ -1,0 +1,532 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Nowo\TaskBoardBundle\Service;
+
+use Closure;
+use DateTimeImmutable;
+use Doctrine\DBAL\LockMode;
+use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\Persistence\ManagerRegistry;
+use InvalidArgumentException;
+use Nowo\TaskBoardBundle\Doctrine\LockConflict;
+use Nowo\TaskBoardBundle\Doctrine\RecoveringFlusher;
+use Nowo\TaskBoardBundle\Doctrine\TransactionRollback;
+use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
+use Nowo\TaskBoardBundle\Dto\TaskFormData;
+use Nowo\TaskBoardBundle\Dto\TaskLinkFormData;
+use Nowo\TaskBoardBundle\Dto\TaskMemberFormData;
+use Nowo\TaskBoardBundle\Entity\Task;
+use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Entity\TaskDocument;
+use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
+use Nowo\TaskBoardBundle\Enum\TaskDependencyType;
+use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
+use Nowo\TaskBoardBundle\Exception\TaskBoardAccessDeniedException;
+use Nowo\TaskBoardBundle\Exception\TaskChangedException;
+use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
+use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
+use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
+use Nowo\TaskBoardBundle\User\TaskBoardUserLocator;
+use Nowo\TaskBoardBundle\User\TaskBoardUsers;
+use Nowo\TaskBoardBundle\Validation\TaskConstraints;
+use Nowo\TaskBoardBundle\ValueObject\TaskBoardUserRef;
+use Nowo\TaskBoardBundle\ValueObject\UserRef;
+use Nowo\TaskBoardBundle\View\TaskView;
+use Nowo\TaskBoardBundle\View\Views;
+use Nowo\TransactionContract\TransientStorageFailure;
+use Throwable;
+
+use function array_diff;
+use function array_splice;
+use function array_unique;
+use function array_values;
+use function count;
+use function is_scalar;
+use function max;
+use function mb_strlen;
+use function min;
+use function trim;
+
+/**
+ * Since 2.29.0: the bundle's {@see TaskCommandsInterface}, a thin layer over the services the pages use. Each call: the
+ * user looked up again by id, the resources loaded by exact id, the page's access rule, then one write unit (transaction
+ * or savepoint, events held until the commit, row lock on the task where edits race).
+ *
+ * Stateless (FrankenPHP worker mode with kernel reset off): every dependency is a stateless service or one the bundle
+ * resets at each boundary; a failed unit resets a closed manager through the registry and reloads the task it touched.
+ */
+final readonly class TaskCommands implements TaskCommandsInterface
+{
+    /** Rows per batch of {@see self::clearTimeEntrySnapshotsForUser()}. */
+    private const BATCH = 500;
+
+    public function __construct(
+        private EntityManagerInterface $entityManager,
+        private TaskBoardIdAccessChecker $access,
+        private TaskBoardResourceAccessChecker $resources,
+        private TaskManager $tasks,
+        private TaskMemberAssigner $members,
+        private TaskCommentManagerInterface $comments,
+        private TaskCommentPolicy $commentPolicy,
+        private TaskLinkAttacher $links,
+        private TaskDependencyManager $dependencies,
+        private TaskTimeLoggerInterface $time,
+        private BoardColumnManagerInterface $columns,
+        private TaskBoardEraserInterface $eraser,
+        private TaskBoardUserLocator $users,
+        private TaskEventDeferral $events,
+        private ?ManagerRegistry $managerRegistry = null,
+        private TaskBoardUsers $userReferences = new TaskBoardUsers(),
+        // The fixed lock order of the bundle (columns, then tasks): a column a write enters is locked before the task.
+        private ?OrderedRowLockInterface $rowLock = null,
+    ) {
+    }
+
+    public function createTask(UserRef $creator, string $boardId, TaskFormData $data, ?string $parentId = null, bool $completed = false): TaskView
+    {
+        $actor = $this->actor($creator);
+        $board = $this->access->board($boardId) ?? throw new TaskBoardAccessDeniedException();
+        if (!$this->resources->canEditBoard($actor, $board)) {
+            throw new TaskBoardAccessDeniedException();
+        }
+        $parent = null;
+        if ($parentId !== null) {
+            $parent = $this->editableTask($actor, $parentId);
+            if ($parent->getBoard()->getId() !== $board->getId()) {
+                throw new InvalidArgumentException('TaskBoard: the parent task is on another board.');
+            }
+        }
+        $this->assertTitle($data->title);
+        $refusal = $this->tasks->activeTaskRefusal($board, $completed ? 0 : 1);
+        if ($refusal instanceof LimitRefusal) {
+            throw new TaskReopenRefusedException($refusal);
+        }
+
+        return $this->unit(function () use ($board, $data, $actor, $parent, $completed): TaskView {
+            $task = $this->tasks->create($board, $data, $actor, $parent);
+            if ($completed) {
+                $this->tasks->complete($task, $actor);
+            }
+
+            return Views::task($task);
+        });
+    }
+
+    public function updateTask(UserRef $actor, string $taskId, TaskFormData $data, ?int $expectedRevision = null): TaskView
+    {
+        $user = $this->actor($actor);
+        $task = $this->editableTask($user, $taskId);
+        $this->assertTitle($data->title);
+
+        return $this->unit(function () use ($task, $data, $user, $expectedRevision): TaskView {
+            $this->lockColumn($data->columnId !== $task->getColumn()?->getId() ? $data->columnId : null);
+            $this->lock($task, $expectedRevision);
+            $this->tasks->update($task, $data, $user);
+
+            return Views::task($task);
+        }, $task);
+    }
+
+    public function moveTask(UserRef $actor, string $taskId, ?string $columnId, int $position, ?int $expectedRevision = null): TaskView
+    {
+        $user = $this->actor($actor);
+        $task = $this->editableTask($user, $taskId);
+
+        return $this->unit(function () use ($task, $columnId, $position, $user, $expectedRevision): TaskView {
+            $this->lockColumn($columnId);
+            $this->lock($task, $expectedRevision);
+            $this->tasks->move($task, $columnId, max(0, $position), $user);
+
+            return Views::task($task);
+        }, $task);
+    }
+
+    public function completeTask(UserRef $actor, string $taskId): TaskView
+    {
+        $user = $this->actor($actor);
+        $task = $this->editableTask($user, $taskId);
+
+        // TaskManager locks the done column and the task in the bundle's fixed order itself.
+        return $this->unit(function () use ($task, $user): TaskView {
+            $this->tasks->complete($task, $user);
+
+            return Views::task($task);
+        }, $task);
+    }
+
+    public function archiveTask(UserRef $actor, string $taskId): TaskView
+    {
+        $user = $this->actor($actor);
+        $task = $this->editableTask($user, $taskId);
+
+        return $this->unit(function () use ($task, $user): TaskView {
+            $this->lock($task, null);
+            $this->tasks->archive($task, $user);
+
+            return Views::task($task);
+        }, $task);
+    }
+
+    public function restoreTask(UserRef $actor, string $taskId): TaskView
+    {
+        $user = $this->actor($actor);
+        $task = $this->editableTask($user, $taskId);
+
+        return $this->unit(function () use ($task, $user): TaskView {
+            $this->lock($task, null);
+            $this->tasks->restore($task, $user);
+
+            return Views::task($task);
+        }, $task);
+    }
+
+    public function deleteTask(UserRef $actor, string $taskId): int
+    {
+        $user = $this->actor($actor);
+        $task = $this->access->task($taskId) ?? throw new TaskBoardAccessDeniedException();
+        if (!$this->resources->canManageBoard($user, $task->getBoard())) {
+            throw new TaskBoardAccessDeniedException();
+        }
+
+        return $this->unit(fn (): int => $this->eraser->eraseTask($task, $user));
+    }
+
+    public function addMember(UserRef $actor, string $taskId, UserRef $member, TaskMemberRole $role = TaskMemberRole::Assignee): string
+    {
+        $user   = $this->actor($actor);
+        $task   = $this->editableTask($user, $taskId);
+        $target = $this->users->find($member) ?? throw new TaskBoardAccessDeniedException();
+
+        return $this->unit(function () use ($task, $target, $role, $user): string {
+            $this->lock($task, null);
+
+            return $this->members->assign($task, new TaskMemberFormData($target, $role), $user)->getId();
+        }, $task);
+    }
+
+    public function removeMember(UserRef $actor, string $taskId, string $memberId): bool
+    {
+        $user = $this->actor($actor);
+        $task = $this->editableTask($user, $taskId);
+
+        return $this->unit(function () use ($task, $memberId, $user): bool {
+            $this->lock($task, null);
+
+            return $this->members->unassign($task, $memberId, $user);
+        }, $task);
+    }
+
+    public function addComment(UserRef $author, string $taskId, string $body, array $mentionIds = []): string
+    {
+        $user = $this->actor($author);
+        $task = $this->access->task($taskId) ?? throw new TaskBoardAccessDeniedException();
+        if (!$this->resources->canViewTask($user, $task) || !$this->commentPolicy->mayComment($user, $task)) {
+            throw new TaskBoardAccessDeniedException();
+        }
+        if (trim($body) === '') {
+            throw new InvalidArgumentException('TaskBoard: a comment cannot be blank.');
+        }
+
+        return $this->unit(fn (): string => $this->comments->add($task, $user, $body, array_values($mentionIds))->getId(), $task);
+    }
+
+    public function addLink(UserRef $actor, string $taskId, TaskLinkFormData $data): string
+    {
+        $user = $this->actor($actor);
+        $task = $this->editableTask($user, $taskId);
+        if (trim($data->url) === '' || mb_strlen($data->url) > TaskConstraints::URL_MAX) {
+            throw new InvalidArgumentException('TaskBoard: a link needs a URL of at most 2048 characters.');
+        }
+
+        return $this->unit(fn (): string => $this->links->attach($task, $data, $user)->getId(), $task);
+    }
+
+    public function addHostObjectLink(UserRef $actor, string $taskId, string $objectType, string $objectId, ?string $label = null): string
+    {
+        $user = $this->actor($actor);
+        $task = $this->editableTask($user, $taskId);
+        if (trim($objectType) === '' || trim($objectId) === '') {
+            throw new InvalidArgumentException('TaskBoard: a host object link needs a type and an id.');
+        }
+
+        return $this->unit(function () use ($task, $objectType, $objectId, $user, $label): string {
+            // The task's row locked: two concurrent links of the same object never add two rows.
+            $this->lock($task, null);
+
+            return $this->links->attachObject($task, $objectType, $objectId, $user, $label)->getId();
+        }, $task);
+    }
+
+    public function addDependency(UserRef $actor, string $taskId, string $otherTaskId, TaskDependencyType $type): string
+    {
+        $user  = $this->actor($actor);
+        $task  = $this->editableTask($user, $taskId);
+        $other = $this->editableTask($user, $otherTaskId);
+
+        return $this->unit(fn (): string => $this->dependencies->add($task, $other, $type, $user)->getId(), $task);
+    }
+
+    public function addDocument(UserRef $author, string $taskId, string $title, string $content, ?int $position = null): string
+    {
+        $user = $this->actor($author);
+        $task = $this->editableTask($user, $taskId);
+        if (trim($title) === '' || mb_strlen($title) > TaskConstraints::TITLE_MAX) {
+            throw new InvalidArgumentException('TaskBoard: a document needs a title of 1 to 255 characters.');
+        }
+
+        return $this->unit(function () use ($task, $title, $content, $user, $position): string {
+            $this->lock($task, null);
+            $document = new TaskDocument($task, $title, $content, $user, $position ?? count($task->getDocuments()));
+            $task->getDocuments()->add($document);
+            $this->entityManager->persist($document);
+            $this->entityManager->flush();
+
+            return $document->getId();
+        }, $task);
+    }
+
+    public function logTime(UserRef $user, string $taskId, int $minutes, DateTimeImmutable $loggedAt, ?string $note = null): string
+    {
+        $actor = $this->actor($user);
+        $task  = $this->access->task($taskId) ?? throw new TaskBoardAccessDeniedException();
+        if (!$this->resources->canTrackTime($actor, $task)) {
+            throw new TaskBoardAccessDeniedException();
+        }
+        if ($minutes < 1 || $minutes > TaskConstraints::MAX_MINUTES) {
+            throw new InvalidArgumentException('TaskBoard: minutes must be between 1 and 10080.');
+        }
+
+        return $this->unit(fn (): string => $this->time->log($task, $actor, $minutes, $loggedAt, $note)->getId(), $task);
+    }
+
+    public function addColumn(UserRef $actor, string $boardId, BoardColumnFormData $data, ?int $position = null): string
+    {
+        $user  = $this->actor($actor);
+        $board = $this->manageableColumns($user, $boardId);
+        if (trim($data->name) === '' || mb_strlen($data->name) > TaskConstraints::COLUMN_NAME_MAX) {
+            throw new InvalidArgumentException('TaskBoard: a column needs a name of 1 to 128 characters.');
+        }
+
+        return $this->unit(function () use ($board, $data, $user, $position): string {
+            $column = $this->columns->add($board, $data, $user);
+            if ($position !== null) {
+                $ids = [];
+                foreach ($board->getColumns() as $existing) {
+                    if ($existing->getId() !== $column->getId()) {
+                        $ids[] = $existing->getId();
+                    }
+                }
+                array_splice($ids, min(max(0, $position), count($ids)), 0, [$column->getId()]);
+                $this->columns->reorder($board, $ids, $user);
+            }
+
+            return $column->getId();
+        });
+    }
+
+    public function reorderColumns(UserRef $actor, string $boardId, array $orderedColumnIds): void
+    {
+        $user  = $this->actor($actor);
+        $board = $this->manageableColumns($user, $boardId);
+        $ids   = [];
+        foreach ($board->getColumns() as $column) {
+            $ids[] = $column->getId();
+        }
+        $given = array_values($orderedColumnIds);
+        if (count($given) !== count($ids) || count(array_unique($given)) !== count($given) || array_diff($given, $ids) !== []) {
+            throw new InvalidArgumentException('TaskBoard: the order must list every column of the board exactly once.');
+        }
+
+        $this->unit(function () use ($board, $given, $user): void {
+            $this->columns->reorder($board, $given, $user);
+        });
+    }
+
+    public function adjustTotalTime(string $taskId, int $deltaSeconds): ?int
+    {
+        $task = $this->access->task($taskId);
+        if (!$task instanceof Task) {
+            return null;
+        }
+
+        return $this->unit(function () use ($task, $deltaSeconds): int {
+            // The row is changed by the database, never from a value read in PHP: concurrent adjustments add up (the first
+            // UPDATE locks the row until the unit ends), and the second statement clamps a negative total at 0.
+            $this->entityManager->createQuery('UPDATE ' . Task::class . ' t SET t.totalTimeSeconds = t.totalTimeSeconds + :delta WHERE t.id = :id')
+                ->setParameter('delta', $deltaSeconds)
+                ->setParameter('id', $task->getId())
+                ->execute();
+            $this->entityManager->createQuery('UPDATE ' . Task::class . ' t SET t.totalTimeSeconds = 0 WHERE t.id = :id AND t.totalTimeSeconds < 0')
+                ->setParameter('id', $task->getId())
+                ->execute();
+            // The loaded task follows the database (a bulk UPDATE bypasses the unit of work).
+            $this->entityManager->refresh($task);
+
+            return $task->getTotalTimeSeconds();
+        });
+    }
+
+    public function clearTimeEntrySnapshotsForUser(string $userId): int
+    {
+        if (!TaskBoardUserRef::isValid($userId)) {
+            throw new InvalidArgumentException('TaskBoard: the user id cannot be matched exactly.');
+        }
+        $identity = $this->userReferences->identity('e.user');
+        $changed  = 0;
+        $after    = null;
+        do {
+            $builder = $this->entityManager->createQueryBuilder()
+                ->select('e.id AS id', $identity . ' AS userKey')
+                ->from(TaskTimeEntry::class, 'e')
+                ->where('e.task IS NULL')
+                ->andWhere($identity . ' = :user')
+                ->andWhere('(e.taskTitleSnapshot IS NOT NULL OR e.taskExternalId IS NOT NULL)')
+                ->setParameter('user', $userId)
+                ->orderBy('e.id', 'ASC')
+                ->setMaxResults(self::BATCH);
+            if ($after !== null) {
+                $builder->andWhere('e.id > :after')->setParameter('after', $after);
+            }
+            /** @var list<array{id: mixed, userKey: mixed}> $rows */
+            $rows = $builder->getQuery()->getArrayResult();
+            $ids  = [];
+            foreach ($rows as $row) {
+                $key = $row['userKey'] instanceof TaskBoardUserRef ? $row['userKey']->id : $row['userKey'];
+                // Exactly this user: a collation never clears a look-alike user's entries.
+                if (is_scalar($key) && (string) $key === $userId && is_scalar($row['id'])) {
+                    $ids[] = (string) $row['id'];
+                }
+                $after = is_scalar($row['id']) ? (string) $row['id'] : $after;
+            }
+            if ($ids !== []) {
+                $changed += $this->unit(fn (): int => (int) $this->entityManager->createQuery('UPDATE ' . TaskTimeEntry::class . ' e SET e.taskTitleSnapshot = NULL, e.taskExternalId = NULL WHERE e.id IN (:ids) AND e.task IS NULL')
+                    ->setParameter('ids', $ids)
+                    ->execute());
+            }
+        } while (count($rows) === self::BATCH);
+
+        return $changed;
+    }
+
+    /** The host user behind the reference, when it exists and passes the global gate. */
+    private function actor(UserRef $ref): object
+    {
+        return $this->access->user($ref) ?? throw new TaskBoardAccessDeniedException();
+    }
+
+    private function editableTask(object $user, string $taskId): Task
+    {
+        $task = $this->access->task($taskId);
+        if (!$task instanceof Task || !$this->resources->canEditTask($user, $task)) {
+            throw new TaskBoardAccessDeniedException();
+        }
+
+        return $task;
+    }
+
+    private function manageableColumns(object $user, string $boardId): TaskBoard
+    {
+        $board = $this->access->board($boardId);
+        if (!$board instanceof TaskBoard || !$this->resources->canEditBoard($user, $board) || !$this->resources->canManageColumns($user, $board)) {
+            throw new TaskBoardAccessDeniedException();
+        }
+
+        return $board;
+    }
+
+    private function lockColumn(?string $columnId): void
+    {
+        if ($columnId !== null && $columnId !== '') {
+            $this->rowLock?->lockColumns([$columnId]);
+        }
+    }
+
+    /**
+     * @throws InvalidArgumentException
+     */
+    private function assertTitle(string $title): void
+    {
+        if (trim($title) === '' || mb_strlen($title) > TaskConstraints::TITLE_MAX) {
+            throw new InvalidArgumentException('TaskBoard: a task needs a title of 1 to 255 characters.');
+        }
+    }
+
+    /**
+     * The task's row locked until the unit ends, and the task as committed. With an expected revision, another one is
+     * {@see TaskChangedException}. Inside an outer REPEATABLE READ transaction (MySQL / MariaDB) a refresh may still read
+     * that transaction's snapshot: then the write is refused as changed (never written from a stale copy).
+     *
+     * @throws TaskChangedException
+     */
+    private function lock(Task $task, ?int $expectedRevision): void
+    {
+        $revision = $this->entityManager->createQuery('SELECT t.revision FROM ' . Task::class . ' t WHERE t.id = :id')
+            ->setParameter('id', $task->getId())
+            ->setLockMode(LockMode::PESSIMISTIC_WRITE)
+            ->getSingleScalarResult();
+        $revision = is_scalar($revision) ? (int) $revision : 0;
+        if ($revision !== $task->getRevision()) {
+            $this->entityManager->refresh($task);
+            if ($task->getRevision() !== $revision) {
+                throw new TaskChangedException($revision);
+            }
+        }
+        if ($expectedRevision !== null && $expectedRevision !== $revision) {
+            throw new TaskChangedException($revision);
+        }
+    }
+
+    /**
+     * One write unit: a transaction (a savepoint inside the application's), the task events held until it commits.
+     *
+     * @template T
+     *
+     * @param Closure(): T $write
+     *
+     * @return T
+     */
+    private function unit(Closure $write, ?Task $touched = null): mixed
+    {
+        $connection = $this->entityManager->getConnection();
+        $depth      = $connection->getTransactionNestingLevel();
+        $connection->beginTransaction();
+        $this->events->begin();
+        try {
+            $result = $write();
+            $connection->commit();
+        } catch (Throwable $failure) {
+            try {
+                TransactionRollback::toLevel($connection, $depth);
+            } finally {
+                $this->events->rollBack();
+                RecoveringFlusher::resetIfClosed($this->entityManager, $this->managerRegistry);
+                $this->reload($touched);
+            }
+            if (LockConflict::is($failure)) {
+                throw TransientStorageFailure::fromPrevious($failure);
+            }
+
+            throw $failure;
+        }
+        // After the commit; a failing host listener never reports the saved write as failed (logged).
+        $this->events->commit(false);
+
+        return $result;
+    }
+
+    private function reload(?Task $task): void
+    {
+        if (!$task instanceof Task || !$this->entityManager->isOpen()) {
+            return;
+        }
+        try {
+            if ($this->entityManager->contains($task)) {
+                $this->entityManager->refresh($task);
+            }
+        } catch (Throwable) {
+            // Best effort: a task the rollback removed, or a lost connection, leaves the next read to the database.
+        }
+    }
+}

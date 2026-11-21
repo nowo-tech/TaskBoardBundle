@@ -727,6 +727,34 @@ final readonly class TaskManager implements TaskManagerInterface
     }
 
     /**
+     * Since 2.29.0 (Beacon, DDD-host checklist B1): completes a task. On a board with columns it is {@see moveToDone()}
+     * (the task goes to the done column and the completion follows it). On a board **without columns** the task is marked
+     * completed in place, with its history row and TASK_COMPLETED, where moveToDone() changes nothing. False when the task
+     * was already completed (nothing changes).
+     *
+     * @throws ColumnTransitionRefusedException when the column transition policy refuses the done column
+     * @throws TaskTreeRefusedException `conflict` when the task changed meanwhile (see move())
+     */
+    public function complete(Task $task, object $user, ?ColumnTransitionVia $via = null): bool
+    {
+        if ($task->isCompleted()) {
+            return false;
+        }
+        if ($this->orderedColumns($task->getBoard()) !== []) {
+            $this->moveToDone($task, $user, $via);
+
+            return $task->isCompleted();
+        }
+
+        $task->markCompleted();
+        $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Completed, false, true);
+        $this->taskRepository->save($task);
+        $this->dispatchCompletion($task, $user, false);
+
+        return true;
+    }
+
+    /**
      * @param ColumnTransitionVia|null $via since 2.16.0 (spec 234): how the move happens, for the column transition policy;
      *                                      null: a person in the board UI (`web`). The Task API always passes its
      *                                      principal's channel.

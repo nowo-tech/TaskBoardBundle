@@ -17,7 +17,9 @@ use Nowo\TaskBoardBundle\Event\TaskMemberRemovedEvent;
 use Nowo\TaskBoardBundle\Exception\UnassignableUserException;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Support\ActorId;
+use Nowo\TaskBoardBundle\User\TaskBoardUserLocator;
 use Nowo\TaskBoardBundle\ValueObject\TaskBoardUserRef;
+use Nowo\TaskBoardBundle\ValueObject\UserRef;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 use function get_object_vars;
@@ -41,6 +43,8 @@ final readonly class TaskMemberAssigner
         private TaskChangeRecorder $changeRecorder,
         private ?TaskAssigneeProviderInterface $assigneeProvider = null,
         private ?EventDispatcherInterface $eventDispatcher = null,
+        // Since 2.29.0: finds the user of `TaskMemberFormData::$userId`.
+        private ?TaskBoardUserLocator $users = null,
     ) {
     }
 
@@ -67,6 +71,14 @@ final readonly class TaskMemberAssigner
      */
     public function assign(Task $task, TaskMemberFormData $data, object $actor): TaskMember
     {
+        if (!is_object($data->user) && $data->userId !== null) {
+            // Since 2.29.0: the user by id, looked up again (exact id); nobody behind it is refused like an unassignable user.
+            $found = UserRef::isValid($data->userId) ? $this->users?->find(new UserRef($data->userId)) : null;
+            if ($found === null) {
+                throw UnassignableUserException::forBoard($task->getBoard());
+            }
+            $data = new TaskMemberFormData($found, $data->memberRole, $data->userId);
+        }
         if (!is_object($data->user)) {
             throw new InvalidArgumentException('User is required.');
         }
