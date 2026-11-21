@@ -30,6 +30,7 @@ use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncField;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncFieldValue;
 use Nowo\TaskBoardBundle\User\TaskBoardUsers;
 use Nowo\TaskBoardBundle\ValueObject\TaskBoardUserRef;
+use SortDirection;
 
 use function array_chunk;
 use function array_filter;
@@ -99,7 +100,7 @@ final readonly class TaskApiQueryRepository
             // @igor-ignore - QueryBuilder created per call by filtered(); not shared.
             $qb->andWhere('t.id IN (:searchMatches)')->setParameter('searchMatches', $onlyIds);
         }
-        $direction = $filter->reverse ? 'DESC' : 'ASC';
+        $direction = $filter->reverse ? SortDirection::Descending : SortDirection::Ascending;
         // @igor-ignore - QueryBuilder created per call by filtered(); not shared.
         $qb->orderBy(self::ORDER_FIELDS[$filter->orderBy], $direction)->addOrderBy('t.id', $direction);
         $offset = $filter->page * TaskApiTaskFilter::PAGE_SIZE;
@@ -173,9 +174,9 @@ final readonly class TaskApiQueryRepository
             ->from(TaskBoard::class, 'b')
             ->leftJoin('b.columns', 'c')
             ->where('b.archivedAt IS NULL')
-            ->orderBy('b.name', 'ASC')
-            ->addOrderBy('b.id', 'ASC')
-            ->addOrderBy('c.position', 'ASC');
+            ->orderBy('b.name', SortDirection::Ascending)
+            ->addOrderBy('b.id', SortDirection::Ascending)
+            ->addOrderBy('c.position', SortDirection::Ascending);
         $tenant = [];
         if ($keys !== []) {
             $tenant[] = 'b.tenantKey IN (:tenantKeys)';
@@ -280,8 +281,8 @@ final readonly class TaskApiQueryRepository
             ->where('t.parent IN (:parents)')
             ->andWhere('t.archivedAt IS NULL')
             ->setParameter('parents', $taskIds)
-            ->orderBy('t.position', 'ASC')
-            ->addOrderBy('t.id', 'ASC')
+            ->orderBy('t.position', SortDirection::Ascending)
+            ->addOrderBy('t.id', SortDirection::Ascending)
             ->getQuery()
             ->getResult();
 
@@ -331,8 +332,8 @@ final readonly class TaskApiQueryRepository
         $qb->where('c.task = :task')
             ->andWhere('c.deletedAt IS NULL')
             ->setParameter('task', $task)
-            ->orderBy('c.createdAt', 'DESC')
-            ->addOrderBy('c.id', 'DESC')
+            ->orderBy('c.createdAt', SortDirection::Descending)
+            ->addOrderBy('c.id', SortDirection::Descending)
             ->setMaxResults($limit);
         if ($before instanceof DateTimeImmutable) {
             $qb->andWhere($beforeId !== null ? 'c.createdAt < :before OR (c.createdAt = :before AND c.id < :beforeId)' : 'c.createdAt < :before')
@@ -381,7 +382,7 @@ final readonly class TaskApiQueryRepository
             ->from(TaskSyncField::class, 'f')
             ->where('f.board = :board')
             ->setParameter('board', $boardId)
-            ->orderBy('f.position', 'ASC')
+            ->orderBy('f.position', SortDirection::Ascending)
             ->getQuery()
             ->getResult();
 
@@ -410,7 +411,7 @@ final readonly class TaskApiQueryRepository
             // Since 2.3.0 (spec 217, owner decision 4): only the fields of the task's own board, as the panel shows them.
             ->andWhere('f.board = t.board')
             ->setParameter('tasks', $taskIds)
-            ->orderBy('f.position', 'ASC')
+            ->orderBy('f.position', SortDirection::Ascending)
             ->getQuery()
             ->getResult();
         $byTask = [];

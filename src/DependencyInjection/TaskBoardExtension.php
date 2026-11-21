@@ -41,8 +41,11 @@ use Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface;
 use Nowo\TaskBoardBundle\Bridge\SearchKit\BoardSearchDefinition;
 use Nowo\TaskBoardBundle\Bridge\SearchKit\TaskSearchDefinition;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\ImportedTimeAggregatorListener;
+use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTaskDirectory;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTaskProvider;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTeamContextProvider;
+use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTeamDirectory;
+use Nowo\TaskBoardBundle\Bridge\TimeTrack\TimeTrackScopeKeys;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TimeTrackTaskTimeBillableDefaultProvider;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TimeTrackTaskTimePeriodLock;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TimeTrackTaskTimerStarter;
@@ -60,6 +63,7 @@ use Nowo\TaskBoardBundle\DependencyInjection\Compiler\PrivateEntityManagerRefere
 use Nowo\TaskBoardBundle\DependencyInjection\Compiler\TaskBoardPortsPass;
 use Nowo\TaskBoardBundle\Doctrine\PrivateEntityManagerMiddleware;
 use Nowo\TaskBoardBundle\Doctrine\TaskBoardEntityManager;
+use Nowo\TaskBoardBundle\Doctrine\TaskBoardHostFlushProbe;
 use Nowo\TaskBoardBundle\Doctrine\TaskBoardManagerRegistry;
 use Nowo\TaskBoardBundle\Doctrine\TaskBoardMetadataListener;
 use Nowo\TaskBoardBundle\Doctrine\TaskRevisionListener;
@@ -199,10 +203,10 @@ use Nowo\TaskBoardBundle\View\TaskBoardDefaultViewResolverInterface;
 use Nowo\TimeTrackBundle\Event\TimeEntryCreatedEvent;
 use Nowo\TimeTrackBundle\Event\TimeEntryImportedEvent;
 use Nowo\TimeTrackBundle\Event\TimeTrackEvents;
-use Nowo\TimeTrackBundle\Integration\TaskProviderInterface;
+use Nowo\TimeTrackBundle\Integration\TaskDirectoryInterface;
 use Nowo\TimeTrackBundle\Repository\TimesheetRepositoryInterface;
 use Nowo\TimeTrackBundle\Timesheet\PeriodLockGuard;
-use Nowo\TimeTrackBundle\Timesheet\TimesheetScopeProviderInterface;
+use Nowo\TransactionDoctrine\HostFlushProbe;
 use Nowo\TransactionDoctrine\Symfony\Conflict\ConflictResponseFormatterInterface;
 use Symfony\Component\Config\FileLocator;
 use Symfony\Component\DependencyInjection\Argument\IteratorArgument;
@@ -240,7 +244,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
     public const TIPTAP_TASK_PROFILE = 'task';
 
     /**
-     * @param string $timeTrackProviderInterface Interface whose presence enables the optional TimeTrack bridge
+     * @param string $timeTrackProviderInterface Interface whose presence enables the optional TimeTrack bridge (since
+     *                                           2.28.0 the 1.23 TaskDirectoryInterface)
      * @param string $timeTrackImportedEvent Since 1.25: event class whose presence (TimeTrack >= 1.11) enables the
      *                                       imported-time aggregation
      * @param string $timeTrackEntryCreatedEvent Since 1.26.1: event class whose presence (TimeTrack >= 1.14) enables the
@@ -251,7 +256,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
      *                                         under TimeTrack's period lock
      */
     public function __construct(
-        private readonly string $timeTrackProviderInterface = TaskProviderInterface::class,
+        private readonly string $timeTrackProviderInterface = TaskDirectoryInterface::class,
         private readonly string $timeTrackImportedEvent = TimeEntryImportedEvent::class,
         private readonly string $timeTrackEntryCreatedEvent = TimeEntryCreatedEvent::class,
         private readonly string $timeTrackBillableDefaults = self::TIME_TRACK_BILLABLE_DEFAULTS,
@@ -260,8 +265,22 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         private readonly string $conflictFormatterInterface = ConflictResponseFormatterInterface::class,
         // Since 2.22.0: the service id of TimeTrack's timer use cases ("Start timer" of the task menu).
         private readonly string $timeTrackTimerService = self::TIME_TRACK_TIMER_SERVICE,
+        // Since 2.28.0: the deprecated 1.x TimeTrack ports (removed in TimeTrack 2.0), each a string so a TimeTrack
+        // without them still loads: while they exist, the 1.x implementations stay registered and the 1.x scope port is used.
+        private readonly string $timeTrackLegacyTaskProvider = self::TIME_TRACK_LEGACY_TASK_PROVIDER,
+        private readonly string $timeTrackLegacyTeamProvider = self::TIME_TRACK_LEGACY_TEAM_PROVIDER,
+        private readonly string $timeTrackLegacyScopeProvider = self::TIME_TRACK_LEGACY_SCOPE_PROVIDER,
     ) {
     }
+
+    /** Since 2.28.0: TimeTrack's deprecated 1.x task port (TimeTrack < 2.0). */
+    public const TIME_TRACK_LEGACY_TASK_PROVIDER = 'Nowo\\TimeTrackBundle\\Integration\\TaskProviderInterface';
+
+    /** Since 2.28.0: TimeTrack's deprecated 1.x team port (TimeTrack < 2.0). */
+    public const TIME_TRACK_LEGACY_TEAM_PROVIDER = 'Nowo\\TimeTrackBundle\\Integration\\TeamContextProviderInterface';
+
+    /** Since 2.28.0: TimeTrack's deprecated 1.x scope port (TimeTrack < 2.0). */
+    public const TIME_TRACK_LEGACY_SCOPE_PROVIDER = 'Nowo\\TimeTrackBundle\\Timesheet\\TimesheetScopeProviderInterface';
 
     /** Since 2.22.0: TimeTrack's timer use cases (its service id is the class). */
     public const TIME_TRACK_TIMER_SERVICE = 'Nowo\\TimeTrackBundle\\Service\\TimerService';
@@ -405,15 +424,22 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
      * and {@see TaskBoardManagerRegistry}; {@see PrivateEntityManagerReferencesPass} then points every bundle service at
      * them, and {@see PrivateEntityManagerPass} attaches the rollback middleware (DBAL 4) to the source manager's
      * connection. null keeps the 2.14 wiring; false too, with a deprecation (the private manager is the only mode in 3.0).
+     * Since 2.28.0 null (unset) is deprecated too, and both register the host-flush probe ({@see TaskBoardHostFlushProbe}).
+     * The notices are raised while the container is built (once per build, not per request).
      */
     private function registerPrivateEntityManager(ContainerBuilder $container, ?bool $private, string $emName): void
     {
         $container->setParameter(PrivateEntityManagerReferencesPass::PARAMETER, $private === true);
         $container->setParameter(PrivateEntityManagerReferencesPass::SOURCE_PARAMETER, $emName);
+        if ($private === null) {
+            trigger_deprecation('nowo-tech/task-board-bundle', '2.28', self::unsetPrivateEntityManagerNotice($emName));
+        }
         if ($private === false) {
             trigger_deprecation('nowo-tech/task-board-bundle', '2.15', '"nowo_task_board.database.private_entity_manager: false" is deprecated: TaskBoard writes then flush the application\'s entity manager, including its pending changes; the private entity manager becomes the only mode in 3.0. Set it to true (see UPGRADING.md "To 2.15.0").');
         }
         if ($private !== true) {
+            $this->registerHostFlushProbe($container);
+
             return;
         }
 
@@ -432,6 +458,31 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
     }
 
     /**
+     * Since 2.28.0 (REQ-ARCH-001 rule 6 deprecation layer): the notice of an unset `database.private_entity_manager`.
+     *
+     * @param string $emName `database.entity_manager`
+     */
+    public static function unsetPrivateEntityManagerNotice(string $emName): string
+    {
+        return sprintf('Not setting "nowo_task_board.database.private_entity_manager" is deprecated: every TaskBoard write then flushes your entity manager "%s", including what your application left pending in it. In 3.0 the option is removed and the private entity manager is the only mode (as if true): TaskBoard writes never flush, clear or close your manager. Opt in now with "nowo_task_board: { database: { private_entity_manager: true } }" once the "were flushed by NowoTaskBoardBundle" deprecations are gone (see UPGRADING.md "To 2.28.0").', $emName);
+    }
+
+    /**
+     * Since 2.28.0 (REQ-ARCH-001 rule 6 deprecation layer): without the private manager, every TaskBoard flush of the
+     * application's manager reports the application's pending changes it writes ({@see TaskBoardHostFlushProbe}):
+     * transaction-doctrine's shared probe when its bundle is registered, else an own one. Reset at the start of every
+     * main request, at the bundle's boundaries ({@see self::registerRequestBoundary()}) and at `kernel.reset`.
+     */
+    private function registerHostFlushProbe(ContainerBuilder $container): void
+    {
+        $container->register(TaskBoardHostFlushProbe::class, TaskBoardHostFlushProbe::class)
+            ->setArguments([new Reference(HostFlushProbe::SERVICE_ID, ContainerInterface::NULL_ON_INVALID_REFERENCE)])
+            ->addTag('doctrine.event_listener', ['event' => 'preFlush', 'method' => 'preFlush'])
+            ->addTag('kernel.event_listener', ['event' => 'kernel.request', 'method' => 'onKernelRequest', 'priority' => 4096])
+            ->addTag('kernel.reset', ['method' => 'reset']);
+    }
+
+    /**
      * Since 2.11.1 (REQ-RUNTIME-002): the optional request memos (recurrence, sync) join the ones the boundary
      * subscriber clears, as IGNORE_ON_UNINITIALIZED references (a boundary never builds a service).
      */
@@ -441,7 +492,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $state      = $subscriber->getArgument('$state');
         $values     = $state instanceof IteratorArgument ? $state->getValues() : [];
         // Since 2.15.0: the private entity manager last, after the memos that may still hold its rows.
-        foreach ([TaskRecurrenceView::class, SyncPeopleViewProvider::class, TaskBoardUsers::class, TaskBoardEntityManager::class] as $id) {
+        // Since 2.28.0: the host-flush probe (registered without the private manager only).
+        foreach ([TaskRecurrenceView::class, SyncPeopleViewProvider::class, TaskBoardUsers::class, TaskBoardHostFlushProbe::class, TaskBoardEntityManager::class] as $id) {
             if ($container->hasDefinition($id)) {
                 $values[] = new Reference($id, ContainerInterface::IGNORE_ON_UNINITIALIZED_REFERENCE);
             }
@@ -1119,8 +1171,16 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         }
 
         $loader->load('services_timetrack.yaml');
-        $container->setAlias('nowo_task_board.task_provider', TaskBoardTaskProvider::class);
-        $container->setAlias('nowo_task_board.team_context_provider', TaskBoardTeamContextProvider::class);
+        // Since 2.28.0: TimeTrack's framework-free task and team directories (TimeTrack >= 1.23); TimeTrack asks them
+        // through its 1.23 twin interfaces. The deprecated 1.x implementations stay registered under their class while
+        // TimeTrack has their interfaces (a host that names them in its TimeTrack configuration), removed in 3.0.
+        $container->setAlias('nowo_task_board.task_provider', TaskBoardTaskDirectory::class);
+        $container->setAlias('nowo_task_board.team_context_provider', TaskBoardTeamDirectory::class);
+        foreach ([TaskBoardTaskProvider::class => $this->timeTrackLegacyTaskProvider, TaskBoardTeamContextProvider::class => $this->timeTrackLegacyTeamProvider] as $class => $interface) {
+            if (interface_exists($interface)) {
+                $container->register($class, $class)->setAutowired(true);
+            }
+        }
 
         // Since 1.25: totals of imported entries (TimeTrack >= 1.11); TimeTrack 1.10 has no such events.
         if (class_exists($this->timeTrackImportedEvent)) {
@@ -1141,14 +1201,14 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         if (interface_exists($this->timeTrackBillableDefaults)) {
             $container->register(TimeTrackTaskTimeBillableDefaultProvider::class, TimeTrackTaskTimeBillableDefaultProvider::class)
                 ->setArgument('$defaults', new Reference($this->timeTrackBillableDefaults, ContainerInterface::NULL_ON_INVALID_REFERENCE))
-                ->setArgument('$scopes', new Reference(TimesheetScopeProviderInterface::class, ContainerInterface::NULL_ON_INVALID_REFERENCE));
+                ->setArgument('$scopes', new Reference(TimeTrackScopeKeys::serviceId($this->timeTrackLegacyScopeProvider), ContainerInterface::NULL_ON_INVALID_REFERENCE));
             $container->setAlias(TaskTimeBillableDefaultProviderInterface::class, TimeTrackTaskTimeBillableDefaultProvider::class);
         }
         if (class_exists($this->timeTrackPeriodLockGuard)) {
             $container->register(TimeTrackTaskTimePeriodLock::class, TimeTrackTaskTimePeriodLock::class)
                 ->setArgument('$guard', new Reference($this->timeTrackPeriodLockGuard, ContainerInterface::NULL_ON_INVALID_REFERENCE))
                 ->setArgument('$timesheets', new Reference(TimesheetRepositoryInterface::class, ContainerInterface::NULL_ON_INVALID_REFERENCE))
-                ->setArgument('$scopes', new Reference(TimesheetScopeProviderInterface::class, ContainerInterface::NULL_ON_INVALID_REFERENCE));
+                ->setArgument('$scopes', new Reference(TimeTrackScopeKeys::serviceId($this->timeTrackLegacyScopeProvider), ContainerInterface::NULL_ON_INVALID_REFERENCE));
             $container->setAlias(TaskTimePeriodLockInterface::class, TimeTrackTaskTimePeriodLock::class);
         }
         // Since 2.22.0: "Start timer" of the task menu, through TimeTrack's TimerService (absent: the entry is not offered).

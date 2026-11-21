@@ -22,6 +22,7 @@ use Nowo\TaskBoardBundle\Service\TaskBoardQuota;
 use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncItem;
+use SortDirection;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 use Throwable;
 
@@ -171,14 +172,14 @@ final readonly class TaskMover implements TaskMoverInterface
     private function lockTree(Task $task): void
     {
         $level = [$task->getId()];
-        $this->entityManager->createQueryBuilder()->select('t.id')->from(Task::class, 't')->where('t.id IN (:ids)')->setParameter('ids', $level)->orderBy('t.id', 'ASC')
+        $this->entityManager->createQueryBuilder()->select('t.id')->from(Task::class, 't')->where('t.id IN (:ids)')->setParameter('ids', $level)->orderBy('t.id', SortDirection::Ascending)
             ->getQuery()->setLockMode(LockMode::PESSIMISTIC_WRITE)->getSingleColumnResult();
         // Since 2.20.0 (audit PX-M2): bounded, and a loop in the data fails closed (the move is refused, nothing written).
         $seen   = [$task->getId() => true];
         $levels = 0;
         while ($level !== []) {
             /** @var list<string> $ids */
-            $ids = $this->entityManager->createQueryBuilder()->select('t.id')->from(Task::class, 't')->where('IDENTITY(t.parent) IN (:ids)')->setParameter('ids', $level)->orderBy('t.id', 'ASC')
+            $ids = $this->entityManager->createQueryBuilder()->select('t.id')->from(Task::class, 't')->where('IDENTITY(t.parent) IN (:ids)')->setParameter('ids', $level)->orderBy('t.id', SortDirection::Ascending)
                 ->getQuery()->setLockMode(LockMode::PESSIMISTIC_WRITE)->getSingleColumnResult();
             $level = TaskMovePlanner::nextLevel($ids, $seen, ++$levels);
         }

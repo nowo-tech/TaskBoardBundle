@@ -8,6 +8,7 @@ use Doctrine\DBAL\Platforms\AbstractMySQLPlatform;
 use Doctrine\ORM\QueryBuilder;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskLink;
+use SortDirection;
 
 use function implode;
 use function mb_strlen;
@@ -82,7 +83,7 @@ final readonly class TaskTextMatch
             $named[] = '(' . $byNumber('tbPrefixBoard') . ')';
             // Number matches first, then the caller's order.
             $orders = $qb->getDQLPart('orderBy');
-            $qb->addSelect('CASE WHEN ' . $byNumber('tbPrefixRankBoard') . ' THEN 0 ELSE 1 END AS HIDDEN tbReferenceRank')->orderBy('tbReferenceRank', 'ASC');
+            $qb->addSelect('CASE WHEN ' . $byNumber('tbPrefixRankBoard') . ' THEN 0 ELSE 1 END AS HIDDEN tbReferenceRank')->orderBy('tbReferenceRank', SortDirection::Ascending);
             foreach ($orders as $order) {
                 $qb->addOrderBy($order);
             }

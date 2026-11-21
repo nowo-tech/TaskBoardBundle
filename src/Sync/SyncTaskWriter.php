@@ -361,6 +361,13 @@ final readonly class SyncTaskWriter
             $this->events?->rollBack();
             $ctx->taskEvents = [];
             RecoveringFlusher::resetIfClosed($this->entityManager, $this->managerRegistry);
+            // Since 2.28.0 (audit WA-8): a page that failed before its flush (or at its commit) leaves the manager open,
+            // still holding the TaskBoard rows the page created or changed, and the application's next flush would write
+            // them after the rollback. They leave the manager as after a dry run; the application's entities stay.
+            if ($this->entityManager->isOpen()) {
+                $hostRows?->forget();
+                BundleEntityDetacher::detach($this->entityManager, $this->logger, refreshKept: true);
+            }
 
             throw $exception;
         } finally {

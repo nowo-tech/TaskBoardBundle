@@ -10,6 +10,7 @@ use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncField;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncFieldValue;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncItem;
 use Nowo\TaskBoardBundle\Sync\Field\SyncFieldType;
+use SortDirection;
 
 use function array_chunk;
 use function array_is_list;
@@ -54,7 +55,7 @@ final readonly class SyncFieldViewProvider
             // Since 2.3.0 (spec 217): only the fields of the task's own board. A task moved off its board keeps its values
             // (the source board's erasure still reaches them) but does not show them on the target.
             ->andWhere('f.board = :board')->setParameter('board', $task->getBoard())
-            ->orderBy('f.position', 'ASC')->addOrderBy('f.name', 'ASC')
+            ->orderBy('f.position', SortDirection::Ascending)->addOrderBy('f.name', SortDirection::Ascending)
             ->getQuery()->getResult();
         $fields = [];
         foreach ($values as $value) {

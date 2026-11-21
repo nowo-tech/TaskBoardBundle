@@ -14,6 +14,7 @@ use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncField;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncFieldValue;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncItem;
 use Psr\Clock\ClockInterface;
+use SortDirection;
 use Symfony\Component\Clock\NativeClock;
 
 use function array_diff;
@@ -274,7 +275,7 @@ final readonly class SyncFieldValueEraser
         do {
             $query = $this->entityManager->createQueryBuilder()->select('t')->from(Task::class, 't')->join(TaskDocument::class, 'd', 'WITH', 'd.task = t')
                 ->where('t.id > :after')->andWhere('d.syncFields IS NOT NULL OR d.content LIKE :shape')->setParameter('after', $after)->setParameter('shape', '- **%')
-                ->groupBy('t.id')->orderBy('t.id', 'ASC')->setMaxResults(self::PAGE);
+                ->groupBy('t.id')->orderBy('t.id', SortDirection::Ascending)->setMaxResults(self::PAGE);
             if ($board instanceof TaskBoard) {
                 // Since 2.3.0 (spec 217, audit IC-I8): with the tasks moved off this board, whose "Fields" document came from it.
                 $moved = $this->entityManager->createQueryBuilder()->select('IDENTITY(i.detachedTask)')->from(TaskSyncItem::class, 'i')
@@ -320,7 +321,7 @@ final readonly class SyncFieldValueEraser
                 ->select('v.id AS id', 'IDENTITY(f.board) AS boardId', 'IDENTITY(v.task) AS taskId', 'f.name AS field', 'f.type AS type', 'v.text AS text', 'v.value AS value')
                 ->from(TaskSyncFieldValue::class, 'v')->join(TaskSyncField::class, 'f', 'WITH', 'f = v.field')
                 ->where('v.id > :after')->setParameter('after', $after)
-                ->orderBy('v.id', 'ASC')->setMaxResults(self::PAGE);
+                ->orderBy('v.id', SortDirection::Ascending)->setMaxResults(self::PAGE);
             if ($board instanceof TaskBoard) {
                 $query->andWhere('f.board = :board')->setParameter('board', $board);
             }

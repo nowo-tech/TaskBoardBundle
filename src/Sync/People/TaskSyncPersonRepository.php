@@ -420,7 +420,7 @@ final readonly class TaskSyncPersonRepository
             $page = $this->entityManager->createQueryBuilder()->select('i')->from(TaskSyncItem::class, 'i')->join('i.connection', 'c')
                 ->where('c.directory = :directory')->andWhere('i.id > :after')->andWhere('i.task IS NOT NULL')
                 ->setParameter('directory', $person->getDirectory())->setParameter('after', $after)
-                ->orderBy('i.id', 'ASC')->setMaxResults(self::EXPORT_PAGE)->getQuery()->getResult();
+                ->orderBy('i.id', SortDirection::Ascending)->setMaxResults(self::EXPORT_PAGE)->getQuery()->getResult();
             foreach ($page as $item) {
                 $after = $item->getId();
                 foreach (PeopleProjection::ROLES as $role) {
@@ -447,7 +447,7 @@ final readonly class TaskSyncPersonRepository
                 ->select('i.id AS id', 'IDENTITY(i.task) AS taskId', 'i.remoteMeta AS meta')->from(TaskSyncItem::class, 'i')->join('i.connection', 'c')
                 ->where('c.directory = :directory')->andWhere('i.id > :after')->andWhere('i.remoteMeta IS NOT NULL')
                 ->setParameter('directory', $directory)->setParameter('after', $after)
-                ->orderBy('i.id', 'ASC')->setMaxResults(self::EXPORT_PAGE)->getQuery()->getArrayResult();
+                ->orderBy('i.id', SortDirection::Ascending)->setMaxResults(self::EXPORT_PAGE)->getQuery()->getArrayResult();
             foreach ($page as $row) {
                 $after     = $row['id'];
                 $estimates = $row['meta']['estimates'] ?? [];
@@ -477,7 +477,7 @@ final readonly class TaskSyncPersonRepository
                     ->from(TaskSyncFieldValue::class, 'v')->join(TaskSyncField::class, 'f', 'WITH', 'f = v.field')
                     ->where('f.board = :board')->andWhere('f.type = :people')->andWhere('v.id > :after')
                     ->setParameter('board', $connection->getBoard())->setParameter('people', SyncFieldType::People->value)->setParameter('after', $after)
-                    ->orderBy('v.id', 'ASC')->setMaxResults(self::EXPORT_PAGE)->getQuery()->getArrayResult();
+                    ->orderBy('v.id', SortDirection::Ascending)->setMaxResults(self::EXPORT_PAGE)->getQuery()->getArrayResult();
                 foreach ($page as $row) {
                     $after = $row['id'];
                     if (is_array($row['value']) && in_array($token, $row['value'], true)) {

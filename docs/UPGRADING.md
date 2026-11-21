@@ -4,6 +4,11 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
+- [Preparing for 3.0](#preparing-for-30)
+- [To 2.28.0](#to-2280)
+  - [Unset `private_entity_manager`](#unset-private_entity_manager)
+  - [The host-flush probe: your migration list](#the-host-flush-probe-your-migration-list)
+  - [TimeTrack: the 1.23 twins](#timetrack-the-123-twins)
 - [To 2.26.0](#to-2260)
 - [To 2.25.0](#to-2250)
   - [Header search (additive)](#header-search-additive)
@@ -221,6 +226,106 @@ php bin/console cache:clear
 ```
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
+
+## Preparing for 3.0
+
+TaskBoard 3.0 contains only the deprecations announced in 2.x. Run 2.28 for a while and read your deprecation log for
+`nowo-tech/task-board-bundle` and the "flushed by NowoTaskBoardBundle" entries: together they are the list of what to
+change before 3.0. What 3.0 removes:
+
+| 2.x | 3.0 | Notice in 2.28 |
+|---|---|---|
+| `database.private_entity_manager` unset or `false` (TaskBoard writes flush your entity manager) | the private entity manager is the only mode; the option goes | at the container build (unset: 2.28, `false`: 2.15) |
+| your pending changes written by a TaskBoard flush | no longer written by TaskBoard: flush them yourself | host-flush probe, one per entity class and unit of work |
+| the 2.15 entity-typed host ports (`SyncLimitCheckerInterface`, `TaskAttachmentStorageInterface`, ...) | their framework-free twins (table in [To 2.15.0](#to-2150)) | `@deprecated` (Symfony's DebugClassLoader, in debug mode) |
+| entity getters and public entity properties of the events | the id getters and `get*Snapshot()` accessors | `@deprecated` (as above) |
+| a layout without UiKit canonical blocks (legacy layout bridge), `templates.*` and `css_framework` keys, `nowo_task_board_btn_class()` | `web_ui.layout_template`, `nowo_ui_kit.css_framework`, `nowo_ui_class()` | when used (since 2.0) |
+| `Bridge\TimeTrack\TaskBoardTaskProvider`, `TaskBoardTeamContextProvider` | `nowo_task_board.task_provider` / `team_context_provider` (the 1.23 twins) | `@deprecated` (as above) |
+
+**2.x security support.** After 3.0.0 is tagged, the 2.x line gets security fixes for 6 months: Moderate and higher are
+backported to the last 2.x minor; Low ones are fixed in 3.x only, with the advice to upgrade. Advisories name both
+lines.
+
+## To 2.28.0
+
+From **2.27.x**:
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
+
+Requires `nowo-tech/transaction-doctrine` ^1.9.1 (Composer updates it) and, when you use TimeTrack,
+`nowo-tech/time-track-bundle` ^1.23 (Composer refuses an older one: update it in the same command). Nothing breaks: with
+the same configuration the bundle behaves as 2.27, and no migration is needed. What is new is what you see in your
+deprecation log (the profiler, `var/log/*.deprecations.log`, or the build log of `cache:clear` / `cache:warmup`).
+
+### Unset `private_entity_manager`
+
+Without `database.private_entity_manager` you now get this notice. It is raised **while the container is built** (once
+per build: in the output or deprecation log of `cache:clear` / `cache:warmup`, or of the first request after a cache
+clear in debug mode), not on every request:
+
+> Not setting "nowo_task_board.database.private_entity_manager" is deprecated: every TaskBoard write then flushes your
+> entity manager "default", including what your application left pending in it. In 3.0 the option is removed and the
+> private entity manager is the only mode (as if true): TaskBoard writes never flush, clear or close your manager. Opt
+> in now with "nowo_task_board: { database: { private_entity_manager: true } }" once the "were flushed by
+> NowoTaskBoardBundle" deprecations are gone (see UPGRADING.md "To 2.28.0").
+
+Opting in needs no schema change and the tables stay where they are; read
+[Private entity manager (opt-in)](#private-entity-manager-opt-in) for what to check first:
+
+```yaml
+nowo_task_board:
+    database:
+        private_entity_manager: true
+```
+
+### The host-flush probe: your migration list
+
+Until you opt in, every TaskBoard write (the board and task pages, the Task API, a remote sync, an import, the
+recurrence and number commands, ...) flushes your entity manager. Right before each of those flushes TaskBoard now lists
+the entity classes **outside TaskBoard** with pending changes in your unit of work and triggers, once per class and
+unit of work (request, Messenger message or console command):
+
+> Your pending changes to App\Entity\Order were flushed by NowoTaskBoardBundle; 2.0 no longer does.
+
+(The wording is shared by every bundle that has the probe; for TaskBoard the major that drops this mode is 3.0.) Each
+entry is a place where your code changed, persisted or removed an `App\Entity\Order` and relied on a TaskBoard write to
+save it. In 3.0 (and in 2.28 with `private_entity_manager: true`) TaskBoard writes only its own rows, so that change
+would be lost. To migrate:
+
+1. Run the application (or its test suite) on 2.28 and collect the "flushed by NowoTaskBoardBundle" entries: that is
+   the exact list of classes.
+2. For each class, find the code that changes it before a TaskBoard call and add your own `$entityManager->flush()` (or
+   your usual unit of work) after the change.
+3. Check where your entities reference TaskBoard rows (a to-one or collection pointing at a `Task`, `TaskBoard`, ...).
+   With the private manager, the TaskBoard instances its services return belong to TaskBoard's manager, which yours
+   does not know (it would try to insert them): reference the row by id with your manager instead, for example
+   `$order->setTask($entityManager->getReference(Task::class, $taskId))`.
+4. Turn `private_entity_manager: true` on and check that no new entries appear (with the private manager the probe is
+   off: the entries stop because TaskBoard no longer flushes your manager).
+
+A flush your own code runs is never reported, nor one an application listener runs while handling a TaskBoard event:
+only the flushes TaskBoard's own code calls. The probe only reads: it never flushes, clears, closes, detaches or resets
+anything, it skips TaskBoard's own classes without looking at them, and a failure inside it never stops the write. It
+is reset at the start of every main request and at every request, message and command boundary, also in FrankenPHP
+worker mode with the kernel reset off.
+
+### TimeTrack: the 1.23 twins
+
+If you wire TimeTrack with the documented services, nothing changes:
+
+```yaml
+nowo_time_track:
+    task_provider: nowo_task_board.task_provider
+    team_context_provider: nowo_task_board.team_context_provider
+```
+
+They are now `TaskBoardTaskDirectory` and `TaskBoardTeamDirectory`, which implement TimeTrack's framework-free
+`TaskDirectoryInterface` and `TeamDirectoryInterface`; TimeTrack asks them with a `TimeTrackUserRef` and gets the same
+answers. If your configuration names the classes `Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTaskProvider` or
+`TaskBoardTeamContextProvider` instead, they still work (deprecated, removed in 3.0): switch to the two service ids
+above.
 
 ## To 2.26.0
 

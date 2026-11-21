@@ -125,6 +125,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Host-flush probe (REQ-ARCH-001 rule 6 deprecation layer).** Without `database.private_entity_manager: true` every
+  TaskBoard write flushes `database.entity_manager`, which is the application's manager, and so also writes what the
+  application left pending there; 3.0 writes only through the private manager and no longer does. Right before each
+  TaskBoard flush of that manager (Doctrine `preFlush`; the code that called `flush()` is a TaskBoard class), the shared
+  nowo-tech/transaction-doctrine 1.9 `HostFlushProbe` lists the application's entity classes with pending work and
+  triggers one `E_USER_DEPRECATED` per class and unit of work: "Your pending changes to App\Entity\X were flushed by
+  NowoTaskBoardBundle; 2.0 no longer does." (the major that drops this mode is TaskBoard 3.0). A flush the application
+  runs itself is never reported. Internal `Doctrine\TaskBoardHostFlushProbe`, registered only without the private
+  manager. It only reads: it never flushes, clears, closes, resets or detaches anything, and a failed inspection never
+  stops the write (transaction-doctrine 1.9.1). Its state is emptied at the start of every main request, at every
+  request, message and command boundary of the bundle and at `kernel.reset` (FrankenPHP worker mode with kernel reset
+  off included); transaction-doctrine's bundle resets its shared probe itself when it is registered.
+- **TimeTrack bridge on TimeTrack's 1.23 framework-free twins.** `nowo_task_board.task_provider` is now
+  `Bridge\TimeTrack\TaskBoardTaskDirectory` (`TaskDirectoryInterface`) and `nowo_task_board.team_context_provider`
+  `Bridge\TimeTrack\TaskBoardTeamDirectory` (`TeamDirectoryInterface`): TimeTrack asks them with a `TimeTrackUserRef`
+  instead of the Symfony user, with the same answers. The billable default and the period lock of manual entries ask
+  TimeTrack's scope port through whichever interface the installed TimeTrack serves (`TimesheetScopeProviderInterface`
+  in 1.x, `TimesheetScopePolicyInterface` once the 1.x one is gone), so TaskBoard works with
+  `nowo-tech/time-track-bundle` `^1.23 || ^2.0`. Composer now refuses TimeTrack below 1.23 (`conflict`).
+- Tests: `TaskBoardHostFlushProbeTest` (which flush is TaskBoard's, resets), `HostFlushProbeTest` (one notice per class
+  and unit of work on a real manager, none for an application flush, every request of a kept-alive worker with kernel
+  reset off starts afresh, no probe with the private manager), `PrivateEntityManagerConfigTest` (unset gives the notice
+  and the probe, `true` neither), `TimeTrackTwinBridgeTest` (the twins through TimeTrack's gates answer as the 1.x
+  providers), `SyncFailedPageTest` (WA-8).
+
+### Changed
+
+- Requires `nowo-tech/transaction-doctrine` `^1.9.1` (was `^1.6`): the host-flush probe.
+
+### Deprecated
+
+- **Not setting `database.private_entity_manager`.** Once per container build (the notice is raised while the container
+  is compiled, so it appears in the build or cache-warmup deprecation log, not on every request):
+  "Not setting "nowo_task_board.database.private_entity_manager" is deprecated: every TaskBoard write then flushes your
+  entity manager "default", including what your application left pending in it. In 3.0 the option is removed and the
+  private entity manager is the only mode (as if true) [...]". An explicit `false` keeps its 2.15 notice. See UPGRADING
+  "To 2.28.0".
+- `Bridge\TimeTrack\TaskBoardTaskProvider` and `Bridge\TimeTrack\TaskBoardTeamContextProvider` (TimeTrack's 1.x ports):
+  still registered under their class while TimeTrack has the 1.x interfaces, removed in 3.0. Point TimeTrack at
+  `nowo_task_board.task_provider` / `nowo_task_board.team_context_provider` (the twins).
+
+### Fixed
+
+- **A failed sync page no longer leaves its TaskBoard rows for the next flush** (audit WA-8). A page that failed before
+  its flush (or at its commit) rolled back its transaction but left the application's entity manager open with the
+  TaskBoard rows it had created or changed still scheduled; the run's own status write, or the application's next
+  flush, then wrote them after the rollback. They now leave the manager as after a dry run (`BundleEntityDetacher`; the
+  application's entities and their pending changes stay, and so do the TaskBoard rows an application entity
+  references, read again).
+- **No more Doctrine ORM sort-direction deprecations in queries** (https://github.com/doctrine/orm/issues/11313). The
+  query builders' `orderBy()` / `addOrderBy()` calls (task API, header search, SearchKit groups, sync, questions,
+  recurrence, erasure, moves, row locks) passed the strings `'ASC'` / `'DESC'`; they pass `SortDirection` values now,
+  as the rest of the bundle does since 1.5.7 (the `TaskQuestion` mapping was fixed in 2.27.1). Same SQL.
+
 ## [2.27.1] - 2026-11-21
 
 ### Fixed

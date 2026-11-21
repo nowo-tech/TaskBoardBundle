@@ -878,7 +878,7 @@ final class Configuration implements ConfigurationInterface
                         ->end()
                         ->booleanNode('private_entity_manager')
                             ->defaultNull()
-                            ->info('Since 2.15.0 (REQ-ARCH-001 rule 6): true = the bundle reads and writes its rows through a private entity manager created on the connection, mapping and events of database.entity_manager, so a TaskBoard write never flushes, clears or closes the application\'s manager. null (default) keeps the 2.14 behaviour; false too, deprecated: true becomes the only mode in 3.0.')
+                            ->info('Since 2.15.0 (REQ-ARCH-001 rule 6): true = the bundle reads and writes its rows through a private entity manager created on the connection, mapping and events of database.entity_manager, so a TaskBoard write never flushes, clears or closes the application\'s manager. null (default) keeps the 2.14 behaviour, deprecated since 2.28 (a notice when the container is built, and one per application entity class whose pending changes a TaskBoard flush writes); false too, deprecated: true becomes the only mode in 3.0.')
                         ->end()
                     ->end()
                 ->end()
