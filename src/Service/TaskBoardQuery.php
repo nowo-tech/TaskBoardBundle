@@ -48,6 +48,8 @@ final readonly class TaskBoardQuery implements TaskBoardQueryInterface
     public function __construct(
         private EntityManagerInterface $entityManager,
         private TaskBoardUsers $users = new TaskBoardUsers(),
+        // Rows per batch of the tag histogram scan (a test sets a small one to cross a batch).
+        private int $batchSize = self::BATCH,
     ) {
     }
 
@@ -245,7 +247,7 @@ final readonly class TaskBoardQuery implements TaskBoardQueryInterface
                 ->select('t.id AS id', 't.tags AS tags', 'b.tenantKey AS tenantKey')
                 ->andWhere('t.archivedAt IS NULL')
                 ->orderBy('t.id', 'ASC')
-                ->setMaxResults(self::BATCH);
+                ->setMaxResults($this->batchSize);
             if ($openOnly) {
                 $builder->andWhere('t.completedAt IS NULL');
             }
@@ -269,7 +271,7 @@ final readonly class TaskBoardQuery implements TaskBoardQueryInterface
             }
             $last  = $rows === [] ? null : $rows[array_key_last($rows)]['id'];
             $after = is_scalar($last) ? (string) $last : null;
-        } while (count($rows) === self::BATCH);
+        } while (count($rows) === $this->batchSize);
 
         uksort($counts, static fn (string $a, string $b): int => [$counts[$b], $a] <=> [$counts[$a], $b] ?: strcmp($a, $b));
 

@@ -62,7 +62,7 @@ use function trim;
 final readonly class TaskCommands implements TaskCommandsInterface
 {
     /** Rows per batch of {@see self::clearTimeEntrySnapshotsForUser()}. */
-    private const BATCH = 500;
+    public const BATCH = 500;
 
     public function __construct(
         private EntityManagerInterface $entityManager,
@@ -481,11 +481,9 @@ final readonly class TaskCommands implements TaskCommandsInterface
         $revision = is_scalar($revision) ? (int) $revision : 0;
         if ($revision !== $task->getRevision()) {
             $this->entityManager->refresh($task);
-            if ($task->getRevision() !== $revision) {
-                throw new TaskChangedException($revision);
-            }
         }
-        if ($expectedRevision !== null && $expectedRevision !== $revision) {
+        // A refresh that still gives another revision (an outer REPEATABLE READ snapshot) is never written from.
+        if ($task->getRevision() !== $revision || ($expectedRevision !== null && $expectedRevision !== $revision)) {
             throw new TaskChangedException($revision);
         }
     }
@@ -537,8 +535,10 @@ final readonly class TaskCommands implements TaskCommandsInterface
             if ($this->entityManager->contains($task)) {
                 $this->entityManager->refresh($task);
             }
+            // @codeCoverageIgnoreStart
         } catch (Throwable) {
             // Best effort: a task the rollback removed, or a lost connection, leaves the next read to the database.
         }
+        // @codeCoverageIgnoreEnd
     }
 }

@@ -37,6 +37,8 @@ final readonly class TaskFlowStats implements TaskFlowStatsInterface
 
     public function __construct(
         private EntityManagerInterface $entityManager,
+        // Rows per batch of the daily scan (a test sets a small one to cross a batch).
+        private int $batchSize = self::BATCH,
     ) {
     }
 
@@ -168,7 +170,7 @@ final readonly class TaskFlowStats implements TaskFlowStatsInterface
                 ->setParameter('from', $from, 'datetime_immutable')
                 ->setParameter('to', $to, 'datetime_immutable')
                 ->orderBy('t.id', 'ASC')
-                ->setMaxResults(self::BATCH);
+                ->setMaxResults($this->batchSize);
             if ($after !== null) {
                 $builder->andWhere('t.id > :after')->setParameter('after', $after);
             }
@@ -181,7 +183,7 @@ final readonly class TaskFlowStats implements TaskFlowStatsInterface
             }
             $last  = $rows === [] ? null : $rows[array_key_last($rows)]['id'];
             $after = is_scalar($last) ? (string) $last : null;
-        } while (count($rows) === self::BATCH);
+        } while (count($rows) === $this->batchSize);
     }
 
     /**

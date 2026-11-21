@@ -18,7 +18,6 @@ use Nowo\TaskBoardBundle\Exception\UnassignableUserException;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Support\ActorId;
 use Nowo\TaskBoardBundle\User\TaskBoardUserLocator;
-use Nowo\TaskBoardBundle\ValueObject\TaskBoardUserRef;
 use Nowo\TaskBoardBundle\ValueObject\UserRef;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
@@ -88,9 +87,12 @@ final readonly class TaskMemberAssigner
         }
 
         foreach ($task->getMembers() as $existing) {
+            $id   = ActorId::of($data->user);
             $same = $existing->getUser() === $data->user
                 // Since 2.15.0 (database.user_reference: id): a member read back is a reference to the user's id.
-                || ($existing->getUser() instanceof TaskBoardUserRef && $existing->getUser()->id === ActorId::of($data->user));
+                // Since 2.29.0: also another object of the same user (the private manager holds its own copy of a user
+                // the application's manager loaded), compared by exact id.
+                || ($id !== null && ActorId::of($existing->getUser()) === $id);
             if ($same && $existing->getMemberRole() === $data->memberRole) {
                 return $existing;
             }

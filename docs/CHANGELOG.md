@@ -188,6 +188,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   where the bundle checks the signed-in user (every page and the API) answer as before. A hand-built checker without
   the new optional `$tokenStorage` argument keeps the 2.28 rule; the container always passes it. Internal
   `Security\UserRoleCheck`. Tests: `RolesOfTheGivenUserTest`.
+- `TaskMemberAssigner::assign()` recognises an existing member by exact user id too, not only by the same object: with
+  the private entity manager, assigning a user again through the application's copy of that user no longer fails on the
+  members' unique key.
 
 ## [2.28.0] - 2026-11-21
 
