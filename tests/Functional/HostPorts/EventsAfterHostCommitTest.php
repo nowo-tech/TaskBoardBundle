@@ -75,7 +75,7 @@ final class EventsAfterHostCommitTest extends FunctionalTestCase
     {
         $board = $this->board();
         $task  = $this->commands->createTask(UserRef::ofId((string) $this->owner->getId()), $board->getId(), new TaskFormData('Referenced'));
-        $tasks = $this->count('task_board_tasks');
+        $tasks = $this->rows('task_board_tasks');
 
         $note       = new HostTaskNote();
         $note->task = $this->host->getReference(Task::class, $task->id);
@@ -83,11 +83,11 @@ final class EventsAfterHostCommitTest extends FunctionalTestCase
         $this->host->flush();
 
         self::assertSame($task->id, $this->host->getConnection()->fetchOne('SELECT task_id FROM app_host_task_note WHERE id = ?', [$note->id]));
-        self::assertSame($tasks, $this->count('task_board_tasks'), 'the host flush inserted no TaskBoard row');
-        self::assertSame(1, $this->count('task_board_tasks WHERE title = \'Referenced\''));
+        self::assertSame($tasks, $this->rows('task_board_tasks'), 'the host flush inserted no TaskBoard row');
+        self::assertSame(1, $this->rows('task_board_tasks WHERE title = \'Referenced\''));
     }
 
-    private function count(string $from): int
+    private function rows(string $from): int
     {
         return (int) $this->host->getConnection()->fetchOne('SELECT COUNT(*) FROM ' . $from);
     }
