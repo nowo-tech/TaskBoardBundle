@@ -19,6 +19,7 @@ use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext;
 use Nowo\TaskBoardBundle\User\TaskBoardUsers;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
+use SortDirection;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 use function array_chunk;
@@ -295,10 +296,10 @@ final readonly class SearchBoardScope
         if ($default !== null && !$reach->listenersMayGrant) {
             $qb->andWhere($default);
         } elseif ($default !== null) {
-            $qb->addSelect("CASE WHEN {$default} THEN 0 ELSE 1 END AS HIDDEN defaultReach")->orderBy('defaultReach', 'ASC');
+            $qb->addSelect("CASE WHEN {$default} THEN 0 ELSE 1 END AS HIDDEN defaultReach")->orderBy('defaultReach', SortDirection::Ascending);
         }
 
-        return $qb->addOrderBy('b.updatedAt', 'DESC')->addOrderBy('b.id', 'ASC');
+        return $qb->addOrderBy('b.updatedAt', SortDirection::Descending)->addOrderBy('b.id', SortDirection::Ascending);
     }
 
     /** The DQL condition of the default rule (creator, or a team of the viewer); "1 = 0" when neither applies. */

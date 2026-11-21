@@ -10,6 +10,12 @@ use Nowo\TaskBoardBundle\Support\UserIdResolver;
 use Nowo\TimeTrackBundle\Integration\TeamContextProviderInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
 
+/**
+ * TimeTrack's 1.x team context provider port, asked with the Symfony user.
+ *
+ * @deprecated since 2.28.0, TimeTrack asks {@see TaskBoardTeamDirectory} (its framework-free 1.23 twin, the service
+ *             `nowo_task_board.team_context_provider`); removed in 3.0 together with TimeTrack's 1.x interface
+ */
 final readonly class TaskBoardTeamContextProvider implements TeamContextProviderInterface
 {
     public function __construct(

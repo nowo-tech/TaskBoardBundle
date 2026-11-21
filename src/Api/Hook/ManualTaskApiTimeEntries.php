@@ -21,6 +21,7 @@ use Nowo\TaskBoardBundle\Service\TaskTimeBillableService;
 use Nowo\TaskBoardBundle\Service\TaskTimeLogger;
 use Nowo\TaskBoardBundle\Support\ActorId;
 use Nowo\TaskBoardBundle\User\TaskBoardUsers;
+use SortDirection;
 
 /**
  * Since 2.2.0 (spec 213): a time store over the bundle's own manual entries, through {@see TaskTimeLogger} as the task page
@@ -52,7 +53,7 @@ final readonly class ManualTaskApiTimeEntries implements TaskApiTimeEntriesInter
             ->join('e.task', 't')
             ->where('e.user = :user')
             ->setParameter('user', $this->userParameter($principal->user))
-            ->orderBy('e.loggedAt', 'DESC')
+            ->orderBy('e.loggedAt', SortDirection::Descending)
             ->setMaxResults(self::LIMIT);
         if ($query->taskId !== null) {
             $qb->andWhere('t.id = :task')->setParameter('task', $query->taskId);

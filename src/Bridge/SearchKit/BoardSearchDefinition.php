@@ -14,6 +14,7 @@ use Nowo\TaskBoardBundle\Event\SearchScopeEvent;
 use Nowo\TaskBoardBundle\Search\Header\SearchBoardScope;
 use Nowo\TaskBoardBundle\Search\Header\SearchText;
 use Nowo\TaskBoardBundle\Search\Header\SearchViewer;
+use SortDirection;
 
 use function array_filter;
 use function array_values;
@@ -69,8 +70,8 @@ final class BoardSearchDefinition extends TaskBoardSearchDefinition
             ->select('b')
             ->from(TaskBoard::class, 'b')
             ->where('b.archivedAt IS NULL')
-            ->orderBy('b.updatedAt', 'DESC')
-            ->addOrderBy('b.id', 'ASC');
+            ->orderBy('b.updatedAt', SortDirection::Descending)
+            ->addOrderBy('b.id', SortDirection::Ascending);
         $viewer = $this->viewer($query);
         $scope  = $viewer instanceof SearchViewer ? $this->scope->boards($viewer, SearchScopeEvent::GROUP_BOARDS, SearchText::words($query->text)) : null;
         if ($scope?->capped === true) {

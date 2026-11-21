@@ -12,6 +12,7 @@ use Nowo\TaskBoardBundle\Question\Entity\TaskQuestion;
 use Nowo\TaskBoardBundle\Question\Entity\TaskQuestionRecipient;
 use Nowo\TaskBoardBundle\Support\ActorId;
 use Nowo\TaskBoardBundle\User\TaskBoardUsers;
+use SortDirection;
 
 use function array_chunk;
 use function array_filter;
@@ -97,7 +98,7 @@ final readonly class TaskQuestionQuery
             ->where('b.id = :board AND q.state = :answered')
             ->setParameter('board', $boardId)
             ->setParameter('answered', TaskQuestionState::Answered->value)
-            ->orderBy('q.answeredAt', 'ASC')->addOrderBy('q.id', 'ASC')
+            ->orderBy('q.answeredAt', SortDirection::Ascending)->addOrderBy('q.id', SortDirection::Ascending)
             ->setMaxResults(max(1, min($limit, 500)));
         if ($since instanceof DateTimeImmutable) {
             $builder->andWhere('q.answeredAt >= :since')->setParameter('since', $since);
@@ -171,7 +172,7 @@ final readonly class TaskQuestionQuery
             ->from(TaskQuestion::class, 'q')->join('q.task', 't')->join('t.board', 'b')
             ->where('q.state = :open')
             ->setParameter('open', TaskQuestionState::Open->value)
-            ->orderBy('noDue', 'ASC')->addOrderBy('q.dueOn', 'ASC')->addOrderBy('q.askedAt', 'ASC')->addOrderBy('q.id', 'ASC')
+            ->orderBy('noDue', SortDirection::Ascending)->addOrderBy('q.dueOn', SortDirection::Ascending)->addOrderBy('q.askedAt', SortDirection::Ascending)->addOrderBy('q.id', SortDirection::Ascending)
             ->setMaxResults(self::MY_QUESTIONS_CAP);
     }
 

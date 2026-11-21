@@ -10,6 +10,7 @@ use Nowo\TaskBoardBundle\Doctrine\RecoveringFlusher;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\User\TaskBoardUsers;
+use SortDirection;
 
 final readonly class DoctrineOrmTaskCommentRepository implements TaskCommentRepositoryInterface
 {
@@ -43,7 +44,7 @@ final readonly class DoctrineOrmTaskCommentRepository implements TaskCommentRepo
         $comments = $builder
             ->where('c.task = :task')
             ->setParameter('task', $task)
-            ->orderBy('c.createdAt', 'ASC')
+            ->orderBy('c.createdAt', SortDirection::Ascending)
             ->getQuery()
             ->getResult();
 

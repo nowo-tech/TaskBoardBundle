@@ -6,8 +6,8 @@ namespace Nowo\TaskBoardBundle\Bridge\TimeTrack;
 
 use Nowo\TaskBoardBundle\Service\TaskTimeBillableDefaultProviderInterface;
 use Nowo\TimeTrackBundle\Integration\TimeEntryBillableDefaultProviderInterface;
+use Nowo\TimeTrackBundle\Timesheet\TimesheetScopePolicyInterface;
 use Nowo\TimeTrackBundle\Timesheet\TimesheetScopeProviderInterface;
-use Symfony\Component\Security\Core\User\UserInterface;
 
 /**
  * Since 2.12.0 (TimeTrackBundle >= 1.21): the default `billable` of a manual entry is TimeTrack's host default, asked with
@@ -19,7 +19,8 @@ final readonly class TimeTrackTaskTimeBillableDefaultProvider implements TaskTim
 {
     public function __construct(
         private ?TimeEntryBillableDefaultProviderInterface $defaults = null,
-        private ?TimesheetScopeProviderInterface $scopes = null,
+        // Since 2.28.0 also TimeTrack's framework-free scope policy.
+        private TimesheetScopeProviderInterface|TimesheetScopePolicyInterface|null $scopes = null,
     ) {
     }
 
@@ -28,7 +29,7 @@ final readonly class TimeTrackTaskTimeBillableDefaultProvider implements TaskTim
         if (!$this->defaults instanceof TimeEntryBillableDefaultProviderInterface) {
             return null;
         }
-        $scopeKey = $user instanceof UserInterface ? $this->scopes?->scopeKeyForTask($user, $taskId, $boardId) : null;
+        $scopeKey = TimeTrackScopeKeys::forTask($this->scopes, $user, $taskId, $boardId);
 
         return $this->defaults->defaultFor($scopeKey ?? '', $taskId);
     }

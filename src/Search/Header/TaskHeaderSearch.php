@@ -9,6 +9,7 @@ use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Event\SearchScopeEvent;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
+use SortDirection;
 
 use function array_map;
 use function count;
@@ -67,8 +68,8 @@ final readonly class TaskHeaderSearch
             ->where('IDENTITY(t.board) IN (:boards)')
             ->andWhere('t.archivedAt IS NULL')
             ->setParameter('boards', $boards->ids())
-            ->orderBy('t.updatedAt', 'DESC')
-            ->addOrderBy('t.id', 'ASC')
+            ->orderBy('t.updatedAt', SortDirection::Descending)
+            ->addOrderBy('t.id', SortDirection::Ascending)
             ->setMaxResults($scan);
         $reference = $this->match->apply($qb, $text);
         /** @var list<Task> $tasks */

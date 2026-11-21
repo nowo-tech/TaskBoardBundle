@@ -280,6 +280,8 @@ When TimeTrack is installed and configured with `nowo_task_board.task_provider`:
 - Users can start/stop timers on trackable tasks (assignee or team member).
 - On timer stop, `TimeSpentAggregatorListener` adds duration to `task.total_time_seconds`.
 - Team context for TimeTrack comes from `nowo_task_board.team_context_provider`.
+- Since 2.28.0 both services implement TimeTrack's framework-free 1.23 interfaces (`TaskDirectoryInterface`,
+  `TeamDirectoryInterface`): TaskBoard needs `nowo-tech/time-track-bundle` `^1.23 || ^2.0`.
 
 ### Billable manual entries (since 2.12)
 

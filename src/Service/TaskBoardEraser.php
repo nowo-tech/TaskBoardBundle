@@ -25,6 +25,7 @@ use Psr\Clock\ClockInterface;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use SensitiveParameter;
+use SortDirection;
 use Stringable;
 use Symfony\Component\Clock\NativeClock;
 use Symfony\Component\Security\Core\Exception\AccessDeniedException;
@@ -373,7 +374,7 @@ final readonly class TaskBoardEraser implements TaskBoardEraserInterface
             ->from(Task::class, 't')
             ->where('t.board = :board')
             ->setParameter('board', $board)
-            ->orderBy('t.id', 'DESC')
+            ->orderBy('t.id', SortDirection::Descending)
             ->setMaxResults(1)
             ->getQuery()
             ->getArrayResult();

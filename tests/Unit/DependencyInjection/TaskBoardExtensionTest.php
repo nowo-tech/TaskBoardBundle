@@ -9,7 +9,10 @@ use Doctrine\Bundle\DoctrineBundle\DependencyInjection\DoctrineExtension;
 use LogicException;
 use Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\ImportedTimeAggregatorListener;
+use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTaskDirectory;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTaskProvider;
+use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTeamContextProvider;
+use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTeamDirectory;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TimeTrackTaskTimeBillableDefaultProvider;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TimeTrackTaskTimePeriodLock;
 use Nowo\TaskBoardBundle\Controller\TaskBoardManageController;
@@ -44,6 +47,7 @@ use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 use Nowo\TimeTrackBundle\Event\TimeEntryCreatedEvent;
 use Nowo\TimeTrackBundle\Integration\TaskProviderInterface;
+use Nowo\TimeTrackBundle\Timesheet\TimesheetScopePolicyInterface;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Symfony\Bundle\FrameworkBundle\DependencyInjection\FrameworkExtension;
@@ -81,9 +85,13 @@ final class TaskBoardExtensionTest extends TestCase
         self::assertArrayNotHasKey('$managerRegistry', $container->getDefinition(DoctrineOrmTeamMemberRepository::class)->getArguments());
 
         if (interface_exists(TaskProviderInterface::class)) {
-            self::assertTrue($container->hasAlias('nowo_task_board.task_provider'));
-            self::assertTrue($container->hasAlias('nowo_task_board.team_context_provider'));
+            // Since 2.28.0: the 1.23 twins answer TimeTrack; the deprecated 1.x classes stay registered.
+            self::assertSame(TaskBoardTaskDirectory::class, (string) $container->getAlias('nowo_task_board.task_provider'));
+            self::assertSame(TaskBoardTeamDirectory::class, (string) $container->getAlias('nowo_task_board.team_context_provider'));
+            self::assertTrue($container->hasDefinition(TaskBoardTaskDirectory::class));
+            self::assertTrue($container->hasDefinition(TaskBoardTeamDirectory::class));
             self::assertTrue($container->hasDefinition(TaskBoardTaskProvider::class));
+            self::assertTrue($container->hasDefinition(TaskBoardTeamContextProvider::class));
         } else {
             self::assertFalse($container->hasAlias('nowo_task_board.task_provider'));
             self::assertFalse($container->hasAlias('nowo_task_board.team_context_provider'));
@@ -158,6 +166,39 @@ final class TaskBoardExtensionTest extends TestCase
         self::assertSame(NullTaskTimeBillableDefaultProvider::class, (string) $without->getAlias(TaskTimeBillableDefaultProviderInterface::class));
         self::assertSame(NoTaskTimePeriodLock::class, (string) $without->getAlias(TaskTimePeriodLockInterface::class));
         self::assertFalse($without->hasDefinition(TimeTrackTaskTimePeriodLock::class) && !$without->getDefinition(TimeTrackTaskTimePeriodLock::class)->hasTag('container.excluded'));
+    }
+
+    /**
+     * Since 2.28.0: a TimeTrack without its deprecated 1.x ports (2.0) gets the twins only, and the scope port is the
+     * framework-free policy; with them (1.x) the 1.x scope service is the one asked (TimeTrack wraps a host's policy in it).
+     */
+    public function testTheTimeTrackBridgeFollowsTheInstalledPorts(): void
+    {
+        $with = new ContainerBuilder();
+        $with->setParameter('kernel.environment', 'test');
+        $with->setParameter('kernel.bundles', ['SecurityBundle' => SecurityBundle::class]);
+        (new TaskBoardExtension())->load([['user_class' => User::class]], $with);
+        foreach ([TimeTrackTaskTimeBillableDefaultProvider::class, TimeTrackTaskTimePeriodLock::class] as $id) {
+            self::assertSame(TaskBoardExtension::TIME_TRACK_LEGACY_SCOPE_PROVIDER, (string) $with->getDefinition($id)->getArgument('$scopes'), $id);
+        }
+
+        $without = new ContainerBuilder();
+        $without->setParameter('kernel.environment', 'test');
+        $without->setParameter('kernel.bundles', ['SecurityBundle' => SecurityBundle::class]);
+        (new TaskBoardExtension(
+            timeTrackLegacyTaskProvider: 'Nowo\\TimeTrackBundle\\Integration\\MissingTaskProvider',
+            timeTrackLegacyTeamProvider: 'Nowo\\TimeTrackBundle\\Integration\\MissingTeamProvider',
+            timeTrackLegacyScopeProvider: 'Nowo\\TimeTrackBundle\\Timesheet\\MissingScopeProvider',
+        ))->load([['user_class' => User::class]], $without);
+        self::assertSame(TaskBoardTaskDirectory::class, (string) $without->getAlias('nowo_task_board.task_provider'));
+        self::assertSame(TaskBoardTeamDirectory::class, (string) $without->getAlias('nowo_task_board.team_context_provider'));
+        foreach ([TaskBoardTaskProvider::class, TaskBoardTeamContextProvider::class] as $legacy) {
+            // The resource exclusion leaves only Symfony's "excluded" marker.
+            self::assertTrue(!$without->hasDefinition($legacy) || $without->getDefinition($legacy)->hasTag('container.excluded'), $legacy);
+        }
+        foreach ([TimeTrackTaskTimeBillableDefaultProvider::class, TimeTrackTaskTimePeriodLock::class] as $id) {
+            self::assertSame(TimesheetScopePolicyInterface::class, (string) $without->getDefinition($id)->getArgument('$scopes'), $id);
+        }
     }
 
     public function testWeekStartResolverFollowsTheGanttConfig(): void
