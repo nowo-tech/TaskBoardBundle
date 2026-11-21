@@ -6,11 +6,10 @@ namespace Nowo\TaskBoardBundle\Tests\Functional\HostPorts;
 
 use DateTimeImmutable;
 use Doctrine\DBAL\Exception\DeadlockException;
+use InvalidArgumentException;
 use Nowo\TaskBoardBundle\Dto\BoardCriteria;
 use Nowo\TaskBoardBundle\Dto\TaskCriteria;
 use Nowo\TaskBoardBundle\Dto\TaskFormData;
-use Nowo\TaskBoardBundle\Entity\Task;
-use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
 use Nowo\TaskBoardBundle\Exception\ColumnTransitionRefusedException;
 use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
 use Nowo\TaskBoardBundle\Service\TaskBoardQuery;
@@ -20,13 +19,12 @@ use Nowo\TaskBoardBundle\Service\TaskCommandsInterface;
 use Nowo\TaskBoardBundle\Service\TaskFlowStats;
 use Nowo\TaskBoardBundle\Tests\Functional\App\ScriptedTransitionPolicy;
 use Nowo\TaskBoardBundle\Tests\Functional\App\TestSyncLimitChecker;
+use Nowo\TaskBoardBundle\Tests\Functional\FunctionalTestCase;
 use Nowo\TaskBoardBundle\Tests\Functional\Move\MoveLockFailureTest;
 use Nowo\TaskBoardBundle\Tests\Functional\Sync\SyncFunctionalTestCase;
-use Nowo\TaskBoardBundle\Tests\Functional\FunctionalTestCase;
 use Nowo\TaskBoardBundle\User\TaskBoardUsers;
 use Nowo\TaskBoardBundle\ValueObject\UserRef;
 use Nowo\TransactionContract\TransientStorageFailure;
-use InvalidArgumentException;
 
 use function array_fill;
 use function array_map;
@@ -62,7 +60,7 @@ final class HostPortsLimitsTest extends FunctionalTestCase
 
     public function testTheActiveTaskLimitAndTheTransitionPolicyRefuseBeforeAnythingIsKept(): void
     {
-        $board                            = $this->board('Limited', ['To do', 'Blocked', 'Done']);
+        $board                             = $this->board('Limited', ['To do', 'Blocked', 'Done']);
         TestSyncLimitChecker::$refuseTasks = true;
         try {
             $this->commands->createTask($this->ownerRef, $board->getId(), new TaskFormData('Over the limit'));
@@ -82,8 +80,8 @@ final class HostPortsLimitsTest extends FunctionalTestCase
 
     public function testALockConflictInsideTheUnitIsATransientFailure(): void
     {
-        $board = $this->board();
-        $task  = $this->commands->createTask($this->ownerRef, $board->getId(), new TaskFormData('Raced'));
+        $board                               = $this->board();
+        $task                                = $this->commands->createTask($this->ownerRef, $board->getId(), new TaskFormData('Raced'));
         ScriptedTransitionPolicy::$meanwhile = static function (): never {
             throw new DeadlockException(MoveLockFailureTest::driverException('Deadlock found when trying to get lock', '40001', 1213), null);
         };
@@ -129,14 +127,11 @@ final class HostPortsLimitsTest extends FunctionalTestCase
 
     public function testSnapshotErasureCrossesItsBatches(): void
     {
-        $board = $this->board();
-        $task  = $this->commands->createTask($this->ownerRef, $board->getId(), new TaskFormData('Many entries'));
-        $loaded = $this->em->find(Task::class, $task->id);
-        self::assertInstanceOf(Task::class, $loaded);
+        $board  = $this->board();
+        $task   = $this->commands->createTask($this->ownerRef, $board->getId(), new TaskFormData('Many entries'));
         foreach (array_fill(0, TaskCommands::BATCH + 1, 1) as $minutes) {
-            $this->em->persist(new TaskTimeEntry($loaded, $this->owner, $minutes, new DateTimeImmutable('2026-11-01')));
+            $this->commands->logTime($this->ownerRef, $task->id, $minutes, new DateTimeImmutable('2026-11-01'));
         }
-        $this->em->flush();
         $this->commands->deleteTask($this->ownerRef, $task->id);
 
         self::assertSame(TaskCommands::BATCH + 1, $this->commands->clearTimeEntrySnapshotsForUser($this->ownerRef->id));
