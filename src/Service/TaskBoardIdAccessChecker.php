@@ -10,6 +10,8 @@ use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
+use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenant;
+use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext;
 use Nowo\TaskBoardBundle\User\TaskBoardUserLocator;
 use Nowo\TaskBoardBundle\ValueObject\UserRef;
 
@@ -28,6 +30,9 @@ final readonly class TaskBoardIdAccessChecker implements TaskBoardAccessInterfac
         private TaskBoardUserLocator $users,
         private TaskBoardAccessCheckerInterface $accessChecker,
         private TaskBoardResourceAccessChecker $resources,
+        // Audit YJ-M1: with `tenancy.enabled` a board is reached only through a tenant the user may open (as the pages
+        // and the Task API decide); null or tenancy off: no tenant rule.
+        private ?TaskBoardTenantContext $tenantContext = null,
     ) {
     }
 
@@ -78,7 +83,7 @@ final readonly class TaskBoardIdAccessChecker implements TaskBoardAccessInterfac
         $visible = [];
         foreach ($boardIds as $id) {
             $board = $this->board($id);
-            if ($board instanceof TaskBoard && $this->resources->canViewBoard($actor, $board)) {
+            if ($board instanceof TaskBoard && $this->reaches($actor, $board) && $this->resources->canViewBoard($actor, $board)) {
                 $visible[] = $id;
             }
         }
@@ -92,6 +97,21 @@ final readonly class TaskBoardIdAccessChecker implements TaskBoardAccessInterfac
         $actor = $this->users->find($user);
 
         return $actor !== null && $this->accessChecker->canAccess($actor) ? $actor : null;
+    }
+
+    /**
+     * Audit YJ-M1: whether the user reaches the board's tenant. With `tenancy.enabled` the board must have a tenant key
+     * and the tenant resolver must open that tenant to the user (`tenantOfKey()`, as the Task API's guard); a board
+     * without a tenant is refused. Without tenancy: always.
+     */
+    public function reaches(object $actor, TaskBoard $board): bool
+    {
+        if ($this->tenantContext?->isEnabled() !== true) {
+            return true;
+        }
+        $key = $board->getTenantKey();
+
+        return $key !== null && $this->tenantContext->tenantOfKey($key, $actor) instanceof TaskBoardTenant;
     }
 
     /** The board with exactly this id, or null. */
@@ -118,7 +138,7 @@ final readonly class TaskBoardIdAccessChecker implements TaskBoardAccessInterfac
         $actor = $this->user($user);
         $board = $actor === null ? null : $this->board($boardId);
 
-        return $actor !== null && $board instanceof TaskBoard && $decide($actor, $board);
+        return $actor !== null && $board instanceof TaskBoard && $this->reaches($actor, $board) && $decide($actor, $board);
     }
 
     /**
@@ -129,6 +149,6 @@ final readonly class TaskBoardIdAccessChecker implements TaskBoardAccessInterfac
         $actor = $this->user($user);
         $task  = $actor === null ? null : $this->task($taskId);
 
-        return $actor !== null && $task instanceof Task && $decide($actor, $task);
+        return $actor !== null && $task instanceof Task && $this->reaches($actor, $task->getBoard()) && $decide($actor, $task);
     }
 }

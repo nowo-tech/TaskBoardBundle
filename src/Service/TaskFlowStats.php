@@ -18,11 +18,13 @@ use Nowo\TaskBoardBundle\View\TaskCompletionSample;
 use Nowo\TaskBoardBundle\View\TaskFlowDay;
 
 use function array_key_last;
+use function array_slice;
 use function count;
 use function is_scalar;
 use function is_string;
 use function ksort;
 use function sprintf;
+use function usort;
 
 use const SORT_STRING;
 
@@ -113,39 +115,53 @@ final readonly class TaskFlowStats implements TaskFlowStatsInterface
         if ($keys === [] || $columnName === '') {
             return [];
         }
-        /** @var list<array{taskId: mixed, tenantKey: mixed, enteredAt: mixed}> $rows */
-        $rows = $this->entityManager->createQueryBuilder()
-            ->select('IDENTITY(h.task) AS taskId', 'b.tenantKey AS tenantKey', 'MIN(h.createdAt) AS enteredAt')
-            ->from(TaskChangeHistory::class, 'h')
-            ->join('h.task', 't')
-            ->join('t.board', 'b')
-            ->where('b.tenantKey IN (:keys)')
-            ->andWhere('h.changeType = :column')
-            ->andWhere('h.newValue = :name')
-            ->groupBy('h.task')
-            ->addGroupBy('b.tenantKey')
-            ->having('MIN(h.createdAt) >= :from')
-            ->andHaving('MIN(h.createdAt) < :to')
-            ->setParameter('keys', $keys)
-            ->setParameter('column', TaskChangeType::Column->value)
-            ->setParameter('name', $columnName)
-            ->setParameter('from', $from, 'datetime_immutable')
-            ->setParameter('to', $to, 'datetime_immutable')
-            ->orderBy('enteredAt', 'ASC')
-            ->addOrderBy('taskId', 'ASC')
-            ->setMaxResults($limit)
-            ->getQuery()
-            ->getArrayResult();
+        // Audit YJ-L5: the column name is compared byte for byte in PHP (the database may fold it), so the rows are
+        // scanned in keyset batches by history id and the first exact entry of each task is kept.
+        /** @var array<string, array{0: string, 1: DateTimeImmutable}> $first task id => [tenant key, first entry] */
+        $first = [];
+        $after = null;
+        do {
+            $builder = $this->entityManager->createQueryBuilder()
+                ->select('h.id AS id', 'IDENTITY(h.task) AS taskId', 'b.tenantKey AS tenantKey', 'h.newValue AS name', 'h.createdAt AS at')
+                ->from(TaskChangeHistory::class, 'h')
+                ->join('h.task', 't')
+                ->join('t.board', 'b')
+                ->where('b.tenantKey IN (:keys)')
+                ->andWhere('h.changeType = :column')
+                ->andWhere('h.newValue = :name')
+                ->andWhere('h.createdAt < :to')
+                ->setParameter('keys', $keys)
+                ->setParameter('column', TaskChangeType::Column->value)
+                ->setParameter('name', $columnName)
+                ->setParameter('to', $to, 'datetime_immutable')
+                ->orderBy('h.id', 'ASC')
+                ->setMaxResults($this->batchSize);
+            if ($after !== null) {
+                // @igor-ignore - A query builder created in this call; nothing is kept on the service.
+                $builder->andWhere('h.id > :after')->setParameter('after', $after);
+            }
+            /** @var list<array{id: mixed, taskId: mixed, tenantKey: mixed, name: mixed, at: mixed}> $rows */
+            $rows = $builder->getQuery()->getArrayResult();
+            foreach ($rows as $row) {
+                $taskId = is_scalar($row['taskId']) ? (string) $row['taskId'] : '';
+                $exact  = $row['name'] === $columnName && is_string($row['tenantKey']) && ExactKey::oneOf($row['tenantKey'], $keys) && $row['at'] instanceof DateTimeImmutable;
+                if ($exact && (!isset($first[$taskId]) || $row['at'] < $first[$taskId][1])) {
+                    $first[$taskId] = [(string) $row['tenantKey'], $row['at']];
+                }
+            }
+            $last  = $rows === [] ? null : $rows[array_key_last($rows)]['id'];
+            $after = is_scalar($last) ? (string) $last : null;
+        } while (count($rows) === $this->batchSize);
+
         $entries = [];
-        foreach ($rows as $row) {
-            // A MIN() over a datetime comes back as the platform's string (stored without a time zone, like the column).
-            $at = is_string($row['enteredAt']) ? new DateTimeImmutable($row['enteredAt']) : null;
-            if (is_string($row['tenantKey']) && ExactKey::oneOf($row['tenantKey'], $keys) && $at instanceof DateTimeImmutable && is_scalar($row['taskId'])) {
-                $entries[] = new TaskColumnEntry((string) $row['taskId'], $row['tenantKey'], $at);
+        foreach ($first as $taskId => [$tenantKey, $at]) {
+            if ($at >= $from) {
+                $entries[] = new TaskColumnEntry((string) $taskId, $tenantKey, $at);
             }
         }
+        usort($entries, static fn (TaskColumnEntry $a, TaskColumnEntry $b): int => [$a->enteredAt, $a->taskId] <=> [$b->enteredAt, $b->taskId]);
 
-        return $entries;
+        return array_slice($entries, 0, $limit);
     }
 
     /**

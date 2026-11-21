@@ -51,7 +51,7 @@ interface TaskFlowStatsInterface
 
     /**
      * The first time each task entered a column named `$columnName` (from the task history), when that first time is in
-     * the window; earliest first. The name is compared as the database compares text.
+     * the window; earliest first. The name is compared byte for byte (since 2.29.0 audit YJ-L5; the database may fold it).
      *
      * @param list<string> $tenantKeys
      *

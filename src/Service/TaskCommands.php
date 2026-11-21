@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Service;
 use Closure;
 use DateTimeImmutable;
 use Doctrine\DBAL\LockMode;
+use Doctrine\ORM\AbstractQuery;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Persistence\ManagerRegistry;
 use InvalidArgumentException;
@@ -90,7 +91,7 @@ final readonly class TaskCommands implements TaskCommandsInterface
     public function createTask(UserRef $creator, string $boardId, TaskFormData $data, ?string $parentId = null, bool $completed = false): TaskView
     {
         $actor = $this->actor($creator);
-        $board = $this->access->board($boardId) ?? throw new TaskBoardAccessDeniedException();
+        $board = $this->reachableBoard($actor, $boardId);
         if (!$this->resources->canEditBoard($actor, $board)) {
             throw new TaskBoardAccessDeniedException();
         }
@@ -193,7 +194,7 @@ final readonly class TaskCommands implements TaskCommandsInterface
     public function deleteTask(UserRef $actor, string $taskId): int
     {
         $user = $this->actor($actor);
-        $task = $this->access->task($taskId) ?? throw new TaskBoardAccessDeniedException();
+        $task = $this->reachableTask($user, $taskId);
         if (!$this->resources->canManageBoard($user, $task->getBoard())) {
             throw new TaskBoardAccessDeniedException();
         }
@@ -229,7 +230,7 @@ final readonly class TaskCommands implements TaskCommandsInterface
     public function addComment(UserRef $author, string $taskId, string $body, array $mentionIds = []): string
     {
         $user = $this->actor($author);
-        $task = $this->access->task($taskId) ?? throw new TaskBoardAccessDeniedException();
+        $task = $this->reachableTask($user, $taskId);
         if (!$this->resources->canViewTask($user, $task) || !$this->commentPolicy->mayComment($user, $task)) {
             throw new TaskBoardAccessDeniedException();
         }
@@ -301,7 +302,7 @@ final readonly class TaskCommands implements TaskCommandsInterface
     public function logTime(UserRef $user, string $taskId, int $minutes, DateTimeImmutable $loggedAt, ?string $note = null): string
     {
         $actor = $this->actor($user);
-        $task  = $this->access->task($taskId) ?? throw new TaskBoardAccessDeniedException();
+        $task  = $this->reachableTask($actor, $taskId);
         if (!$this->resources->canTrackTime($actor, $task)) {
             throw new TaskBoardAccessDeniedException();
         }
@@ -430,8 +431,30 @@ final readonly class TaskCommands implements TaskCommandsInterface
 
     private function editableTask(object $user, string $taskId): Task
     {
+        $task = $this->reachableTask($user, $taskId);
+        if (!$this->resources->canEditTask($user, $task)) {
+            throw new TaskBoardAccessDeniedException();
+        }
+
+        return $task;
+    }
+
+    /** Audit YJ-M1: the board by exact id, in a tenant the user reaches (tenancy), else the one refusal. */
+    private function reachableBoard(object $user, string $boardId): TaskBoard
+    {
+        $board = $this->access->board($boardId);
+        if (!$board instanceof TaskBoard || !$this->access->reaches($user, $board)) {
+            throw new TaskBoardAccessDeniedException();
+        }
+
+        return $board;
+    }
+
+    /** Audit YJ-M1: the task by exact id, on a board in a tenant the user reaches (tenancy), else the one refusal. */
+    private function reachableTask(object $user, string $taskId): Task
+    {
         $task = $this->access->task($taskId);
-        if (!$task instanceof Task || !$this->resources->canEditTask($user, $task)) {
+        if (!$task instanceof Task || !$this->access->reaches($user, $task->getBoard())) {
             throw new TaskBoardAccessDeniedException();
         }
 
@@ -440,8 +463,8 @@ final readonly class TaskCommands implements TaskCommandsInterface
 
     private function manageableColumns(object $user, string $boardId): TaskBoard
     {
-        $board = $this->access->board($boardId);
-        if (!$board instanceof TaskBoard || !$this->resources->canEditBoard($user, $board) || !$this->resources->canManageColumns($user, $board)) {
+        $board = $this->reachableBoard($user, $boardId);
+        if (!$this->resources->canEditBoard($user, $board) || !$this->resources->canManageColumns($user, $board)) {
             throw new TaskBoardAccessDeniedException();
         }
 
@@ -471,19 +494,26 @@ final readonly class TaskCommands implements TaskCommandsInterface
      * that transaction's snapshot: then the write is refused as changed (never written from a stale copy).
      *
      * @throws TaskChangedException
+     * @throws TaskBoardAccessDeniedException when the task is gone
      */
     private function lock(Task $task, ?int $expectedRevision): void
     {
+        // Audit YJ-L2: a task deleted since it was loaded is the one refusal, not a Doctrine NoResultException.
         $revision = $this->entityManager->createQuery('SELECT t.revision FROM ' . Task::class . ' t WHERE t.id = :id')
             ->setParameter('id', $task->getId())
             ->setLockMode(LockMode::PESSIMISTIC_WRITE)
-            ->getSingleScalarResult();
+            ->getOneOrNullResult(AbstractQuery::HYDRATE_SINGLE_SCALAR);
+        if ($revision === null) {
+            throw new TaskBoardAccessDeniedException();
+        }
         $revision = is_scalar($revision) ? (int) $revision : 0;
+        $boardId  = $task->getBoard()->getId();
         if ($revision !== $task->getRevision()) {
             $this->entityManager->refresh($task);
         }
-        // A refresh that still gives another revision (an outer REPEATABLE READ snapshot) is never written from.
-        if ($task->getRevision() !== $revision || ($expectedRevision !== null && $expectedRevision !== $revision)) {
+        // A refresh that still gives another revision (an outer REPEATABLE READ snapshot) is never written from; nor is a
+        // task moved to another board meanwhile (audit YJ-L3: the access decided before was for the old board).
+        if ($task->getRevision() !== $revision || $task->getBoard()->getId() !== $boardId || ($expectedRevision !== null && $expectedRevision !== $revision)) {
             throw new TaskChangedException($revision);
         }
     }

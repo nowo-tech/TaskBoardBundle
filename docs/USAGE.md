@@ -830,6 +830,11 @@ copies of the user's detached time entries, in batches; idempotent).
   comment (`comments.readers_can_comment`), `canTrackTime` for time, the board's manage right to delete; your
   `BOARD_ACCESS_CHECK` / `TASK_ACCESS_CHECK` listeners decide as on the pages. An unknown user, an unknown id (ids are
   compared byte for byte) and a refusal all throw `TaskBoardAccessDeniedException` with the same message.
+- **Tenancy.** With `tenancy.enabled` a board (and its tasks) is reached only through a tenant the user may open: the
+  board must have a tenant key and your tenant resolver must answer that tenant for the user, as on the pages and in
+  the Task API. A user your resolver no longer opens the tenant to, a team member from another tenant and a holder of a
+  global `security.manage_roles` role outside the tenant are refused; so is any board without a tenant. The access port
+  answers `false` the same way.
 - **One write unit per call.** One transaction, or a savepoint inside yours; the task events are held until it
   commits and dropped when it rolls back.
 - **Concurrency.** A task write locks the task's row first (after the column it enters, in the bundle's fixed lock

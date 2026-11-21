@@ -87,6 +87,8 @@ final class RolesOfTheGivenUserTest extends TestCase
         self::assertTrue($checker->canAccess($user));
         // Another object of the same user (exactly the same id): still the signed-in user.
         self::assertTrue($checker->canAccess(new IdUser('u-1', [])));
+        // The same id on another kind of object (a team, a service account) is somebody else.
+        self::assertFalse($checker->canAccess(new RolesOnlyWithId('u-1', ['ROLE_MEMBER'])));
         // A look-alike id is somebody else.
         self::assertFalse($checker->canAccess(new IdUser('U-1', ['ROLE_MEMBER'])));
     }
@@ -209,6 +211,26 @@ final readonly class RolesOnly
     }
 
     public function getRoles(): mixed
+    {
+        return $this->roles;
+    }
+}
+
+/** Another kind of host object whose id overlaps a user's. */
+final readonly class RolesOnlyWithId
+{
+    /** @param list<string> $roles */
+    public function __construct(private string $id, private array $roles)
+    {
+    }
+
+    public function getId(): string
+    {
+        return $this->id;
+    }
+
+    /** @return list<string> */
+    public function getRoles(): array
     {
         return $this->roles;
     }

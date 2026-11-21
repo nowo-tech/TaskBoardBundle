@@ -84,7 +84,7 @@ final readonly class UserRoleCheck
         return false;
     }
 
-    /** Whether `$user` is the token's user: the same object, or exactly the same non-empty id. */
+    /** Whether `$user` is the token's user: the same object, or an object of the same class with exactly the same id. */
     private function isSignedIn(object $user): bool
     {
         $signedIn = $this->tokenStorage?->getToken()?->getUser();
@@ -96,7 +96,9 @@ final readonly class UserRoleCheck
         }
         $id = ActorId::of($user);
 
-        return $id !== null && $id === ActorId::of($signedIn);
+        // Audit YJ-L1: the same id of the same kind of object (a Doctrine proxy is a subclass of its entity), so another
+        // class whose ids overlap (a team, a service account) is never taken for the signed-in user.
+        return $id !== null && $id === ActorId::of($signedIn) && ($user instanceof $signedIn || $signedIn instanceof $user);
     }
 
     /** A user object that is not a Symfony user but reports its roles, as a security user carrying only those roles. */

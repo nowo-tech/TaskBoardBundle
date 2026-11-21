@@ -138,7 +138,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     the system calls `adjustTotalTime` (atomic, clamped at 0) and `clearTimeEntrySnapshotsForUser` (erasure, batched,
     idempotent). The user is a `ValueObject\UserRef` (id only, looked up again per call); each call re-checks the page's
     access rule, runs in one write unit (a savepoint inside the host's transaction) with row locks in the bundle's
-    fixed order, and returns a `View\TaskView` or an id. Unknown user, unknown id and refusal are one
+    fixed order, and returns a `View\TaskView` or an id. With `tenancy.enabled` a board is reached only through a tenant
+    the user may open (audit YJ-M1, as the pages and the Task API); a task deleted meanwhile is the one refusal, one moved
+    to another board meanwhile a `TaskChangedException`. Unknown user, unknown id and refusal are one
     `TaskBoardAccessDeniedException`; a lock conflict is `TransientStorageFailure`.
   - `Service\TaskBoardAccessInterface` (`TaskBoardIdAccessChecker`): `canAccess`, `canViewBoard`, `canEditBoard`,
     `canManageBoard`, `canViewTask`, `canEditTask`, `canTrackTime`, `filterBoardIds` by `UserRef` and id.

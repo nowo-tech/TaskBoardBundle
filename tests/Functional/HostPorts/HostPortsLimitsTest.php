@@ -11,6 +11,8 @@ use Nowo\TaskBoardBundle\Dto\BoardCriteria;
 use Nowo\TaskBoardBundle\Dto\TaskCriteria;
 use Nowo\TaskBoardBundle\Dto\TaskFormData;
 use Nowo\TaskBoardBundle\Exception\ColumnTransitionRefusedException;
+use Nowo\TaskBoardBundle\Exception\TaskBoardAccessDeniedException;
+use Nowo\TaskBoardBundle\Exception\TaskChangedException;
 use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
 use Nowo\TaskBoardBundle\Service\TaskBoardQuery;
 use Nowo\TaskBoardBundle\Service\TaskBoardQueryInterface;
@@ -106,6 +108,26 @@ final class HostPortsLimitsTest extends FunctionalTestCase
         self::assertSame(['Mine', $task->revision + 2], [$view->title, $view->revision]);
     }
 
+    /** Audit YJ-L2: a task deleted since it was loaded is the one refusal; YJ-L3: one moved to another board is a conflict. */
+    public function testATaskGoneOrMovedMeanwhileIsNeverWritten(): void
+    {
+        $board      = $this->board();
+        $other      = $this->board('Other');
+        $gone       = $this->commands->createTask($this->ownerRef, $board->getId(), new TaskFormData('Gone'));
+        $moved      = $this->commands->createTask($this->ownerRef, $board->getId(), new TaskFormData('Moved'));
+        $connection = $this->em->getConnection();
+        $connection->executeStatement('DELETE FROM task_board_tasks WHERE id = ?', [$gone->id]);
+        $connection->executeStatement('UPDATE task_board_tasks SET board_id = ?, column_id = NULL, revision = revision + 1 WHERE id = ?', [$other->getId(), $moved->id]);
+
+        try {
+            $this->commands->updateTask($this->ownerRef, $gone->id, new TaskFormData('Never'));
+            self::fail('A deleted task is refused.');
+        } catch (TaskBoardAccessDeniedException) {
+        }
+        $this->expectException(TaskChangedException::class);
+        $this->commands->updateTask($this->ownerRef, $moved->id, new TaskFormData('Never'));
+    }
+
     public function testScansCrossTheirBatches(): void
     {
         $board = $this->board('Batches', tenantKey: 'acme');
@@ -115,8 +137,14 @@ final class HostPortsLimitsTest extends FunctionalTestCase
         $em    = $this->em;
         $query = new TaskBoardQuery($em, new TaskBoardUsers(), 2);
         self::assertSame(['t' => 3], $query->tagCounts(['acme']));
-        $flow = (new TaskFlowStats($em, 2))->dailyFlow(['acme'], new DateTimeImmutable('-1 day'), new DateTimeImmutable('+1 day'));
+        $stats = new TaskFlowStats($em, 2);
+        $flow  = $stats->dailyFlow(['acme'], new DateTimeImmutable('-1 day'), new DateTimeImmutable('+1 day'));
         self::assertSame(3, $flow[0]->created);
+        foreach ($query->findTasks(TaskCriteria::forTenants(['acme']))->items as $task) {
+            $this->commands->moveTask($this->ownerRef, $task->id, $board->getColumns()->get(1)?->getId(), 0);
+        }
+        self::assertCount(3, $stats->firstEntries(['acme'], 'Doing', new DateTimeImmutable('-1 day'), new DateTimeImmutable('+1 day')));
+        self::assertCount(2, $stats->firstEntries(['acme'], 'Doing', new DateTimeImmutable('-1 day'), new DateTimeImmutable('+1 day'), 2));
 
         $page = $query->findTasks(TaskCriteria::forTenants(['acme'])->page(0, 2));
         self::assertTrue($page->hasMore());
