@@ -85,10 +85,10 @@ final class HostPortsWorkerTest extends FunctionalTestCase
         $baseline = 0;
         for ($i = 0; $i < self::ITERATIONS; ++$i) {
             foreach ($refs as $name => $ref) {
-                $other  = $name === 'alice' ? 'bob' : 'alice';
-                $column = $boards[$name]->getColumns()->get(($i + 1) % 3)?->getId();
+                $other     = $name === 'alice' ? 'bob' : 'alice';
+                $column    = $boards[$name]->getColumns()->get(($i + 1) % 3)?->getId();
                 $elsewhere = $boards[$name]->getColumns()->get(($i + 2) % 3)?->getId();
-                $moved  = [];
+                $moved     = [];
                 $connection->beginTransaction();
                 $commands->moveTask($ref, $tasks[$name], $column, 0);
                 $connection->commit();

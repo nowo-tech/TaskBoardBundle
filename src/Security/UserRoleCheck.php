@@ -65,7 +65,7 @@ final readonly class UserRoleCheck
             return false;
         }
 
-        $subject = $user instanceof UserInterface ? $user : self::roleHolder($user);
+        $subject = $user instanceof UserInterface ? $user : $this->roleHolder($user);
         if (!$subject instanceof UserInterface) {
             return false;
         }
@@ -100,7 +100,7 @@ final readonly class UserRoleCheck
     }
 
     /** A user object that is not a Symfony user but reports its roles, as a security user carrying only those roles. */
-    private static function roleHolder(object $user): ?UserInterface
+    private function roleHolder(object $user): ?UserInterface
     {
         if (!method_exists($user, 'getRoles')) {
             return null;

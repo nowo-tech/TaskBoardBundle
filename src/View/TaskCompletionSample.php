@@ -5,10 +5,11 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\View;
 
 use DateTimeImmutable;
+use Nowo\TaskBoardBundle\Service\TaskFlowStatsInterface;
 
 /**
  * Since 2.29.0: one completed task with when it was created and completed (lead time samples of
- * {@see \Nowo\TaskBoardBundle\Service\TaskFlowStatsInterface}).
+ * {@see TaskFlowStatsInterface}).
  */
 final readonly class TaskCompletionSample
 {

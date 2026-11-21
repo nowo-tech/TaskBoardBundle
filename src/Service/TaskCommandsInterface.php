@@ -13,6 +13,7 @@ use Nowo\TaskBoardBundle\Enum\TaskDependencyType;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Exception\ColumnTransitionRefusedException;
 use Nowo\TaskBoardBundle\Exception\TaskBoardAccessDeniedException;
+use Nowo\TaskBoardBundle\Exception\TaskBoardQuotaRefusedException;
 use Nowo\TaskBoardBundle\Exception\TaskChangedException;
 use Nowo\TaskBoardBundle\Exception\TaskLinkedToProviderException;
 use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
@@ -52,6 +53,7 @@ interface TaskCommandsInterface
      * the done column when the board has columns, in place otherwise; one write unit with the creation).
      *
      * @throws TaskBoardAccessDeniedException
+     * @throws TaskBoardQuotaRefusedException when the host's plan refuses a new task (QUOTA_CHECK): nothing is created
      * @throws TaskReopenRefusedException when the host's active-task limit refuses one more task: nothing is created
      * @throws ColumnTransitionRefusedException when the column transition policy refuses the column
      * @throws TaskTreeRefusedException when the subtask would be too deep

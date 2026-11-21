@@ -27,7 +27,9 @@ use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\MultiBoard\DoctrineMultiBoardTaskQuery;
 use Nowo\TaskBoardBundle\MultiBoard\MultiBoardTaskFilter;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
+use Nowo\TaskBoardBundle\Dto\TaskCriteria;
 use Nowo\TaskBoardBundle\Service\TaskBoardCreatorInterface;
+use Nowo\TaskBoardBundle\Service\TaskBoardQueryInterface;
 use Nowo\TaskBoardBundle\Service\TaskManagerInterface;
 use Nowo\TaskBoardBundle\Service\TaskTimeLoggerInterface;
 use Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleReassigner;
@@ -133,5 +135,11 @@ final class DddHostLookAlikeTest extends KernelTestCase
         $table = $em->getClassMetadata(TaskTimeEntry::class)->getTableName();
         self::assertSame('u-bruno', $em->getConnection()->fetchOne('SELECT user_id FROM ' . $table . ' WHERE id = ?', [$entryId]), 'Bruno keeps his rows');
         self::assertSame('u-bruno', $repository->findById($task->getId())?->getCreator()?->getId());
+
+        // Since 2.29.0: the host query port keeps only the creator whose id is equal byte for byte.
+        $ports = $container->get(TaskBoardQueryInterface::class);
+        self::assertSame(1, $ports->countTasks(TaskCriteria::forBoards([$board->getId()])->createdBy('u-bruno')));
+        self::assertSame(0, $ports->countTasks(TaskCriteria::forBoards([$board->getId()])->createdBy('U-BRUNO')));
+        self::assertSame([], $ports->findTasks(TaskCriteria::forBoards([$board->getId()])->createdBy('U-BRUNO'))->items);
     }
 }

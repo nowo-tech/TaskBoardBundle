@@ -36,13 +36,18 @@ final class TaskBoardRestructurerTest extends CopyTestCase
         $tokens->setToken(new UsernamePasswordToken($this->owner, 'main', $this->owner->getRoles()));
     }
 
-    public function testWithoutASignedInUserTheDefaultPolicyRefusesFolders(): void
+    /**
+     * Since 2.29.0 (role rules judge the given user): without a signed-in user (a command, a Messenger handler) the
+     * default policy asks the given user's own roles. Up to 2.28 the missing token refused everyone.
+     */
+    public function testWithoutASignedInUserTheDefaultPolicyAsksTheUsersOwnRoles(): void
     {
         $tokens = self::getContainer()->get('security.token_storage');
         self::assertInstanceOf(TokenStorageInterface::class, $tokens);
         $tokens->setToken(null);
-        $this->assertRestructureRefused(TaskBoardRestructureRefusedException::NOT_ALLOWED, fn (): TaskBoardFolderSnapshot => $this->restructurer()->createFolder($this->owner, 'acme', 'Epic'));
+        $this->assertRestructureRefused(TaskBoardRestructureRefusedException::NOT_ALLOWED, fn (): TaskBoardFolderSnapshot => $this->restructurer()->createFolder($this->user('noroles@example.com', []), 'acme', 'Epic'));
         self::assertSame(0, $this->em->getRepository(TaskBoardFolder::class)->count([]));
+        self::assertSame('Epic', $this->restructurer()->createFolder($this->owner, 'acme', 'Epic')->name, 'the owner holds the create role');
     }
 
     public function testFoldersAreCreatedListedUpdatedAndDeletedOnlyWhenEmpty(): void

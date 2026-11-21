@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\View;
 
+use Nowo\TaskBoardBundle\Service\TaskFlowStatsInterface;
+
 /**
- * Since 2.29.0: tasks created and completed in one tenant on one day ({@see \Nowo\TaskBoardBundle\Service\TaskFlowStatsInterface}).
+ * Since 2.29.0: tasks created and completed in one tenant on one day ({@see TaskFlowStatsInterface}).
  */
 final readonly class TaskFlowDay
 {

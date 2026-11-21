@@ -15,12 +15,12 @@ use Nowo\TransactionContract\TransientStorageFailure;
 require dirname(__DIR__, 3) . '/vendor/autoload.php';
 
 [$script, $taskId, $times, $seconds] = $argv;
-$kernel = new FunctionalKernel();
+$kernel                              = new FunctionalKernel();
 $kernel->boot();
 $commands = $kernel->getContainer()->get(TaskCommandsInterface::class);
 assert($commands instanceof TaskCommandsInterface);
 for ($index = 0; $index < (int) $times; ++$index) {
-    for ($attempt = 0; ; ++$attempt) {
+    for ($attempt = 0;; ++$attempt) {
         try {
             $commands->adjustTotalTime($taskId, (int) $seconds);
 

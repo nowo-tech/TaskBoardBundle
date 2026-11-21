@@ -205,8 +205,13 @@ use Nowo\TimeTrackBundle\Event\TimeEntryCreatedEvent;
 use Nowo\TimeTrackBundle\Event\TimeEntryImportedEvent;
 use Nowo\TimeTrackBundle\Event\TimeTrackEvents;
 use Nowo\TimeTrackBundle\Integration\TaskDirectoryInterface;
+use Nowo\TimeTrackBundle\Integration\TaskProviderInterface;
+use Nowo\TimeTrackBundle\Integration\TeamContextProviderInterface;
+use Nowo\TimeTrackBundle\Integration\TimeEntryBillableDefaultProviderInterface;
 use Nowo\TimeTrackBundle\Repository\TimesheetRepositoryInterface;
+use Nowo\TimeTrackBundle\Service\TimerService;
 use Nowo\TimeTrackBundle\Timesheet\PeriodLockGuard;
+use Nowo\TimeTrackBundle\Timesheet\TimesheetScopeProviderInterface;
 use Nowo\TransactionDoctrine\HostFlushProbe;
 use Nowo\TransactionDoctrine\Symfony\Conflict\ConflictResponseFormatterInterface;
 use Symfony\Component\Config\FileLocator;
@@ -275,19 +280,19 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
     }
 
     /** Since 2.28.0: TimeTrack's deprecated 1.x task port (TimeTrack < 2.0). */
-    public const TIME_TRACK_LEGACY_TASK_PROVIDER = 'Nowo\\TimeTrackBundle\\Integration\\TaskProviderInterface';
+    public const TIME_TRACK_LEGACY_TASK_PROVIDER = TaskProviderInterface::class;
 
     /** Since 2.28.0: TimeTrack's deprecated 1.x team port (TimeTrack < 2.0). */
-    public const TIME_TRACK_LEGACY_TEAM_PROVIDER = 'Nowo\\TimeTrackBundle\\Integration\\TeamContextProviderInterface';
+    public const TIME_TRACK_LEGACY_TEAM_PROVIDER = TeamContextProviderInterface::class;
 
     /** Since 2.28.0: TimeTrack's deprecated 1.x scope port (TimeTrack < 2.0). */
-    public const TIME_TRACK_LEGACY_SCOPE_PROVIDER = 'Nowo\\TimeTrackBundle\\Timesheet\\TimesheetScopeProviderInterface';
+    public const TIME_TRACK_LEGACY_SCOPE_PROVIDER = TimesheetScopeProviderInterface::class;
 
     /** Since 2.22.0: TimeTrack's timer use cases (its service id is the class). */
-    public const TIME_TRACK_TIMER_SERVICE = 'Nowo\\TimeTrackBundle\\Service\\TimerService';
+    public const TIME_TRACK_TIMER_SERVICE = TimerService::class;
 
     /** Since 2.12.0: TimeTrack's billable default port (TimeTrack >= 1.21); a string, so older TimeTrack still loads. */
-    public const TIME_TRACK_BILLABLE_DEFAULTS = 'Nowo\\TimeTrackBundle\\Integration\\TimeEntryBillableDefaultProviderInterface';
+    public const TIME_TRACK_BILLABLE_DEFAULTS = TimeEntryBillableDefaultProviderInterface::class;
 
     public function load(array $configs, ContainerBuilder $container): void
     {

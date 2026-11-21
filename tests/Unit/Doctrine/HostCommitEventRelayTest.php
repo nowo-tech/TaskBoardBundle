@@ -117,7 +117,7 @@ final class HostCommitEventRelayTest extends TestCase
 
     public function testTheResponseReleasesAndAFailingListenerIsLogged(): void
     {
-        $this->inner->addListener(TaskBoardEvents::TASK_CREATED, static function (): void {
+        $this->inner->addListener(TaskBoardEvents::TASK_CREATED, static function (): never {
             throw new RuntimeException('listener');
         });
         $this->level = 1;

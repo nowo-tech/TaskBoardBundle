@@ -23,7 +23,9 @@ use Nowo\TaskBoardBundle\Entity\TaskDocument;
 use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
 use Nowo\TaskBoardBundle\Enum\TaskDependencyType;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
+use Nowo\TaskBoardBundle\Event\TaskBoardQuotaCheckEvent;
 use Nowo\TaskBoardBundle\Exception\TaskBoardAccessDeniedException;
+use Nowo\TaskBoardBundle\Exception\TaskBoardQuotaRefusedException;
 use Nowo\TaskBoardBundle\Exception\TaskChangedException;
 use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
@@ -77,6 +79,7 @@ final readonly class TaskCommands implements TaskCommandsInterface
         private TaskBoardEraserInterface $eraser,
         private TaskBoardUserLocator $users,
         private TaskEventDeferral $events,
+        private TaskBoardQuota $quota,
         private ?ManagerRegistry $managerRegistry = null,
         private TaskBoardUsers $userReferences = new TaskBoardUsers(),
         // The fixed lock order of the bundle (columns, then tasks): a column a write enters is locked before the task.
@@ -99,6 +102,11 @@ final readonly class TaskCommands implements TaskCommandsInterface
             }
         }
         $this->assertTitle($data->title);
+        // The host's plan (QUOTA_CHECK), as the board page asks before a new task.
+        $plan = $this->quota->refusal(TaskBoardQuotaCheckEvent::ACTION_TASK_CREATE, $board->getTenantKey(), $board, 1, $actor);
+        if ($plan !== null) {
+            throw new TaskBoardQuotaRefusedException($plan);
+        }
         $refusal = $this->tasks->activeTaskRefusal($board, $completed ? 0 : 1);
         if ($refusal instanceof LimitRefusal) {
             throw new TaskReopenRefusedException($refusal);
@@ -229,6 +237,7 @@ final readonly class TaskCommands implements TaskCommandsInterface
             throw new InvalidArgumentException('TaskBoard: a comment cannot be blank.');
         }
 
+        // @igor-ignore - Call on a stateless bundle service / a Doctrine entity loaded for this call; nothing is kept on the service.
         return $this->unit(fn (): string => $this->comments->add($task, $user, $body, array_values($mentionIds))->getId(), $task);
     }
 
@@ -265,6 +274,7 @@ final readonly class TaskCommands implements TaskCommandsInterface
         $task  = $this->editableTask($user, $taskId);
         $other = $this->editableTask($user, $otherTaskId);
 
+        // @igor-ignore - Call on a stateless bundle service / a Doctrine entity loaded for this call; nothing is kept on the service.
         return $this->unit(fn (): string => $this->dependencies->add($task, $other, $type, $user)->getId(), $task);
     }
 
@@ -279,6 +289,7 @@ final readonly class TaskCommands implements TaskCommandsInterface
         return $this->unit(function () use ($task, $title, $content, $user, $position): string {
             $this->lock($task, null);
             $document = new TaskDocument($task, $title, $content, $user, $position ?? count($task->getDocuments()));
+            // @igor-ignore - Call on a stateless bundle service / a Doctrine entity loaded for this call; nothing is kept on the service.
             $task->getDocuments()->add($document);
             $this->entityManager->persist($document);
             $this->entityManager->flush();
@@ -310,6 +321,7 @@ final readonly class TaskCommands implements TaskCommandsInterface
         }
 
         return $this->unit(function () use ($board, $data, $user, $position): string {
+            // @igor-ignore - Call on a stateless bundle service / a Doctrine entity loaded for this call; nothing is kept on the service.
             $column = $this->columns->add($board, $data, $user);
             if ($position !== null) {
                 $ids = [];

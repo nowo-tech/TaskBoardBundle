@@ -5,10 +5,11 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\View;
 
 use DateTimeImmutable;
+use Nowo\TaskBoardBundle\Service\TaskFlowStatsInterface;
 
 /**
  * Since 2.29.0: the first time a task entered a column (by the column's name in the task history), for
- * {@see \Nowo\TaskBoardBundle\Service\TaskFlowStatsInterface::firstEntries()}.
+ * {@see TaskFlowStatsInterface::firstEntries()}.
  */
 final readonly class TaskColumnEntry
 {

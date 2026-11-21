@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Service;
 
 use DateTimeImmutable;
-use DateTimeInterface;
 use DateTimeZone;
 use Doctrine\ORM\EntityManagerInterface;
 use InvalidArgumentException;
@@ -24,6 +23,8 @@ use function is_scalar;
 use function is_string;
 use function ksort;
 use function sprintf;
+
+use const SORT_STRING;
 
 /**
  * Since 2.29.0: the bundle's {@see TaskFlowStatsInterface}. Reads only; stateless (FrankenPHP worker safe). The daily
@@ -135,7 +136,8 @@ final readonly class TaskFlowStats implements TaskFlowStatsInterface
             ->getArrayResult();
         $entries = [];
         foreach ($rows as $row) {
-            $at = $this->date($row['enteredAt']);
+            // A MIN() over a datetime comes back as the platform's string (stored without a time zone, like the column).
+            $at = is_string($row['enteredAt']) ? new DateTimeImmutable($row['enteredAt']) : null;
             if (is_string($row['tenantKey']) && ExactKey::oneOf($row['tenantKey'], $keys) && $at instanceof DateTimeImmutable && is_scalar($row['taskId'])) {
                 $entries[] = new TaskColumnEntry((string) $row['taskId'], $row['tenantKey'], $at);
             }
@@ -180,21 +182,6 @@ final readonly class TaskFlowStats implements TaskFlowStatsInterface
             $last  = $rows === [] ? null : $rows[array_key_last($rows)]['id'];
             $after = is_scalar($last) ? (string) $last : null;
         } while (count($rows) === self::BATCH);
-    }
-
-    /** A MIN() over a datetime comes back as the platform's string. */
-    private function date(mixed $value): ?DateTimeImmutable
-    {
-        if ($value instanceof DateTimeImmutable) {
-            return $value;
-        }
-        if (!is_string($value) || $value === '') {
-            return null;
-        }
-        $format = $this->entityManager->getConnection()->getDatabasePlatform()->getDateTimeFormatString();
-        $date   = DateTimeImmutable::createFromFormat($format, $value) ?: DateTimeImmutable::createFromFormat('Y-m-d H:i:s.u', $value);
-
-        return $date instanceof DateTimeInterface ? $date : null;
     }
 
     /**

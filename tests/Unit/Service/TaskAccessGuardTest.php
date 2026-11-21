@@ -31,6 +31,15 @@ final class TaskAccessGuardTest extends TestCase
         self::assertTrue($guard->canTrack($user, $task));
     }
 
+    /** Since 2.29.0: any user object; one without a usable id may not track. */
+    public function testAUserWithoutAnIdMayNotTrack(): void
+    {
+        $user = new TestUser('1', 'dev@example.com');
+        $task = new Task(new TaskBoard('Demo', 'demo', $user), 'Work', $user);
+
+        self::assertFalse((new TaskAccessGuard($this->createStub(TeamMemberRepositoryInterface::class)))->canTrack(new \stdClass(), $task));
+    }
+
     public function testTeamMemberCanTrack(): void
     {
         $user  = new TestUser('1', 'dev@example.com');

@@ -21,7 +21,10 @@ use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\Enum\TaskSort;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
+use Nowo\TaskBoardBundle\Event\TaskBoardQuotaCheckEvent;
 use Nowo\TaskBoardBundle\Exception\TaskBoardAccessDeniedException;
+use Nowo\TaskBoardBundle\Exception\TaskBoardQuotaRefusedException;
+use Nowo\TaskBoardBundle\Tests\Functional\App\RecordingQuotaListener;
 use Nowo\TaskBoardBundle\Exception\TaskChangedException;
 use Nowo\TaskBoardBundle\Exception\UnassignableUserException;
 use Nowo\TaskBoardBundle\Service\TaskBoardAccessInterface;
@@ -32,9 +35,12 @@ use Nowo\TaskBoardBundle\Service\TaskMemberAssigner;
 use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\AppUser;
 use Nowo\TaskBoardBundle\Tests\Functional\FunctionalTestCase;
 use Nowo\TaskBoardBundle\ValueObject\UserRef;
+use Nowo\TaskBoardBundle\View\BoardView;
+use Nowo\TaskBoardBundle\View\TaskView;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 
 use function array_map;
+use function array_slice;
 use function count;
 
 /**
@@ -142,31 +148,31 @@ final class HostPortsTest extends FunctionalTestCase
         $nobody   = UserRef::ofId('999999');
 
         $calls = [
-            fn () => $this->commands->createTask($stranger, $board->getId(), new TaskFormData('x')),
-            fn () => $this->commands->createTask($this->ownerRef, 'missing', new TaskFormData('x')),
-            fn () => $this->commands->createTask($nobody, $board->getId(), new TaskFormData('x')),
-            fn () => $this->commands->updateTask($stranger, $task->getId(), new TaskFormData('x')),
-            fn () => $this->commands->updateTask($this->ownerRef, 'missing', new TaskFormData('x')),
-            fn () => $this->commands->updateTask($this->ownerRef, strtoupper($task->getId()), new TaskFormData('x')),
-            fn () => $this->commands->moveTask($stranger, $task->getId(), null, 0),
-            fn () => $this->commands->completeTask($stranger, $task->getId()),
-            fn () => $this->commands->archiveTask($stranger, $task->getId()),
-            fn () => $this->commands->restoreTask($stranger, $task->getId()),
-            fn () => $this->commands->deleteTask($stranger, $task->getId()),
-            fn () => $this->commands->deleteTask($this->ownerRef, 'missing'),
-            fn () => $this->commands->addMember($stranger, $task->getId(), $this->ownerRef),
-            fn () => $this->commands->addMember($this->ownerRef, $task->getId(), $nobody),
-            fn () => $this->commands->removeMember($stranger, $task->getId(), 'm'),
-            fn () => $this->commands->addComment($stranger, $task->getId(), 'hi'),
-            fn () => $this->commands->addComment($this->ownerRef, 'missing', 'hi'),
-            fn () => $this->commands->addLink($stranger, $task->getId(), new TaskLinkFormData(url: 'https://example.com')),
-            fn () => $this->commands->addHostObjectLink($stranger, $task->getId(), 'invoice', '1'),
-            fn () => $this->commands->addDependency($stranger, $task->getId(), $task->getId(), TaskDependencyType::Blocks),
-            fn () => $this->commands->addDocument($stranger, $task->getId(), 'Doc', 'Body'),
-            fn () => $this->commands->logTime($stranger, $task->getId(), 30, new DateTimeImmutable()),
-            fn () => $this->commands->logTime($this->ownerRef, 'missing', 30, new DateTimeImmutable()),
-            fn () => $this->commands->addColumn($stranger, $board->getId(), new BoardColumnFormData('New')),
-            fn () => $this->commands->addColumn($this->ownerRef, 'missing', new BoardColumnFormData('New')),
+            fn (): TaskView => $this->commands->createTask($stranger, $board->getId(), new TaskFormData('x')),
+            fn (): TaskView => $this->commands->createTask($this->ownerRef, 'missing', new TaskFormData('x')),
+            fn (): TaskView => $this->commands->createTask($nobody, $board->getId(), new TaskFormData('x')),
+            fn (): TaskView => $this->commands->updateTask($stranger, $task->getId(), new TaskFormData('x')),
+            fn (): TaskView => $this->commands->updateTask($this->ownerRef, 'missing', new TaskFormData('x')),
+            fn (): TaskView => $this->commands->updateTask($this->ownerRef, strtoupper($task->getId()), new TaskFormData('x')),
+            fn (): TaskView => $this->commands->moveTask($stranger, $task->getId(), null, 0),
+            fn (): TaskView => $this->commands->completeTask($stranger, $task->getId()),
+            fn (): TaskView => $this->commands->archiveTask($stranger, $task->getId()),
+            fn (): TaskView => $this->commands->restoreTask($stranger, $task->getId()),
+            fn (): int => $this->commands->deleteTask($stranger, $task->getId()),
+            fn (): int => $this->commands->deleteTask($this->ownerRef, 'missing'),
+            fn (): string => $this->commands->addMember($stranger, $task->getId(), $this->ownerRef),
+            fn (): string => $this->commands->addMember($this->ownerRef, $task->getId(), $nobody),
+            fn (): bool => $this->commands->removeMember($stranger, $task->getId(), 'm'),
+            fn (): string => $this->commands->addComment($stranger, $task->getId(), 'hi'),
+            fn (): string => $this->commands->addComment($this->ownerRef, 'missing', 'hi'),
+            fn (): string => $this->commands->addLink($stranger, $task->getId(), new TaskLinkFormData(url: 'https://example.com')),
+            fn (): string => $this->commands->addHostObjectLink($stranger, $task->getId(), 'invoice', '1'),
+            fn (): string => $this->commands->addDependency($stranger, $task->getId(), $task->getId(), TaskDependencyType::Blocks),
+            fn (): string => $this->commands->addDocument($stranger, $task->getId(), 'Doc', 'Body'),
+            fn (): string => $this->commands->logTime($stranger, $task->getId(), 30, new DateTimeImmutable()),
+            fn (): string => $this->commands->logTime($this->ownerRef, 'missing', 30, new DateTimeImmutable()),
+            fn (): string => $this->commands->addColumn($stranger, $board->getId(), new BoardColumnFormData('New')),
+            fn (): string => $this->commands->addColumn($this->ownerRef, 'missing', new BoardColumnFormData('New')),
             fn () => $this->commands->reorderColumns($stranger, $board->getId(), []),
         ];
         foreach ($calls as $index => $call) {
@@ -215,23 +221,42 @@ final class HostPortsTest extends FunctionalTestCase
         self::assertSame(45, $this->em->find(TaskTimeEntry::class, $entry)?->getMinutes());
     }
 
+    public function testTheHostsPlanAndAnUnusableUserAreRefused(): void
+    {
+        $board = $this->board();
+        $quota = self::getContainer()->get('app.quota_listener');
+        self::assertInstanceOf(RecordingQuotaListener::class, $quota);
+        $quota->deny = [TaskBoardQuotaCheckEvent::ACTION_TASK_CREATE];
+        try {
+            $this->commands->createTask($this->ownerRef, $board->getId(), new TaskFormData('Over plan'));
+            self::fail('The plan refuses.');
+        } catch (TaskBoardQuotaRefusedException $refused) {
+            self::assertSame('Your plan is full.', $refused->getMessage());
+        }
+        $quota->deny = [];
+
+        // Text for an integer user id names nobody.
+        $this->expectException(TaskBoardAccessDeniedException::class);
+        $this->commands->createTask(UserRef::ofId('abc'), $board->getId(), new TaskFormData('x'));
+    }
+
     public function testInvalidInputIsRefusedBeforeAnyWrite(): void
     {
         $board = $this->board();
         $task  = $this->commands->createTask($this->ownerRef, $board->getId(), new TaskFormData('Work'));
         $other = $this->board('Other');
         $calls = [
-            fn () => $this->commands->createTask($this->ownerRef, $board->getId(), new TaskFormData('  ')),
-            fn () => $this->commands->createTask($this->ownerRef, $other->getId(), new TaskFormData('Sub'), $task->id),
-            fn () => $this->commands->updateTask($this->ownerRef, $task->id, new TaskFormData(str_repeat('x', 256))),
-            fn () => $this->commands->addComment($this->ownerRef, $task->id, ' '),
-            fn () => $this->commands->addLink($this->ownerRef, $task->id, new TaskLinkFormData(url: '')),
-            fn () => $this->commands->addHostObjectLink($this->ownerRef, $task->id, '', '1'),
-            fn () => $this->commands->addDocument($this->ownerRef, $task->id, '', 'Body'),
-            fn () => $this->commands->logTime($this->ownerRef, $task->id, 0, new DateTimeImmutable()),
-            fn () => $this->commands->addColumn($this->ownerRef, $board->getId(), new BoardColumnFormData('')),
+            fn (): TaskView => $this->commands->createTask($this->ownerRef, $board->getId(), new TaskFormData('  ')),
+            fn (): TaskView => $this->commands->createTask($this->ownerRef, $other->getId(), new TaskFormData('Sub'), $task->id),
+            fn (): TaskView => $this->commands->updateTask($this->ownerRef, $task->id, new TaskFormData(str_repeat('x', 256))),
+            fn (): string => $this->commands->addComment($this->ownerRef, $task->id, ' '),
+            fn (): string => $this->commands->addLink($this->ownerRef, $task->id, new TaskLinkFormData(url: '')),
+            fn (): string => $this->commands->addHostObjectLink($this->ownerRef, $task->id, '', '1'),
+            fn (): string => $this->commands->addDocument($this->ownerRef, $task->id, '', 'Body'),
+            fn (): string => $this->commands->logTime($this->ownerRef, $task->id, 0, new DateTimeImmutable()),
+            fn (): string => $this->commands->addColumn($this->ownerRef, $board->getId(), new BoardColumnFormData('')),
             fn () => $this->commands->reorderColumns($this->ownerRef, $board->getId(), ['a']),
-            fn () => $this->commands->clearTimeEntrySnapshotsForUser(' u'),
+            fn (): int => $this->commands->clearTimeEntrySnapshotsForUser(' u'),
         ];
         foreach ($calls as $index => $call) {
             try {
@@ -344,11 +369,11 @@ final class HostPortsTest extends FunctionalTestCase
         $this->commands->createTask($this->ownerRef, $globex->getId(), new TaskFormData('Elsewhere', tags: ['other']));
         $child = $this->commands->createTask($this->ownerRef, $acme->getId(), new TaskFormData('Child'), $due->id);
 
-        $page = $this->query->findBoards(BoardCriteria::forTenants(['acme', 'ACME', " acme"]));
-        self::assertSame(['Acme', 'Acme two'], array_map(static fn ($b): string => $b->name, $page->items));
+        $page = $this->query->findBoards(BoardCriteria::forTenants(['acme', 'ACME', ' acme']));
+        self::assertSame(['Acme', 'Acme two'], array_map(static fn (BoardView $b): string => $b->name, $page->items));
         self::assertSame(2, $page->total);
         self::assertFalse($page->hasMore());
-        self::assertSame(['Closed'], array_map(static fn ($b): string => $b->name, $this->query->findBoards(BoardCriteria::forTenants(['acme'])->withArchived(true))->items));
+        self::assertSame(['Closed'], array_map(static fn (BoardView $b): string => $b->name, $this->query->findBoards(BoardCriteria::forTenants(['acme'])->withArchived(true))->items));
         self::assertSame(3, $this->query->findBoards(BoardCriteria::forTenants(['acme'])->withArchived(null)->page(0, 1))->total);
         self::assertTrue($this->query->findBoards(BoardCriteria::forTenants(['acme'])->page(0, 1))->hasMore());
         self::assertSame(0, $this->query->findBoards(BoardCriteria::forTenants([' x']))->total);
@@ -364,12 +389,12 @@ final class HostPortsTest extends FunctionalTestCase
         self::assertSame([], $this->query->tagCounts([]));
 
         $window = TaskCriteria::forTenants(['acme'])->dueBetween(new DateTimeImmutable('2026-12-01'), new DateTimeImmutable('2026-12-31'))->withCompleted(false);
-        self::assertSame([$due->id], array_map(static fn ($t): string => $t->id, $this->query->findTasks($window)->items));
+        self::assertSame([$due->id], array_map(static fn (TaskView $t): string => $t->id, $this->query->findTasks($window)->items));
         self::assertSame(1, $this->query->countTasks($window));
 
         $all = $this->query->findTasks(TaskCriteria::forTenants(['acme'])->sortedBy(TaskSort::DueAsc)->page(0, 10));
         self::assertSame(5, $all->total);
-        self::assertSame([$due->id, $late->id], array_slice(array_map(static fn ($t): string => $t->id, $all->items), 0, 2));
+        self::assertSame([$due->id, $late->id], array_slice(array_map(static fn (TaskView $t): string => $t->id, $all->items), 0, 2));
         self::assertCount(4, $this->query->findTasks(TaskCriteria::forTenants(['acme'])->topLevelOnly())->items);
         self::assertSame(1, $this->query->countTasks(TaskCriteria::forTenants(['acme'])->withCompleted(true)));
         self::assertSame(5, $this->query->countTasks(TaskCriteria::forTenants(['acme'])->createdBy((string) $this->owner->getId())));
@@ -385,7 +410,7 @@ final class HostPortsTest extends FunctionalTestCase
 
         self::assertSame($child->id, $this->query->findTaskById($child->id)?->id);
         self::assertNull($this->query->findTaskById(''));
-        self::assertSame([$done->id, $due->id], array_map(static fn ($t): string => $t->id, $this->query->findTasksByIds([$done->id, 'missing', '', $due->id])));
+        self::assertSame([$done->id, $due->id], array_map(static fn (TaskView $t): string => $t->id, $this->query->findTasksByIds([$done->id, 'missing', '', $due->id])));
         self::assertSame([], $this->query->findTasksByIds(['']));
 
         $this->expectException(InvalidArgumentException::class);
@@ -418,10 +443,10 @@ final class HostPortsTest extends FunctionalTestCase
         self::assertSame([], $stats->firstEntries(['acme'], 'Doing', $to, $to->modify('+1 day')));
 
         foreach ([
-            fn () => $stats->dailyFlow(['acme'], $to, $from),
-            fn () => $stats->dailyFlow(['acme'], $from, $from->modify('+401 days')),
-            fn () => $stats->completedSamples(['acme'], $from, $to, 0),
-            fn () => $stats->firstEntries(array_fill(0, 501, 'k'), 'Doing', $from, $to),
+            static fn () => $stats->dailyFlow(['acme'], $to, $from),
+            static fn () => $stats->dailyFlow(['acme'], $from, $from->modify('+401 days')),
+            static fn () => $stats->completedSamples(['acme'], $from, $to, 0),
+            static fn () => $stats->firstEntries(array_fill(0, 501, 'k'), 'Doing', $from, $to),
         ] as $call) {
             try {
                 $call();

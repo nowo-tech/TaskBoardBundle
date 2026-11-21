@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Service;
 
+use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
 use InvalidArgumentException;
@@ -110,13 +111,18 @@ final readonly class TaskBoardQuery implements TaskBoardQueryInterface
         }
         $builder = $this->taskScope($criteria)->select('t', 'b');
         match ($criteria->sort) {
+            // @igor-ignore - A query builder created in this call; nothing is kept on the service.
             TaskSort::CreatedDesc => $builder->orderBy('t.createdAt', 'DESC')->addOrderBy('t.id', 'DESC'),
-            TaskSort::CreatedAsc  => $builder->orderBy('t.createdAt', 'ASC')->addOrderBy('t.id', 'ASC'),
+            // @igor-ignore - A query builder created in this call; nothing is kept on the service.
+            TaskSort::CreatedAsc => $builder->orderBy('t.createdAt', 'ASC')->addOrderBy('t.id', 'ASC'),
+            // @igor-ignore - A query builder created in this call; nothing is kept on the service.
             TaskSort::UpdatedDesc => $builder->orderBy('t.updatedAt', 'DESC')->addOrderBy('t.id', 'DESC'),
             // Tasks without a due date last on every platform.
+            // @igor-ignore - A query builder created in this call; nothing is kept on the service.
             TaskSort::DueAsc => $builder->addSelect('CASE WHEN t.dueAt IS NULL THEN 1 ELSE 0 END AS HIDDEN noDue')->orderBy('noDue', 'ASC')->addOrderBy('t.dueAt', 'ASC')->addOrderBy('t.id', 'ASC'),
         };
         /** @var list<Task> $tasks */
+        // @igor-ignore - A query builder created in this call; nothing is kept on the service.
         $tasks = $builder->setFirstResult($criteria->offset)->setMaxResults($criteria->limit)->getQuery()->getResult();
         $items = [];
         foreach ($tasks as $task) {
@@ -139,6 +145,7 @@ final readonly class TaskBoardQuery implements TaskBoardQueryInterface
             ->select(($byTenant ? 'b.tenantKey' : 'b.id') . ' AS scopeKey', 'COUNT(t.id) AS n')
             ->groupBy($byTenant ? 'b.tenantKey' : 'b.id');
         if ($creator !== null) {
+            // @igor-ignore - A query builder created in this call; nothing is kept on the service.
             $builder->addSelect($creator . ' AS creatorKey')->addGroupBy('creatorKey');
         }
         /** @var list<array{scopeKey: mixed, n: mixed, creatorKey?: mixed}> $rows */
@@ -235,6 +242,7 @@ final readonly class TaskBoardQuery implements TaskBoardQueryInterface
                 $builder->andWhere('t.completedAt IS NULL');
             }
             if ($after !== null) {
+                // @igor-ignore - A query builder created in this call; nothing is kept on the service.
                 $builder->andWhere('t.id > :after')->setParameter('after', $after);
             }
             /** @var list<array{id: mixed, tags: mixed, tenantKey: mixed}> $rows */
@@ -296,13 +304,13 @@ final readonly class TaskBoardQuery implements TaskBoardQueryInterface
         if ($criteria->archived !== null) {
             $builder->andWhere($criteria->archived ? 't.archivedAt IS NOT NULL' : 't.archivedAt IS NULL');
         }
-        if ($criteria->dueFrom !== null || $criteria->dueTo !== null) {
+        if ($criteria->dueFrom instanceof DateTimeImmutable || $criteria->dueTo instanceof DateTimeImmutable) {
             $builder->andWhere('t.dueAt IS NOT NULL');
         }
-        if ($criteria->dueFrom !== null) {
+        if ($criteria->dueFrom instanceof DateTimeImmutable) {
             $builder->andWhere('t.dueAt >= :dueFrom')->setParameter('dueFrom', $criteria->dueFrom, 'datetime_immutable');
         }
-        if ($criteria->dueTo !== null) {
+        if ($criteria->dueTo instanceof DateTimeImmutable) {
             $builder->andWhere('t.dueAt <= :dueTo')->setParameter('dueTo', $criteria->dueTo, 'datetime_immutable');
         }
         if ($criteria->columnId !== null) {
@@ -325,10 +333,6 @@ final readonly class TaskBoardQuery implements TaskBoardQueryInterface
         if ($criteria->tenantKeys !== [] ? !ExactKey::oneOf($board->getTenantKey(), $criteria->tenantKeys) : !ExactKey::oneOf($board->getId(), $criteria->boardIds)) {
             return false;
         }
-        if ($criteria->columnId !== null && $task->getColumn()?->getId() !== $criteria->columnId) {
-            return false;
-        }
-
         return $criteria->creatorId === null || ActorId::of($task->getCreator()) === $criteria->creatorId;
     }
 
