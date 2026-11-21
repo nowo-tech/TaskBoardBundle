@@ -126,6 +126,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Role rules judged the signed-in user instead of the user asked about (DDD-host audit B8).**
+  `ConfigurableTaskBoardAccessChecker` (`security.access_roles`, `create_roles`, `list_roles`) and the
+  `security.manage_roles` bypass of `TaskBoardResourceAccessChecker` asked `isGranted()` on the **current token**,
+  whatever user they were given. A check made on behalf of another user during an administrator's request was granted
+  with the administrator's roles (a cross-user permission leak for a host that checks other users, e.g. a list of who
+  may see a board, or a handler that runs inside such a request), and a check without a token (Messenger handler,
+  console command, worker) refused every user. The roles are now those of the given user: the signed-in user (the
+  token's user object, or an object with exactly the same `getId()`) is still judged by the token, as before; any other
+  user by Symfony's `isGrantedForUser()` with their own roles (role hierarchy and voters apply); a host user object that
+  is not a Symfony `UserInterface` by the roles its `getRoles()` reports, and a user without roles holds none. Requests
+  where the bundle checks the signed-in user (every page and the API) answer as before. A hand-built checker without
+  the new optional `$tokenStorage` argument keeps the 2.28 rule; the container always passes it. Internal
+  `Security\UserRoleCheck`. Tests: `RolesOfTheGivenUserTest`.
+
 ## [2.28.0] - 2026-11-21
 
 ### Added

@@ -21,6 +21,7 @@ use Nowo\TaskBoardBundle\Repository\TeamMemberRepositoryInterface;
 use Nowo\TaskBoardBundle\Service\TaskBoardEraser;
 use Stringable;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface as SymfonyEventDispatcherInterface;
+use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
 use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
@@ -56,12 +57,14 @@ final readonly class TaskBoardResourceAccessChecker
         private bool $scopingEnabled = true,
         // Since 2.23.0 (Beacon spec 242): `comments.readers_can_comment`, the default of who may ask a question.
         private bool $readersCanComment = true,
+        // Since 2.29.0: `security.manage_roles` are the roles of the user asked about, not of the signed-in user.
+        private ?TokenStorageInterface $tokenStorage = null,
     ) {
     }
 
     /**
-     * @param bool $manageRoles since 2.13.0: false leaves `security.manage_roles` out of the default decision (they are the
-     *                          roles of the signed-in user, so they say nothing about another `$user`)
+     * @param bool $manageRoles since 2.13.0: false leaves `security.manage_roles` out of the default decision (up to 2.28
+     *                          they were the roles of the signed-in user; since 2.29.0 they are `$user`'s own)
      */
     public function canViewBoard(object $user, TaskBoard $board, bool $manageRoles = true): bool
     {
@@ -91,7 +94,7 @@ final readonly class TaskBoardResourceAccessChecker
             return false;
         }
 
-        $default = !$this->scopingEnabled || $this->hasManageRole() || $this->sameUser($user, $board->getCreator());
+        $default = !$this->scopingEnabled || $this->hasManageRole($user) || $this->sameUser($user, $board->getCreator());
         $event   = new BoardAccessCheckEvent($user, $board, $default, BoardAccessCheckEvent::ACTION_MANAGE_CONNECTION);
         $this->eventDispatcher?->dispatch($event, TaskBoardEvents::BOARD_ACCESS_CHECK);
 
@@ -138,7 +141,7 @@ final readonly class TaskBoardResourceAccessChecker
             return false;
         }
 
-        $default = !$this->scopingEnabled || $this->hasManageRole() || $this->sameUser($user, $board->getCreator());
+        $default = !$this->scopingEnabled || $this->hasManageRole($user) || $this->sameUser($user, $board->getCreator());
         $event   = new BoardAccessCheckEvent($user, $board, $default, BoardAccessCheckEvent::ACTION_MANAGE);
         $this->eventDispatcher?->dispatch($event, TaskBoardEvents::BOARD_ACCESS_CHECK);
 
@@ -172,7 +175,7 @@ final readonly class TaskBoardResourceAccessChecker
      */
     public function canManageTenantTemplates(object $user, ?string $tenantKey): bool
     {
-        return !$this->scopingEnabled || $this->hasManageRole();
+        return !$this->scopingEnabled || $this->hasManageRole($user);
     }
 
     public function canViewTask(object $user, Task $task): bool
@@ -270,7 +273,7 @@ final readonly class TaskBoardResourceAccessChecker
     {
         $dispatcher = $this->eventDispatcher;
         $listeners  = $dispatcher !== null && (!$dispatcher instanceof SymfonyEventDispatcherInterface || $dispatcher->hasListeners(TaskBoardEvents::BOARD_ACCESS_CHECK));
-        if (!$this->scopingEnabled || ($manageRoles && $this->hasManageRole())) {
+        if (!$this->scopingEnabled || ($manageRoles && $this->hasManageRole($user))) {
             return new BoardViewReach(true, [], $listeners);
         }
 
@@ -483,7 +486,7 @@ final readonly class TaskBoardResourceAccessChecker
     public function canDeleteColumnSet(object $user, ColumnSet $set): bool
     {
         $creator = $set->getCreatedBy();
-        $event   = new ColumnSetAccessCheckEvent($user, $set, $this->hasManageRole() || ($creator !== null && $this->sameUser($user, $creator)));
+        $event   = new ColumnSetAccessCheckEvent($user, $set, $this->hasManageRole($user) || ($creator !== null && $this->sameUser($user, $creator)));
         $this->eventDispatcher?->dispatch($event, TaskBoardEvents::COLUMN_SET_ACCESS_CHECK);
 
         return $event->isGranted();
@@ -535,7 +538,7 @@ final readonly class TaskBoardResourceAccessChecker
 
     private function defaultBoardDecision(object $user, TaskBoard $board, bool $manageRoles = true): bool
     {
-        if (!$this->scopingEnabled || ($manageRoles && $this->hasManageRole())) {
+        if (!$this->scopingEnabled || ($manageRoles && $this->hasManageRole($user))) {
             return true;
         }
 
@@ -587,19 +590,13 @@ final readonly class TaskBoardResourceAccessChecker
         return false;
     }
 
-    private function hasManageRole(): bool
+    /**
+     * Since 2.29.0: whether `$user` (not the signed-in user, unless it is them) holds one of `security.manage_roles`
+     * ({@see UserRoleCheck}).
+     */
+    private function hasManageRole(object $user): bool
     {
-        if (!$this->authorizationChecker instanceof AuthorizationCheckerInterface) {
-            return false;
-        }
-
-        foreach ($this->manageRoles as $role) {
-            if ($this->authorizationChecker->isGranted($role)) {
-                return true;
-            }
-        }
-
-        return false;
+        return (new UserRoleCheck($this->authorizationChecker, $this->tokenStorage))->hasAnyRole($user, $this->manageRoles);
     }
 
     /** `$b` null: an erased account (since 1.25, a board or task creator may be null) is nobody. */

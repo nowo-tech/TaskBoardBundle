@@ -1696,7 +1696,9 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
                 ->setAutowired(true)
                 ->setArgument('$accessRoles', $security['access_roles'])
                 ->setArgument('$createRoles', $security['create_roles'])
-                ->setArgument('$listRoles', $security['list_roles']));
+                ->setArgument('$listRoles', $security['list_roles'])
+                // Since 2.29.0: the roles of the user asked about (the token only for the signed-in user).
+                ->setArgument('$tokenStorage', new Reference('security.token_storage', ContainerInterface::NULL_ON_INVALID_REFERENCE)));
         }
 
         $container->setAlias(TaskBoardAccessCheckerInterface::class, $accessCheckerId);
@@ -1714,7 +1716,9 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             // Demo/dev mode (allow_unauthenticated) keeps the historical "every board visible" behaviour.
             ->setArgument('$scopingEnabled', $security['resource_scoping'] && !$security['allow_unauthenticated'])
             // Since 2.23.0 (Beacon spec 242): the default of who may ask a question.
-            ->setArgument('$readersCanComment', '%nowo_task_board.comments.readers_can_comment%'));
+            ->setArgument('$readersCanComment', '%nowo_task_board.comments.readers_can_comment%')
+            // Since 2.29.0: manage roles of the user asked about (the token only for the signed-in user).
+            ->setArgument('$tokenStorage', new Reference('security.token_storage', ContainerInterface::NULL_ON_INVALID_REFERENCE)));
     }
 
     /**
