@@ -127,6 +127,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Untranslated strings in the de/fr/it/nl/pt catalogues: the board index subtitle, drag and reorder hints, task-moved flash messages, empty-state texts, subtask-created flash, slug and external-id help, the import page (subtitle, form, ClickUp steps, supported formats) and related messages. A new `TranslationCatalogueTest` fails on non-en values identical to English (longer than 15 characters, no placeholders, not allow-listed) and on missing keys.
+
 ## [2.29.0] - 2026-11-21
 
 ### Added
