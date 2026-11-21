@@ -1,39 +1,39 @@
 nav:
   brand: Task Board
-  board: Task board
-task_board.index.title: Task Boards
+  board: "Bacheca attività"
+task_board.index.title: "Bacheche attività"
 task_board.index.subtitle: "Organizza il lavoro con bacheche kanban, elenchi e dettagli delle attività."
-task_board.board.title: Board
-task_board.list.title: List
-task_board.task.title: Task
-task_board.index.create_board: Create board
-task_board.index.your_boards: Your boards
-task_board.index.no_boards: No boards yet.
-task_board.board.add_task: Add task
-task_board.board.add_column: Add column
+task_board.board.title: "Bacheca"
+task_board.list.title: "Elenco"
+task_board.task.title: "Attività"
+task_board.index.create_board: "Crea bacheca"
+task_board.index.your_boards: "Le tue bacheche"
+task_board.index.no_boards: "Nessuna bacheca per ora."
+task_board.board.add_task: "Aggiungi attività"
+task_board.board.add_column: "Aggiungi colonna"
 task_board.board.task_placeholder: Titolo della nuova attività…
-task_board.board.add_task_modal_title: Add task to %column%
-task_board.action.cancel: Cancel
-task_board.action.close: Close
+task_board.board.add_task_modal_title: "Aggiungi attività a %column%"
+task_board.action.cancel: "Annulla"
+task_board.action.close: "Chiudi"
 task_board.board.reorder_hint: "Trascina le intestazioni delle colonne per riordinarle. Trascina le attività tra le colonne."
 task_board.board.drag_column: "Trascina per riordinare la colonna"
-task_board.action.add_column: Add column
-task_board.form.column.name: Column name
-task_board.form.column.color: Color
-task_board.flash.column_added: Column added.
-task_board.view.list: List view
-task_board.view.board: Board view
-task_board.list.filter_search: Search
-task_board.list.filter_priority: Priority
-task_board.list.filter_column: Column
-task_board.list.filter_all: All
+task_board.action.add_column: "Aggiungi colonna"
+task_board.form.column.name: "Nome della colonna"
+task_board.form.column.color: "Colore"
+task_board.flash.column_added: "Colonna aggiunta."
+task_board.view.list: "Vista elenco"
+task_board.view.board: "Vista bacheca"
+task_board.list.filter_search: "Cerca"
+task_board.list.filter_priority: "Priorità"
+task_board.list.filter_column: "Colonna"
+task_board.list.filter_all: "Tutti"
 task_board.list.filter_search_placeholder: 'Cerca attività…'
 task_board.list.filter_any_priority: 'Qualsiasi priorità'
 task_board.list.filter_any_column: 'Qualsiasi colonna'
-task_board.list.filters: Filters
-task_board.list.empty: No tasks yet.
-task_board.task.toggle_subtasks: Toggle subtasks
-task_board.view.all_boards: All boards
+task_board.list.filters: "Filtri"
+task_board.list.empty: "Nessuna attività per ora."
+task_board.task.toggle_subtasks: "Mostra/nascondi sottoattività"
+task_board.view.all_boards: "Tutte le bacheche"
 task_board.view.back_board: Torna al board
 task_board.task.status: Stato
 task_board.task.dates: Date
@@ -43,86 +43,86 @@ task_board.task.manage_people: Gestisci assegnatari
 task_board.task.subtasks_progress: '%done% di %total% completate'
 task_board.task.add_subtask_placeholder: Aggiungi sottoattività…
 task_board.task.edit: Modifica attività
-task_board.task.workflow: Workflow
-task_board.task.change_column: Change column
-task_board.task.no_column: No column
+task_board.task.workflow: "Flusso di lavoro"
+task_board.task.change_column: "Cambia colonna"
+task_board.task.no_column: "Nessuna colonna"
 task_board.task.no_columns: "Nessuna colonna configurata."
 task_board.flash.task_moved_column: "Attività spostata nella colonna selezionata."
-task_board.task.current_column: Current column
-task_board.task.completed_badge: Completed
-task_board.action.previous_column: Move back
-task_board.action.previous_column_to: Move to %column%
-task_board.action.next_column: Move forward
-task_board.action.next_column_to: Move to %column%
-task_board.action.mark_done: Mark as done
-task_board.action.mark_done_column: Move to %column%
+task_board.task.current_column: "Colonna attuale"
+task_board.task.completed_badge: "Completata"
+task_board.action.previous_column: "Sposta indietro"
+task_board.action.previous_column_to: "Sposta in %column%"
+task_board.action.next_column: "Sposta avanti"
+task_board.action.next_column_to: "Sposta in %column%"
+task_board.action.mark_done: "Segna come completata"
+task_board.action.mark_done_column: "Sposta in %column%"
 task_board.flash.task_moved_previous: "Attività spostata nella colonna precedente."
 task_board.flash.task_moved_next: "Attività spostata nella colonna successiva."
 task_board.flash.task_moved_done: "Attività contrassegnata come completata."
-task_board.task.subtasks: Subtasks
-task_board.task.no_subtasks: No subtasks.
+task_board.task.subtasks: "Sottoattività"
+task_board.task.no_subtasks: "Nessuna sottoattività."
 task_board.task.links: Links
-task_board.task.no_links: No links yet.
-task_board.task.dependencies: Dependencies
+task_board.task.no_links: "Nessun link per ora."
+task_board.task.dependencies: "Dipendenze"
 task_board.task.no_dependencies: "Nessuna dipendenza."
-task_board.task.people: People
+task_board.task.people: "Persone"
 task_board.task.no_members: "Nessun membro assegnato."
-task_board.task.time: Time tracking
-task_board.task.documentation: Documentation
+task_board.task.time: "Monitoraggio del tempo"
+task_board.task.documentation: "Documentazione"
 task_board.task.no_docs: "Nessuna pagina di documentazione."
-task_board.action.create: Create
-task_board.action.back: Back
-task_board.action.add_task: Add task
+task_board.action.create: "Crea"
+task_board.action.back: "Indietro"
+task_board.action.add_task: "Aggiungi attività"
 task_board.action.new_task: 'Nuova attività'
-task_board.action.save: Save
-task_board.action.add_subtask: Add subtask
-task_board.action.add_link: Add link
-task_board.action.add_member: Add member
+task_board.action.save: "Salva"
+task_board.action.add_subtask: "Aggiungi sottoattività"
+task_board.action.add_link: "Aggiungi link"
+task_board.action.add_member: "Aggiungi membro"
 task_board.link.url: URL
 task_board.link.merge_request: Merge request
 task_board.link.pull_request: Pull request
 task_board.link.issue: Issue
-task_board.link.documentation: Documentation
-task_board.link.other: Other
-task_board.member.assignee: Assignee
-task_board.member.reviewer: Reviewer
+task_board.link.documentation: "Documentazione"
+task_board.link.other: "Altro"
+task_board.member.assignee: "Assegnatario"
+task_board.member.reviewer: "Revisore"
 task_board.member.stakeholder: Stakeholder
-task_board.member.watcher: Watcher
-task_board.time.estimate: Estimate
-task_board.time.logged: Logged
-task_board.flash.task_updated: Task updated.
-task_board.flash.link_added: Link added.
-task_board.flash.member_added: Member added.
+task_board.member.watcher: "Osservatore"
+task_board.time.estimate: "Stima"
+task_board.time.logged: "Registrato"
+task_board.flash.task_updated: "Attività aggiornata."
+task_board.flash.link_added: "Link aggiunto."
+task_board.flash.member_added: "Membro aggiunto."
 task_board.flash.subtask_created: "Sottoattività creata."
 task_board.flash.subtask_too_deep: "La sottoattività non è stata creata: sarebbe più profonda del consentito."
 task_board.flash.subtask_conflict: "La sottoattività non è stata creata: l'albero delle attività è cambiato nel frattempo. Riprova."
 task_board.flash.task_changed_meanwhile: "L'attività è cambiata nel frattempo: non è stato salvato nulla. Riprova."
 task_board.flash.column_changed_meanwhile: "Le attività della colonna sono cambiate nel frattempo: non è stato salvato nulla. Riprova."
-task_board.form.board.name: Board name
+task_board.form.board.name: "Nome della bacheca"
 task_board.form.board.slug: Slug
 task_board.form.board.slug_help: "Lascia vuoto per generarlo automaticamente dal nome."
-task_board.form.board.description: Description
-task_board.form.task.title: Title
-task_board.form.task.description: Description
-task_board.form.task.priority: Priority
-task_board.form.task.column: Column ID
+task_board.form.board.description: "Descrizione"
+task_board.form.task.title: "Titolo"
+task_board.form.task.description: "Descrizione"
+task_board.form.task.priority: "Priorità"
+task_board.form.task.column: "ID colonna"
 task_board.form.task.estimate: "Stima"
-task_board.form.task.due: Due date
+task_board.form.task.due: "Scadenza"
 task_board.form.task.tags: Tags
 task_board.form.task.due_invalid: "Data di scadenza non valida."
-task_board.form.link.type: Link type
+task_board.form.link.type: "Tipo di link"
 task_board.form.link.url: URL
-task_board.form.link.label: Label
-task_board.form.link.external_id: External ID
+task_board.form.link.label: "Etichetta"
+task_board.form.link.external_id: "ID esterno"
 task_board.form.link.external_id_help: "ad es. IID della MR di GitLab o numero della PR di GitHub."
-task_board.form.member.user: User
-task_board.form.member.role: Role
-task_board.import.action: Import tasks
-task_board.import.title: Import tasks
+task_board.form.member.user: "Utente"
+task_board.form.member.role: "Ruolo"
+task_board.import.action: "Importa attività"
+task_board.import.title: "Importa attività"
 task_board.import.subtitle: "Importa in questa bacheca le attività da ClickUp, Jira, Trello o altre esportazioni supportate."
 task_board.import.form.title: "Carica il file di esportazione"
-task_board.import.form.source: Source
-task_board.import.form.file: Export file
+task_board.import.form.source: "Origine"
+task_board.import.form.file: "File di esportazione"
 task_board.import.form.file_invalid: "Carica un’esportazione CSV o JSON valida (max 20 MB)."
 task_board.import.form.create_columns: "Crea automaticamente le colonne di stato mancanti"
 task_board.import.form.skip_existing: "Salta le attività già importate"
@@ -131,7 +131,7 @@ task_board.import.source.clickup_csv: ClickUp (CSV)
 task_board.import.source.clickup_json: ClickUp (JSON)
 task_board.import.source.jira_csv: Jira (CSV)
 task_board.import.source.trello_json: Trello (JSON)
-task_board.import.help.title: How to export
+task_board.import.help.title: "Come esportare"
 task_board.import.help.clickup_title: ClickUp
 task_board.import.help.clickup_step_1: "In ClickUp, apri la vista Elenco o Tabella (oppure Workspace Settings → Imports / Exports)."
 task_board.import.help.clickup_step_2: "Esporta in CSV con le colonne Task Name, Status, Priority, Assignee, Due Date e Task ID."
@@ -413,7 +413,7 @@ task_board.sync.browser.pick_list: "Scegli un elenco."
 task_board.sync.browser.list_count: "%name% — %count% attività"
 task_board.sync.browser.empty: "Qui non c'è niente."
 task_board.sync.browser.more: "Ci sono altri elementi: organizzali nel provider per restringere l'albero."
-task_board.sync.browser.type.workspace: "workspace"
+task_board.sync.browser.type.workspace: "spazio di lavoro"
 task_board.sync.browser.type.space: "spazio"
 task_board.sync.browser.type.folder: "cartella"
 task_board.sync.browser.type.list: "elenco"

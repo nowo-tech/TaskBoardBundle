@@ -1,39 +1,39 @@
 nav:
   brand: Task Board
-  board: Task board
-task_board.index.title: Task Boards
+  board: "Tableau de tâches"
+task_board.index.title: "Tableaux de tâches"
 task_board.index.subtitle: "Organisez le travail avec des tableaux kanban, des listes et le détail des tâches."
-task_board.board.title: Board
+task_board.board.title: "Tableau"
 task_board.list.title: List
-task_board.task.title: Task
-task_board.index.create_board: Create board
-task_board.index.your_boards: Your boards
-task_board.index.no_boards: No boards yet.
-task_board.board.add_task: Add task
-task_board.board.add_column: Add column
+task_board.task.title: "Tâche"
+task_board.index.create_board: "Créer un tableau"
+task_board.index.your_boards: "Vos tableaux"
+task_board.index.no_boards: "Aucun tableau pour l’instant."
+task_board.board.add_task: "Ajouter une tâche"
+task_board.board.add_column: "Ajouter une colonne"
 task_board.board.task_placeholder: Titre de la nouvelle tâche…
-task_board.board.add_task_modal_title: Add task to %column%
-task_board.action.cancel: Cancel
-task_board.action.close: Close
+task_board.board.add_task_modal_title: "Ajouter une tâche à %column%"
+task_board.action.cancel: "Annuler"
+task_board.action.close: "Fermer"
 task_board.board.reorder_hint: "Faites glisser les en-têtes de colonne pour les réordonner. Faites glisser les tâches entre les colonnes."
 task_board.board.drag_column: "Faire glisser pour réordonner la colonne"
-task_board.action.add_column: Add column
-task_board.form.column.name: Column name
-task_board.form.column.color: Color
-task_board.flash.column_added: Column added.
-task_board.view.list: List view
-task_board.view.board: Board view
-task_board.list.filter_search: Search
-task_board.list.filter_priority: Priority
-task_board.list.filter_column: Column
-task_board.list.filter_all: All
+task_board.action.add_column: "Ajouter une colonne"
+task_board.form.column.name: "Nom de la colonne"
+task_board.form.column.color: "Couleur"
+task_board.flash.column_added: "Colonne ajoutée."
+task_board.view.list: "Vue liste"
+task_board.view.board: "Vue tableau"
+task_board.list.filter_search: "Rechercher"
+task_board.list.filter_priority: "Priorité"
+task_board.list.filter_column: "Colonne"
+task_board.list.filter_all: "Tous"
 task_board.list.filter_search_placeholder: 'Rechercher des tâches…'
 task_board.list.filter_any_priority: 'Toute priorité'
 task_board.list.filter_any_column: 'Toute colonne'
-task_board.list.filters: Filters
-task_board.list.empty: No tasks yet.
-task_board.task.toggle_subtasks: Toggle subtasks
-task_board.view.all_boards: All boards
+task_board.list.filters: "Filtres"
+task_board.list.empty: "Aucune tâche pour l’instant."
+task_board.task.toggle_subtasks: "Afficher/masquer les sous-tâches"
+task_board.view.all_boards: "Tous les tableaux"
 task_board.view.back_board: Retour au tableau
 task_board.task.status: Statut
 task_board.task.dates: Dates
@@ -43,86 +43,86 @@ task_board.task.manage_people: Gérer les assignés
 task_board.task.subtasks_progress: '%done% sur %total% terminées'
 task_board.task.add_subtask_placeholder: Ajouter une sous-tâche…
 task_board.task.edit: Modifier la tâche
-task_board.task.workflow: Workflow
+task_board.task.workflow: "Flux de travail"
 task_board.task.change_column: Changer de colonne
 task_board.task.no_column: Aucune colonne
 task_board.task.no_columns: Aucune colonne configurée.
 task_board.flash.task_moved_column: Tâche déplacée vers la colonne sélectionnée.
-task_board.task.current_column: Current column
-task_board.task.completed_badge: Completed
-task_board.action.previous_column: Move back
-task_board.action.previous_column_to: Move to %column%
-task_board.action.next_column: Move forward
-task_board.action.next_column_to: Move to %column%
-task_board.action.mark_done: Mark as done
-task_board.action.mark_done_column: Move to %column%
+task_board.task.current_column: "Colonne actuelle"
+task_board.task.completed_badge: "Terminée"
+task_board.action.previous_column: "Reculer"
+task_board.action.previous_column_to: "Déplacer vers %column%"
+task_board.action.next_column: "Avancer"
+task_board.action.next_column_to: "Déplacer vers %column%"
+task_board.action.mark_done: "Marquer comme terminée"
+task_board.action.mark_done_column: "Déplacer vers %column%"
 task_board.flash.task_moved_previous: "Tâche déplacée vers la colonne précédente."
 task_board.flash.task_moved_next: "Tâche déplacée vers la colonne suivante."
 task_board.flash.task_moved_done: "Tâche marquée comme terminée."
-task_board.task.subtasks: Subtasks
-task_board.task.no_subtasks: No subtasks.
-task_board.task.links: Links
-task_board.task.no_links: No links yet.
-task_board.task.dependencies: Dependencies
+task_board.task.subtasks: "Sous-tâches"
+task_board.task.no_subtasks: "Aucune sous-tâche."
+task_board.task.links: "Liens"
+task_board.task.no_links: "Aucun lien pour l’instant."
+task_board.task.dependencies: "Dépendances"
 task_board.task.no_dependencies: "Aucune dépendance."
-task_board.task.people: People
+task_board.task.people: "Personnes"
 task_board.task.no_members: "Aucun membre assigné."
-task_board.task.time: Time tracking
+task_board.task.time: "Suivi du temps"
 task_board.task.documentation: Documentation
 task_board.task.no_docs: "Aucune page de documentation."
-task_board.action.create: Create
-task_board.action.back: Back
-task_board.action.add_task: Add task
+task_board.action.create: "Créer"
+task_board.action.back: "Retour"
+task_board.action.add_task: "Ajouter une tâche"
 task_board.action.new_task: 'Nouvelle tâche'
-task_board.action.save: Save
-task_board.action.add_subtask: Add subtask
-task_board.action.add_link: Add link
-task_board.action.add_member: Add member
+task_board.action.save: "Enregistrer"
+task_board.action.add_subtask: "Ajouter une sous-tâche"
+task_board.action.add_link: "Ajouter un lien"
+task_board.action.add_member: "Ajouter un membre"
 task_board.link.url: URL
 task_board.link.merge_request: Merge request
 task_board.link.pull_request: Pull request
-task_board.link.issue: Issue
+task_board.link.issue: "Ticket"
 task_board.link.documentation: Documentation
-task_board.link.other: Other
-task_board.member.assignee: Assignee
-task_board.member.reviewer: Reviewer
-task_board.member.stakeholder: Stakeholder
-task_board.member.watcher: Watcher
-task_board.time.estimate: Estimate
-task_board.time.logged: Logged
-task_board.flash.task_updated: Task updated.
-task_board.flash.link_added: Link added.
-task_board.flash.member_added: Member added.
+task_board.link.other: "Autre"
+task_board.member.assignee: "Assigné"
+task_board.member.reviewer: "Relecteur"
+task_board.member.stakeholder: "Partie prenante"
+task_board.member.watcher: "Observateur"
+task_board.time.estimate: "Estimation"
+task_board.time.logged: "Enregistré"
+task_board.flash.task_updated: "Tâche mise à jour."
+task_board.flash.link_added: "Lien ajouté."
+task_board.flash.member_added: "Membre ajouté."
 task_board.flash.subtask_created: "Sous-tâche créée."
 task_board.flash.subtask_too_deep: "La sous-tâche n'a pas été créée : elle serait plus profonde que permis."
 task_board.flash.subtask_conflict: "La sous-tâche n'a pas été créée : l'arbre des tâches a changé entre-temps. Réessayez."
 task_board.flash.task_changed_meanwhile: "La tâche a changé entre-temps : rien n'a été enregistré. Réessayez."
 task_board.flash.column_changed_meanwhile: "Les tâches de la colonne ont changé entre-temps : rien n'a été enregistré. Réessayez."
-task_board.form.board.name: Board name
+task_board.form.board.name: "Nom du tableau"
 task_board.form.board.slug: Slug
 task_board.form.board.slug_help: "Laissez vide pour le générer automatiquement à partir du nom."
 task_board.form.board.description: Description
-task_board.form.task.title: Title
+task_board.form.task.title: "Titre"
 task_board.form.task.description: Description
-task_board.form.task.priority: Priority
-task_board.form.task.column: Column ID
+task_board.form.task.priority: "Priorité"
+task_board.form.task.column: "ID de la colonne"
 task_board.form.task.estimate: "Estimation"
-task_board.form.task.due: Due date
-task_board.form.task.tags: Tags
+task_board.form.task.due: "Échéance"
+task_board.form.task.tags: "Étiquettes"
 task_board.form.task.due_invalid: "Date d’échéance invalide."
-task_board.form.link.type: Link type
+task_board.form.link.type: "Type de lien"
 task_board.form.link.url: URL
-task_board.form.link.label: Label
-task_board.form.link.external_id: External ID
+task_board.form.link.label: "Libellé"
+task_board.form.link.external_id: "ID externe"
 task_board.form.link.external_id_help: "p. ex. IID de MR GitLab ou numéro de PR GitHub."
-task_board.form.member.user: User
-task_board.form.member.role: Role
-task_board.import.action: Import tasks
-task_board.import.title: Import tasks
+task_board.form.member.user: "Utilisateur"
+task_board.form.member.role: "Rôle"
+task_board.import.action: "Importer des tâches"
+task_board.import.title: "Importer des tâches"
 task_board.import.subtitle: "Importez dans ce tableau des tâches depuis ClickUp, Jira, Trello ou d’autres exports pris en charge."
 task_board.import.form.title: "Téléverser le fichier d’export"
 task_board.import.form.source: Source
-task_board.import.form.file: Export file
+task_board.import.form.file: "Fichier d’export"
 task_board.import.form.file_invalid: "Téléversez un export CSV ou JSON valide (20 Mo max.)."
 task_board.import.form.create_columns: "Créer automatiquement les colonnes de statut manquantes"
 task_board.import.form.skip_existing: "Ignorer les tâches déjà importées"
@@ -131,7 +131,7 @@ task_board.import.source.clickup_csv: ClickUp (CSV)
 task_board.import.source.clickup_json: ClickUp (JSON)
 task_board.import.source.jira_csv: Jira (CSV)
 task_board.import.source.trello_json: Trello (JSON)
-task_board.import.help.title: How to export
+task_board.import.help.title: "Comment exporter"
 task_board.import.help.clickup_title: ClickUp
 task_board.import.help.clickup_step_1: "Dans ClickUp, ouvrez votre vue Liste ou Tableau (ou Workspace Settings → Imports / Exports)."
 task_board.import.help.clickup_step_2: "Exportez en CSV avec les colonnes Task Name, Status, Priority, Assignee, Due Date et Task ID."

@@ -1,6 +1,6 @@
 nav:
   brand: Task Board
-  board: Task board
+  board: "Tablero de tareas"
 task_board.index.title: Tableros de tareas
 task_board.index.subtitle: Organiza el trabajo con tableros kanban, listas y detalle de tareas.
 task_board.board.title: Tablero
@@ -79,7 +79,7 @@ task_board.action.add_subtask: Añadir subtarea
 task_board.action.add_link: Añadir enlace
 task_board.action.add_member: Añadir implicado
 task_board.link.url: URL
-task_board.link.merge_request: Merge request
+task_board.link.merge_request: "Solicitud de fusión"
 task_board.link.pull_request: Pull request
 task_board.link.issue: Issue
 task_board.link.documentation: Documentación
