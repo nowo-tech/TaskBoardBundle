@@ -144,13 +144,13 @@ test('the focus toggle hides the shell header on the board, list, calendar and t
     const toggle = page.locator('[data-testid="nowo-task-focus-toggle"] [data-nowo-ui-focus-mode]');
     await expect(toggle).toHaveAttribute('data-nowo-ui-focus-area', 'tasks');
     await toggle.click();
-    await expect(page.getByTestId('demo-shell')).toHaveAttribute('data-focus-mode', 'on');
-    await expect(page.getByTestId('demo-masthead')).toBeHidden();
+    await expect(page.getByTestId('demo-platform')).toHaveAttribute('data-focus-mode', 'on');
+    await expect(page.locator('[data-testid="demo-platform"] > .nowo-ui-header, [data-testid="demo-platform"] header.nowo-ui-header').first()).toBeHidden();
     await expect(toggle).toHaveAttribute('aria-pressed', 'true');
     await page.locator('body').click({ position: { x: 2, y: 2 } });
     await page.keyboard.press('Escape');
-    await expect(page.getByTestId('demo-shell')).not.toHaveAttribute('data-focus-mode', /on|fullscreen/);
-    await expect(page.getByTestId('demo-masthead')).toBeVisible();
+    await expect(page.getByTestId('demo-platform')).not.toHaveAttribute('data-focus-mode', /on|fullscreen/);
+    await expect(page.locator('[data-testid="demo-platform"] > .nowo-ui-header, [data-testid="demo-platform"] header.nowo-ui-header').first()).toBeVisible();
   }
   await page.goto(`${board}?view=board`);
   await page.locator('.nowo-task-card__title').first().click();
