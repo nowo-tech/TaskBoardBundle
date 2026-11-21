@@ -127,8 +127,8 @@ final class HostPortsLimitsTest extends FunctionalTestCase
 
     public function testSnapshotErasureCrossesItsBatches(): void
     {
-        $board  = $this->board();
-        $task   = $this->commands->createTask($this->ownerRef, $board->getId(), new TaskFormData('Many entries'));
+        $board = $this->board();
+        $task  = $this->commands->createTask($this->ownerRef, $board->getId(), new TaskFormData('Many entries'));
         foreach (array_fill(0, TaskCommands::BATCH + 1, 1) as $minutes) {
             $this->commands->logTime($this->ownerRef, $task->id, $minutes, new DateTimeImmutable('2026-11-01'));
         }
