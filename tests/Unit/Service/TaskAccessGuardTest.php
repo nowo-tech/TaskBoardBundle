@@ -17,6 +17,7 @@ use Nowo\TaskBoardBundle\Repository\TeamMemberRepositoryInterface;
 use Nowo\TaskBoardBundle\Service\TaskAccessGuard;
 use Nowo\TaskBoardBundle\Tests\Stub\TestUser;
 use PHPUnit\Framework\TestCase;
+use stdClass;
 
 final class TaskAccessGuardTest extends TestCase
 {
@@ -37,7 +38,7 @@ final class TaskAccessGuardTest extends TestCase
         $user = new TestUser('1', 'dev@example.com');
         $task = new Task(new TaskBoard('Demo', 'demo', $user), 'Work', $user);
 
-        self::assertFalse((new TaskAccessGuard($this->createStub(TeamMemberRepositoryInterface::class)))->canTrack(new \stdClass(), $task));
+        self::assertFalse((new TaskAccessGuard($this->createStub(TeamMemberRepositoryInterface::class)))->canTrack(new stdClass(), $task));
     }
 
     public function testTeamMemberCanTrack(): void

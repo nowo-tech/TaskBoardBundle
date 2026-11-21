@@ -74,7 +74,9 @@ final readonly class TaskBoardQuery implements TaskBoardQueryInterface
         /** @var list<array{tenantKey: mixed, n: mixed}> $rows */
         $rows = $this->boardScope($criteria->tenantKeys, $criteria->archived)
             ->select('b.tenantKey AS tenantKey', 'COUNT(b.id) AS n')
-            ->groupBy('b.tenantKey')
+            // Per board, not per key: a folding collation would merge ACME's group into acme's.
+            ->groupBy('b.id')
+            ->addGroupBy('b.tenantKey')
             ->getQuery()
             ->getArrayResult();
 
@@ -97,7 +99,9 @@ final readonly class TaskBoardQuery implements TaskBoardQueryInterface
         /** @var list<array{tenantKey: mixed, n: mixed}> $rows */
         $rows = $this->boardScope($keys, false)
             ->select('b.tenantKey AS tenantKey', 'COUNT(b.id) AS n')
-            ->groupBy('b.tenantKey')
+            // Per board, not per key: a folding collation would merge ACME's group into acme's.
+            ->groupBy('b.id')
+            ->addGroupBy('b.tenantKey')
             ->getQuery()
             ->getArrayResult();
 
@@ -143,7 +147,9 @@ final readonly class TaskBoardQuery implements TaskBoardQueryInterface
         $creator  = $criteria->creatorId !== null ? $this->users->identity('t.creator') : null;
         $builder  = $this->taskScope($criteria)
             ->select(($byTenant ? 'b.tenantKey' : 'b.id') . ' AS scopeKey', 'COUNT(t.id) AS n')
-            ->groupBy($byTenant ? 'b.tenantKey' : 'b.id');
+            // Per board, not per key: a folding collation would merge ACME's group into acme's.
+            ->groupBy('b.id')
+            ->addGroupBy('b.tenantKey');
         if ($creator !== null) {
             // @igor-ignore - A query builder created in this call; nothing is kept on the service.
             $builder->addSelect($creator . ' AS creatorKey')->addGroupBy('creatorKey');
@@ -215,7 +221,9 @@ final readonly class TaskBoardQuery implements TaskBoardQueryInterface
             ->select('b.tenantKey AS tenantKey', 'COUNT(t.id) AS n')
             ->andWhere('t.completedAt IS NULL')
             ->andWhere('t.archivedAt IS NULL')
-            ->groupBy('b.tenantKey')
+            // Per board, not per key: a folding collation would merge ACME's group into acme's.
+            ->groupBy('b.id')
+            ->addGroupBy('b.tenantKey')
             ->getQuery()
             ->getArrayResult();
 
@@ -333,6 +341,7 @@ final readonly class TaskBoardQuery implements TaskBoardQueryInterface
         if ($criteria->tenantKeys !== [] ? !ExactKey::oneOf($board->getTenantKey(), $criteria->tenantKeys) : !ExactKey::oneOf($board->getId(), $criteria->boardIds)) {
             return false;
         }
+
         return $criteria->creatorId === null || ActorId::of($task->getCreator()) === $criteria->creatorId;
     }
 
