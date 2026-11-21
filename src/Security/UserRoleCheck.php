@@ -116,6 +116,8 @@ final readonly class UserRoleCheck
             }
         }
 
-        return new RoleHolderUser(ActorId::of($user) ?? 'nowo_task_board.user', $roles);
+        $id = ActorId::of($user);
+
+        return new RoleHolderUser($id !== null && $id !== '' ? $id : 'nowo_task_board.user', $roles);
     }
 }
