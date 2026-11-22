@@ -129,6 +129,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Translations: `task_board.list.title` is now "Liste" (fr), `task_board.task.links` is now "Koppelingen" (nl) and "Link" (it), `task_board.member.stakeholder` is now "Parte interesada" (es) and "Parte interessata" (it), and `task_board.recurrence.skipped` is now "Ignorada: %date%" (pt, it was the Spanish "Saltada"). `TranslationCatalogueTest` also fails now on a non-es value identical to the Spanish one (longer than 12 characters) unless allow-listed per locale as genuinely shared, and on stale entries of that allow-list. 
+
 ## [2.30.0] - 2026-11-22
 
 ### Changed

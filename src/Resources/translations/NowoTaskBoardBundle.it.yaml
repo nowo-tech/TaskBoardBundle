@@ -61,7 +61,7 @@ task_board.flash.task_moved_next: "Attività spostata nella colonna successiva."
 task_board.flash.task_moved_done: "Attività contrassegnata come completata."
 task_board.task.subtasks: "Sottoattività"
 task_board.task.no_subtasks: "Nessuna sottoattività."
-task_board.task.links: Links
+task_board.task.links: Link
 task_board.task.no_links: "Nessun link per ora."
 task_board.task.dependencies: "Dipendenze"
 task_board.task.no_dependencies: "Nessuna dipendenza."
@@ -86,7 +86,7 @@ task_board.link.documentation: "Documentazione"
 task_board.link.other: "Altro"
 task_board.member.assignee: "Assegnatario"
 task_board.member.reviewer: "Revisore"
-task_board.member.stakeholder: Stakeholder
+task_board.member.stakeholder: Parte interessata
 task_board.member.watcher: "Osservatore"
 task_board.time.estimate: "Stima"
 task_board.time.logged: "Registrato"
