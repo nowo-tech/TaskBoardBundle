@@ -1,0 +1,2 @@
+task_board.import.form.file_invalid: "Téléversez un export CSV ou JSON valide (20 Mo max.)."
+task_board.sync.browser.pick_list: "Choisissez une liste."
