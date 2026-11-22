@@ -131,6 +131,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- CI only, no runtime change: the MySQL 8.4 and MySQL 9 jobs now keep the throwaway server's data directory on tmpfs and relax its durability (`innodb_flush_log_at_trx_commit=0`, `sync_binlog=0`, doublewrite off). The functional suite drops and creates the schema before every test and was bound by fsync on the runner's disk (about 70 minutes on MySQL 8.4 against 15 on MariaDB). The same MySQL versions, the same tests and the same required checks run; locking and isolation are untouched.
+
 ## [2.30.2] - 2026-11-22
 
 ### Added
