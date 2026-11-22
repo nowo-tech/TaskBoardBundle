@@ -228,7 +228,7 @@ jobs:
       - name: Relax durability on the throwaway MySQL (no change to locking or isolation)
         run: |
           CID=$(docker ps -q --filter "ancestor=mysql:8.4")
-          docker exec "$CID" mysql -h127.0.0.1 -uroot -proot -e "SET GLOBAL innodb_flush_log_at_trx_commit=0; SET GLOBAL sync_binlog=0; SET GLOBAL innodb_doublewrite=OFF;"
+          docker exec "$CID" mysql -h127.0.0.1 -uroot -proot -e "SET GLOBAL innodb_flush_log_at_trx_commit=0; SET GLOBAL sync_binlog=0;"
 
       - name: Run the functional suite against MySQL
         env:
@@ -281,7 +281,7 @@ jobs:
       - name: Relax durability on the throwaway MySQL (no change to locking or isolation)
         run: |
           CID=$(docker ps -q --filter "ancestor=mysql:9.7")
-          docker exec "$CID" mysql -h127.0.0.1 -uroot -proot -e "SET GLOBAL innodb_flush_log_at_trx_commit=0; SET GLOBAL sync_binlog=0; SET GLOBAL innodb_doublewrite=OFF;"
+          docker exec "$CID" mysql -h127.0.0.1 -uroot -proot -e "SET GLOBAL innodb_flush_log_at_trx_commit=0; SET GLOBAL sync_binlog=0;"
 
       - name: Run the functional suite against MySQL 9
         env:
