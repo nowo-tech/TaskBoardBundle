@@ -12,6 +12,7 @@ use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\Exception\InvalidTaskDependencyException;
 use Nowo\TaskBoardBundle\Import\TaskImportSource;
 use Nowo\TaskBoardBundle\Support\TaskDeviation;
+use Nowo\TaskBoardBundle\Tests\Unit\Form\ConstraintMessagesTest;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use RecursiveDirectoryIterator;
@@ -43,7 +44,9 @@ final class TranslationKeysTest extends TestCase
     public function testEveryUsedKeyExistsInLocale(string $locale): void
     {
         $catalogue = $this->catalogue($locale);
-        $missing   = array_values(array_diff($this->usedKeys(), array_keys($catalogue)));
+        // Constraint messages are translated by Symfony's validator in the `validators` domain, not in the bundle domain:
+        // they are checked against validators.<locale>.yaml (ConstraintMessagesTest), never expected here.
+        $missing = array_values(array_diff($this->usedKeys(), ConstraintMessagesTest::dottedConstraintMessages(), array_keys($catalogue)));
 
         self::assertSame([], $missing, sprintf('Missing keys in NowoTaskBoardBundle.%s.yaml', $locale));
     }

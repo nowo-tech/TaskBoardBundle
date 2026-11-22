@@ -123,7 +123,6 @@ task_board.import.subtitle: Bring tasks from ClickUp, Jira, Trello, or other sup
 task_board.import.form.title: Upload export file
 task_board.import.form.source: Source
 task_board.import.form.file: Export file
-task_board.import.form.file_invalid: Upload a valid CSV or JSON export (max 20 MB).
 task_board.import.form.create_columns: Create missing status columns automatically
 task_board.import.form.skip_existing: Skip tasks that were already imported
 task_board.import.form.submit: Import into board
@@ -409,7 +408,6 @@ task_board.sync.connect.submit: "Import and link"
 task_board.sync.browser.legend: "Choose a list"
 task_board.sync.browser.help: "Open a workspace, a space or a folder to see its lists, then pick the list this board follows."
 task_board.sync.browser.list: "List"
-task_board.sync.browser.pick_list: "Choose a list."
 task_board.sync.browser.list_count: "%name% — %count% tasks"
 task_board.sync.browser.empty: "Nothing here."
 task_board.sync.browser.more: "There are more items: open the provider to narrow the tree."

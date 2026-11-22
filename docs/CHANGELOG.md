@@ -131,6 +131,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The board import form showed the raw key `task_board.import.form.file_invalid` instead of "Upload a valid CSV or JSON export (max 20 MB)." when the uploaded file had a wrong type: Symfony translates constraint messages in the `validators` domain, and the text only existed in `NowoTaskBoardBundle.<locale>.yaml`. The same key-as-text applied to `task_board.sync.browser.pick_list` ("Choose a list.", the link form's list field), which is not shown today because the connection controller turns an invalid link form into the `task_board.sync.flash.pick_list` flash. Both now ship in `validators.<locale>.yaml` (de, en, es, fr, it, nl, pt; text unchanged) and are removed from the bundle domain. **Overrides:** a host that overrode these two keys in `NowoTaskBoardBundle.<locale>.yaml` never took effect on them; put them in `validators.<locale>.yaml`.
+
+### Tests
+
+- Regression test: every dotted literal passed as a constraint message in `src/` (outside controllers) exists in the `validators` catalogue of every shipped locale, and the import and link forms render translated text in each locale. `TranslationKeysTest` no longer expects those constraint-message keys in the bundle domain (it asked for the wrong domain, which is how the bug passed review); they are checked against `validators` instead.
+
 ### Changed
 
 - CI only, no runtime change: the MySQL 8.4 and MySQL 9 jobs now keep the throwaway server's data directory on tmpfs and relax its durability (`innodb_flush_log_at_trx_commit=0`, `sync_binlog=0`). The functional suite drops and creates the schema before every test and was bound by fsync on the runner's disk (about 70 minutes on MySQL 8.4 against 15 on MariaDB). The same MySQL versions, the same tests and the same required checks run; locking and isolation are untouched.

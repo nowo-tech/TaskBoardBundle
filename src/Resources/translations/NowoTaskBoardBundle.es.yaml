@@ -123,7 +123,6 @@ task_board.import.subtitle: Trae tareas desde ClickUp, Jira, Trello u otros form
 task_board.import.form.title: Subir archivo de exportación
 task_board.import.form.source: Origen
 task_board.import.form.file: Archivo de exportación
-task_board.import.form.file_invalid: Sube un CSV o JSON válido (máx. 20 MB).
 task_board.import.form.create_columns: Crear columnas de estado que falten automáticamente
 task_board.import.form.skip_existing: Omitir tareas ya importadas
 task_board.import.form.submit: Importar al tablero
@@ -409,7 +408,6 @@ task_board.sync.connect.submit: "Importar y vincular"
 task_board.sync.browser.legend: "Elige una lista"
 task_board.sync.browser.help: "Abre un espacio de trabajo, un espacio o una carpeta para ver sus listas y elige la lista que seguirá este tablero."
 task_board.sync.browser.list: "Lista"
-task_board.sync.browser.pick_list: "Elige una lista."
 task_board.sync.browser.list_count: "%name% — %count% tareas"
 task_board.sync.browser.empty: "No hay nada aquí."
 task_board.sync.browser.more: "Hay más elementos: organízalos en el proveedor para acotar el árbol."
