@@ -821,7 +821,7 @@ task_board.recurrence.reason.plan: "bloqueada pelos limites do plano; volta a te
 task_board.recurrence.skip: "Saltar"
 task_board.recurrence.skip_next: "Saltar a seguinte"
 task_board.recurrence.skip_next_set: "A seguinte é saltada"
-task_board.recurrence.skipped: "Saltada: %date%"
+task_board.recurrence.skipped: "Ignorada: %date%"
 task_board.recurrence.unskip: "Anular salto"
 task_board.recurrence.pause: "Pausar"
 task_board.recurrence.resume: "Retomar"

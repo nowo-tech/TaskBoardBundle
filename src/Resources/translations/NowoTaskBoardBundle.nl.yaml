@@ -61,7 +61,7 @@ task_board.flash.task_moved_next: "Taak verplaatst naar de volgende kolom."
 task_board.flash.task_moved_done: "Taak gemarkeerd als voltooid."
 task_board.task.subtasks: "Subtaken"
 task_board.task.no_subtasks: "Geen subtaken."
-task_board.task.links: Links
+task_board.task.links: Koppelingen
 task_board.task.no_links: "Nog geen links."
 task_board.task.dependencies: "Afhankelijkheden"
 task_board.task.no_dependencies: "Geen afhankelijkheden."

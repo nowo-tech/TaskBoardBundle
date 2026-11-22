@@ -86,7 +86,7 @@ task_board.link.documentation: Documentación
 task_board.link.other: Otro
 task_board.member.assignee: Responsable
 task_board.member.reviewer: Revisor
-task_board.member.stakeholder: Stakeholder
+task_board.member.stakeholder: Parte interesada
 task_board.member.watcher: Observador
 task_board.time.estimate: Estimación
 task_board.time.logged: Registrado

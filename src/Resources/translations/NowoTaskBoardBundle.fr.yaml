@@ -4,7 +4,7 @@ nav:
 task_board.index.title: "Tableaux de tâches"
 task_board.index.subtitle: "Organisez le travail avec des tableaux kanban, des listes et le détail des tâches."
 task_board.board.title: "Tableau"
-task_board.list.title: List
+task_board.list.title: Liste
 task_board.task.title: "Tâche"
 task_board.index.create_board: "Créer un tableau"
 task_board.index.your_boards: "Vos tableaux"
