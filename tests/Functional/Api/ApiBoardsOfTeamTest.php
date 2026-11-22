@@ -12,6 +12,7 @@ use Nowo\TaskBoardBundle\Api\TaskApiWhere;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiBoardList;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
+use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Tests\Functional\Api\App\ApiTestHost;
 use Symfony\Bridge\Doctrine\Middleware\Debug\DebugDataHolder;
 
@@ -156,8 +157,8 @@ final class ApiBoardsOfTeamTest extends ApiTestCase
     {
         return array_map(static fn (TaskApiBoardList $list): array => [
             $list->space->id,
-            array_map(static fn ($board): string => $board->getName(), $list->boards),
-            array_map(static fn ($board): int => $list->taskCounts[$board->getId()] ?? 0, $list->boards),
+            array_map(static fn (TaskBoard $board): string => $board->getName(), $list->boards),
+            array_map(static fn (TaskBoard $board): int => $list->taskCounts[$board->getId()] ?? 0, $list->boards),
         ], $lists);
     }
 }

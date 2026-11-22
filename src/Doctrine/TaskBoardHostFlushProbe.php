@@ -45,7 +45,7 @@ use const DEBUG_BACKTRACE_IGNORE_ARGS;
  *
  * @internal
  */
-final class TaskBoardHostFlushProbe implements ResetInterface
+final readonly class TaskBoardHostFlushProbe implements ResetInterface
 {
     /** The bundle name the deprecations show. */
     public const BUNDLE = 'NowoTaskBoardBundle';
@@ -67,10 +67,10 @@ final class TaskBoardHostFlushProbe implements ResetInterface
     /** Namespaces of the code between the caller and the flush: Doctrine and the shared transaction runners. */
     private const PASS_THROUGH = ['Doctrine\\', 'Symfony\\Bridge\\Doctrine\\', 'Nowo\\TransactionDoctrine\\'];
 
-    private readonly HostFlushProbe $probe;
+    private HostFlushProbe $probe;
 
     /** Whether {@see self::$probe} is this service's own (no transaction-doctrine bundle): then reset with it. */
-    private readonly bool $ownProbe;
+    private bool $ownProbe;
 
     /**
      * @param HostFlushProbe|null $probe the shared probe (`nowo_transaction_doctrine.host_flush_probe`); null = a probe

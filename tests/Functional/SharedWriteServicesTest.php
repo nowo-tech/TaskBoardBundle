@@ -9,6 +9,7 @@ use Nowo\TaskBoardBundle\Dto\TaskFormData;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskChangeHistory;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
+use Nowo\TaskBoardBundle\Entity\TaskDependency;
 use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
 use Nowo\TaskBoardBundle\Enum\TaskChangeType;
 use Nowo\TaskBoardBundle\Enum\TaskDependencyType;
@@ -164,8 +165,8 @@ final class SharedWriteServicesTest extends FunctionalTestCase
         $manager = $this->service(TaskDependencyManager::class);
         $edge    = $manager->add($a, $b, TaskDependencyType::Blocks, $this->owner);
 
-        self::assertSame([$edge->getId()], array_map(static fn ($d): string => $d->getId(), $manager->findBetween($a, $b)));
-        self::assertSame([$edge->getId()], array_map(static fn ($d): string => $d->getId(), $manager->findBetween($b, $a)));
+        self::assertSame([$edge->getId()], array_map(static fn (TaskDependency $d): string => $d->getId(), $manager->findBetween($a, $b)));
+        self::assertSame([$edge->getId()], array_map(static fn (TaskDependency $d): string => $d->getId(), $manager->findBetween($b, $a)));
         self::assertSame([], $manager->findBetween($a, $c));
     }
 

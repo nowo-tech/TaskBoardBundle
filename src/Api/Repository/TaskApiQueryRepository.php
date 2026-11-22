@@ -507,7 +507,7 @@ final readonly class TaskApiQueryRepository
             // PostgreSQL or a NO PAD binary column), so no IN list grows with the user's tasks.
             $ids = $this->exactIds($assignees);
             $qb->andWhere('EXISTS (SELECT am.id FROM ' . TaskMember::class . ' am WHERE am.task = t AND am.memberRole = :assigneeRole AND am.user IN (:assignees))')
-                ->setParameter('assignees', $ids === [] ? [''] : array_map('strval', array_keys($ids)))
+                ->setParameter('assignees', $ids === [] ? [''] : array_map(strval(...), array_keys($ids)))
                 ->setParameter('assigneeRole', TaskMemberRole::Assignee);
             $this->dropTasks($qb, 'lookAlikeAssigneeTasks', $this->lookAlikeTasks($ids, false));
         } elseif ($assignees !== []) {
@@ -536,7 +536,7 @@ final readonly class TaskApiQueryRepository
             // (audit OC Low) without an IN list of the user's tasks.
             $ids = $this->exactIds([$owner]);
             $qb->andWhere('t.creator IN (:owners) OR EXISTS (SELECT om.id FROM ' . TaskMember::class . ' om WHERE om.task = t AND om.memberRole = :ownerRole AND om.user IN (:owners))')
-                ->setParameter('owners', $ids === [] ? [''] : array_map('strval', array_keys($ids)))
+                ->setParameter('owners', $ids === [] ? [''] : array_map(strval(...), array_keys($ids)))
                 ->setParameter('ownerRole', TaskMemberRole::Assignee);
             $this->dropTasks($qb, 'lookAlikeOwnTasks', $this->lookAlikeTasks($ids, true));
 
@@ -599,7 +599,7 @@ final readonly class TaskApiQueryRepository
         if ($ids === []) {
             return [];
         }
-        $keys = array_map('strval', array_keys($ids));
+        $keys = array_map(strval(...), array_keys($ids));
         /** @var list<array{taskId: mixed, ref: mixed}> $rows */
         $rows = $this->entityManager->createQueryBuilder()
             ->select('IDENTITY(m.task) AS taskId', 'm.user AS ref')

@@ -44,7 +44,7 @@ final readonly class HumansOnlyColumnTransitionPolicy implements ColumnTransitio
             // Audit PC-L2: a retag leaves the task in its column; it does not enter it.
             && $transition->via->operation !== ColumnTransitionVia::OP_RETAG
             && in_array($transition->via->channel, self::MACHINE_CHANNELS, true)
-            && !($this->allowChecklist && $transition->via->operation === ColumnTransitionVia::OP_CHECKLIST)
+            && (!$this->allowChecklist || $transition->via->operation !== ColumnTransitionVia::OP_CHECKLIST)
         ) {
             return ColumnTransitionDecision::refuse(ColumnTransitionDecision::CODE_HUMANS_ONLY, self::MESSAGE);
         }

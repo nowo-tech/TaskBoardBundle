@@ -42,8 +42,8 @@ final class ApiGuardTest extends ApiTestCase
 
     public function testAMissingTargetIsNotFound(): void
     {
-        $this->assertDenied(404, 'ACCESS_001', fn () => $this->guard()->board($this->principal(), 'nothing', TaskApiCapability::ReadOwn));
-        $this->assertDenied(404, 'ACCESS_001', fn () => $this->guard()->task($this->principal(), 'nothing', TaskApiCapability::ReadOwn));
+        $this->assertDenied(404, 'ACCESS_001', fn (): TaskBoard => $this->guard()->board($this->principal(), 'nothing', TaskApiCapability::ReadOwn));
+        $this->assertDenied(404, 'ACCESS_001', fn (): Task => $this->guard()->task($this->principal(), 'nothing', TaskApiCapability::ReadOwn));
     }
 
     public function testOutsideWhereIsNotFoundWhateverTheLevel(): void
@@ -51,8 +51,8 @@ final class ApiGuardTest extends ApiTestCase
         $other = TaskApiWhere::limitedTo(['tenant-b'], ['another-board']);
         foreach (TaskApiLevel::cases() as $level) {
             $principal = $this->principal($level, $other);
-            $this->assertDenied(404, 'ACCESS_001', fn () => $this->guard()->board($principal, $this->board->getId(), TaskApiCapability::ReadOwn));
-            $this->assertDenied(404, 'ACCESS_001', fn () => $this->guard()->task($principal, $this->task->getId(), TaskApiCapability::ReadOwn));
+            $this->assertDenied(404, 'ACCESS_001', fn (): TaskBoard => $this->guard()->board($principal, $this->board->getId(), TaskApiCapability::ReadOwn));
+            $this->assertDenied(404, 'ACCESS_001', fn (): Task => $this->guard()->task($principal, $this->task->getId(), TaskApiCapability::ReadOwn));
         }
     }
 
@@ -60,7 +60,7 @@ final class ApiGuardTest extends ApiTestCase
     {
         $principal = $this->principal(where: TaskApiWhere::everything([self::TENANT]));
 
-        $this->assertDenied(404, 'ACCESS_001', fn () => $this->guard()->board($principal, $this->board->getId(), TaskApiCapability::ReadOwn));
+        $this->assertDenied(404, 'ACCESS_001', fn (): TaskBoard => $this->guard()->board($principal, $this->board->getId(), TaskApiCapability::ReadOwn));
     }
 
     public function testNamingABoardOrItsTenantInWhereReachesIt(): void
@@ -74,7 +74,7 @@ final class ApiGuardTest extends ApiTestCase
     {
         ApiTestHost::$tenants = [];
 
-        $this->assertDenied(404, 'ACCESS_001', fn () => $this->guard()->board($this->principal(), $this->board->getId(), TaskApiCapability::ReadOwn));
+        $this->assertDenied(404, 'ACCESS_001', fn (): TaskBoard => $this->guard()->board($this->principal(), $this->board->getId(), TaskApiCapability::ReadOwn));
     }
 
     public function testNoViewAccessIsNotFoundAndARemovedMemberStopsAtOnce(): void
@@ -87,8 +87,8 @@ final class ApiGuardTest extends ApiTestCase
             $event->deny();
         });
 
-        $this->assertDenied(404, 'ACCESS_001', fn () => $this->guard()->board($principal, $this->board->getId(), TaskApiCapability::ReadOwn));
-        $this->assertDenied(404, 'ACCESS_001', fn () => $this->guard()->task($principal, $this->task->getId(), TaskApiCapability::ReadOwn));
+        $this->assertDenied(404, 'ACCESS_001', fn (): TaskBoard => $this->guard()->board($principal, $this->board->getId(), TaskApiCapability::ReadOwn));
+        $this->assertDenied(404, 'ACCESS_001', fn (): Task => $this->guard()->task($principal, $this->task->getId(), TaskApiCapability::ReadOwn));
     }
 
     public function testATaskTheHostDeniesIsNotFound(): void
@@ -97,7 +97,7 @@ final class ApiGuardTest extends ApiTestCase
             $event->deny();
         });
 
-        $this->assertDenied(404, 'ACCESS_001', fn () => $this->guard()->task($this->principal(), $this->task->getId(), TaskApiCapability::ReadOwn));
+        $this->assertDenied(404, 'ACCESS_001', fn (): Task => $this->guard()->task($this->principal(), $this->task->getId(), TaskApiCapability::ReadOwn));
     }
 
     public function testMyTasksSeesOnlyWhatItCreatedOrIsAssigned(): void
@@ -105,11 +105,11 @@ final class ApiGuardTest extends ApiTestCase
         $other     = $this->user('other@example.com');
         $principal = new TaskApiPrincipal($other, TaskApiLevel::MyTasks, TaskApiWhere::everything(), 'id', 'name');
 
-        $this->assertDenied(404, 'ACCESS_001', fn () => $this->guard()->task($principal, $this->task->getId(), TaskApiCapability::ReadOwn));
+        $this->assertDenied(404, 'ACCESS_001', fn (): Task => $this->guard()->task($principal, $this->task->getId(), TaskApiCapability::ReadOwn));
 
         // Watching does not count.
         $this->member($this->task, $other, TaskMemberRole::Watcher);
-        $this->assertDenied(404, 'ACCESS_001', fn () => $this->guard()->task($principal, $this->task->getId(), TaskApiCapability::ReadOwn));
+        $this->assertDenied(404, 'ACCESS_001', fn (): Task => $this->guard()->task($principal, $this->task->getId(), TaskApiCapability::ReadOwn));
 
         $this->member($this->task, $other, TaskMemberRole::Assignee);
         self::assertSame($this->task->getId(), $this->guard()->task($principal, $this->task->getId(), TaskApiCapability::ReadOwn)->getId());
@@ -135,28 +135,28 @@ final class ApiGuardTest extends ApiTestCase
     {
         ApiTestHost::$planRefusesTenants = [self::TENANT];
 
-        $this->assertDenied(403, 'PLAN_001', fn () => $this->guard()->board($this->principal(), $this->board->getId(), TaskApiCapability::ReadOwn));
-        $this->assertDenied(403, 'PLAN_001', fn () => $this->guard()->task($this->principal(), $this->task->getId(), TaskApiCapability::ReadOwn));
+        $this->assertDenied(403, 'PLAN_001', fn (): TaskBoard => $this->guard()->board($this->principal(), $this->board->getId(), TaskApiCapability::ReadOwn));
+        $this->assertDenied(403, 'PLAN_001', fn (): Task => $this->guard()->task($this->principal(), $this->task->getId(), TaskApiCapability::ReadOwn));
 
         // Out of reach comes first.
         $outside = $this->principal(where: TaskApiWhere::limitedTo([], []));
-        $this->assertDenied(404, 'ACCESS_001', fn () => $this->guard()->board($outside, $this->board->getId(), TaskApiCapability::ReadOwn));
+        $this->assertDenied(404, 'ACCESS_001', fn (): TaskBoard => $this->guard()->board($outside, $this->board->getId(), TaskApiCapability::ReadOwn));
     }
 
     public function testALevelThatMayNotIsARefusalForWhatItCanSee(): void
     {
         $read = $this->principal(TaskApiLevel::Read);
-        $this->assertDenied(403, 'TOKEN_001', fn () => $this->guard()->task($read, $this->task->getId(), TaskApiCapability::WorkOnTask));
-        $this->assertDenied(403, 'TOKEN_001', fn () => $this->guard()->task($read, $this->task->getId(), TaskApiCapability::Comment));
-        $this->assertDenied(403, 'TOKEN_001', fn () => $this->guard()->board($read, $this->board->getId(), TaskApiCapability::EditTasks));
+        $this->assertDenied(403, 'TOKEN_001', fn (): Task => $this->guard()->task($read, $this->task->getId(), TaskApiCapability::WorkOnTask));
+        $this->assertDenied(403, 'TOKEN_001', fn (): Task => $this->guard()->task($read, $this->task->getId(), TaskApiCapability::Comment));
+        $this->assertDenied(403, 'TOKEN_001', fn (): TaskBoard => $this->guard()->board($read, $this->board->getId(), TaskApiCapability::EditTasks));
 
         $mine = $this->principal(TaskApiLevel::MyTasks);
-        $this->assertDenied(403, 'TOKEN_001', fn () => $this->guard()->task($mine, $this->task->getId(), TaskApiCapability::EditTasks));
-        $this->assertDenied(403, 'TOKEN_001', fn () => $this->guard()->task($mine, $this->task->getId(), TaskApiCapability::ReadEverything));
-        $this->assertDenied(403, 'TOKEN_001', fn () => $this->guard()->board($mine, $this->board->getId(), TaskApiCapability::EditTasks));
+        $this->assertDenied(403, 'TOKEN_001', fn (): Task => $this->guard()->task($mine, $this->task->getId(), TaskApiCapability::EditTasks));
+        $this->assertDenied(403, 'TOKEN_001', fn (): Task => $this->guard()->task($mine, $this->task->getId(), TaskApiCapability::ReadEverything));
+        $this->assertDenied(403, 'TOKEN_001', fn (): TaskBoard => $this->guard()->board($mine, $this->board->getId(), TaskApiCapability::EditTasks));
 
         $tasks = $this->principal(TaskApiLevel::Tasks);
-        $this->assertDenied(403, 'TOKEN_001', fn () => $this->guard()->board($tasks, $this->board->getId(), TaskApiCapability::ManageBoards));
+        $this->assertDenied(403, 'TOKEN_001', fn (): TaskBoard => $this->guard()->board($tasks, $this->board->getId(), TaskApiCapability::ManageBoards));
         self::assertSame($this->task->getId(), $this->guard()->task($tasks, $this->task->getId(), TaskApiCapability::DeleteTask)->getId());
     }
 
@@ -173,12 +173,12 @@ final class ApiGuardTest extends ApiTestCase
         $full = $this->principal();
 
         self::assertSame($this->board->getId(), $this->guard()->board($full, $this->board->getId(), TaskApiCapability::ReadEverything)->getId());
-        $this->assertDenied(403, 'ACCESS_002', fn () => $this->guard()->board($full, $this->board->getId(), TaskApiCapability::EditTasks));
-        $this->assertDenied(403, 'ACCESS_002', fn () => $this->guard()->board($full, $this->board->getId(), TaskApiCapability::ManageBoards));
-        $this->assertDenied(403, 'ACCESS_002', fn () => $this->guard()->task($full, $this->task->getId(), TaskApiCapability::WorkOnTask));
-        $this->assertDenied(403, 'ACCESS_002', fn () => $this->guard()->task($full, $this->task->getId(), TaskApiCapability::EditTasks));
-        $this->assertDenied(403, 'ACCESS_002', fn () => $this->guard()->task($full, $this->task->getId(), TaskApiCapability::DeleteTask));
-        $this->assertDenied(403, 'ACCESS_002', fn () => $this->guard()->task($full, $this->task->getId(), TaskApiCapability::ManageBoards));
+        $this->assertDenied(403, 'ACCESS_002', fn (): TaskBoard => $this->guard()->board($full, $this->board->getId(), TaskApiCapability::EditTasks));
+        $this->assertDenied(403, 'ACCESS_002', fn (): TaskBoard => $this->guard()->board($full, $this->board->getId(), TaskApiCapability::ManageBoards));
+        $this->assertDenied(403, 'ACCESS_002', fn (): Task => $this->guard()->task($full, $this->task->getId(), TaskApiCapability::WorkOnTask));
+        $this->assertDenied(403, 'ACCESS_002', fn (): Task => $this->guard()->task($full, $this->task->getId(), TaskApiCapability::EditTasks));
+        $this->assertDenied(403, 'ACCESS_002', fn (): Task => $this->guard()->task($full, $this->task->getId(), TaskApiCapability::DeleteTask));
+        $this->assertDenied(403, 'ACCESS_002', fn (): Task => $this->guard()->task($full, $this->task->getId(), TaskApiCapability::ManageBoards));
         // readers_can_comment is on by default.
         self::assertSame($this->task->getId(), $this->guard()->task($full, $this->task->getId(), TaskApiCapability::Comment)->getId());
     }
@@ -186,7 +186,7 @@ final class ApiGuardTest extends ApiTestCase
     public function testACapabilityOfATaskIsNotGrantedOnABoard(): void
     {
         foreach ([TaskApiCapability::WorkOnTask, TaskApiCapability::Comment, TaskApiCapability::DeleteTask] as $capability) {
-            $this->assertDenied(403, 'ACCESS_002', fn () => $this->guard()->board($this->principal(), $this->board->getId(), $capability));
+            $this->assertDenied(403, 'ACCESS_002', fn (): TaskBoard => $this->guard()->board($this->principal(), $this->board->getId(), $capability));
         }
     }
 

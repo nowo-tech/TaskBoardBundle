@@ -143,7 +143,7 @@ final class TaskMenuOutcomesTest extends FunctionalTestCase
     private function boot(array $config): void
     {
         self::ensureKernelShutdown();
-        static::$taskBoardConfig = $config;
+        self::$taskBoardConfig = $config;
         $this->setUp();
         $this->board = $this->board('Roadmap', ['To do', 'Doing', 'Done', 'Blocked']);
         $this->task  = $this->task($this->board, 'Ship it');
@@ -182,7 +182,7 @@ final class TaskMenuOutcomesTest extends FunctionalTestCase
 
     private function dispatcher(): EventDispatcherInterface
     {
-        $dispatcher = static::getContainer()->get('event_dispatcher');
+        $dispatcher = self::getContainer()->get('event_dispatcher');
         self::assertInstanceOf(EventDispatcherInterface::class, $dispatcher);
 
         return $dispatcher;

@@ -6,7 +6,6 @@ namespace Nowo\TaskBoardBundle\Tests\Stub;
 
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiAuthenticatorInterface;
 use Nowo\TaskBoardBundle\Api\TaskApiAuthFailure;
-use Nowo\TaskBoardBundle\Api\TaskApiPrincipal;
 use Symfony\Component\HttpFoundation\Request;
 
 /**
@@ -14,7 +13,7 @@ use Symfony\Component\HttpFoundation\Request;
  */
 final class DenyingTaskApiAuthenticator implements TaskApiAuthenticatorInterface
 {
-    public function authenticate(Request $request): TaskApiPrincipal|TaskApiAuthFailure
+    public function authenticate(Request $request): TaskApiAuthFailure
     {
         return TaskApiAuthFailure::Invalid;
     }

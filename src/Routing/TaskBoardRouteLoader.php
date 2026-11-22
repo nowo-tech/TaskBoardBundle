@@ -322,7 +322,7 @@ final class TaskBoardRouteLoader extends Loader
             return;
         }
 
-        $collection->add($this->routes[$key]['name'], self::fromAttribute($attributes, $controller, $this->routePrefix . $this->routes[$key]['path']));
+        $collection->add($this->routes[$key]['name'], $this->fromAttribute($attributes, $controller, $this->routePrefix . $this->routes[$key]['path']));
     }
 
     /**
@@ -331,7 +331,7 @@ final class TaskBoardRouteLoader extends Loader
      *
      * @param array<string, Route> $attributes
      */
-    private static function fromAttribute(array $attributes, string $controller, string $path): Route
+    private function fromAttribute(array $attributes, string $controller, string $path): Route
     {
         $attribute = $attributes[$controller] ?? throw new LogicException(sprintf('No #[Route] attribute on "%s".', $controller));
 
@@ -361,8 +361,8 @@ final class TaskBoardRouteLoader extends Loader
         }
 
         $path = $this->routePrefix . rtrim($this->multiBoardPath, '/');
-        $collection->add(TaskBoardMultiBoardController::ROUTE, self::fromAttribute($attributes, TaskBoardMultiBoardController::class . '::tasks', $path === '' ? '/' : $path));
-        $collection->add(TaskBoardMultiBoardController::ROUTE_EXPORT, self::fromAttribute($attributes, TaskBoardMultiBoardController::class . '::export', $path . '/export.{format}'));
+        $collection->add(TaskBoardMultiBoardController::ROUTE, $this->fromAttribute($attributes, TaskBoardMultiBoardController::class . '::tasks', $path === '' ? '/' : $path));
+        $collection->add(TaskBoardMultiBoardController::ROUTE_EXPORT, $this->fromAttribute($attributes, TaskBoardMultiBoardController::class . '::export', $path . '/export.{format}'));
     }
 
     /**
@@ -380,7 +380,7 @@ final class TaskBoardRouteLoader extends Loader
         $routes = self::API_ROUTES + ($this->templatesEnabled ? self::API_TEMPLATE_ROUTES : []) + ($this->questionsEnabled ? self::API_QUESTION_ROUTES : []);
         foreach ($routes as $name => $controller) {
             $attribute = $attributes[$controller] ?? throw new LogicException(sprintf('No #[Route] attribute on "%s".', $controller));
-            $collection->add('nowo_task_board_api_' . $name, self::fromAttribute($attributes, $controller, $this->apiPrefix . $attribute->getPath()));
+            $collection->add('nowo_task_board_api_' . $name, $this->fromAttribute($attributes, $controller, $this->apiPrefix . $attribute->getPath()));
         }
     }
 

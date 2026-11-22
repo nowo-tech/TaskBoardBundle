@@ -31,7 +31,7 @@ final class HeaderSearchReferencesTest extends HeaderSearchTestCase
 {
     protected function setUp(): void
     {
-        static::$taskBoardConfig = ['task_numbers' => ['enabled' => true]];
+        self::$taskBoardConfig = ['task_numbers' => ['enabled' => true]];
         parent::setUp();
     }
 

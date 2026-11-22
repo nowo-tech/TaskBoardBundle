@@ -93,7 +93,7 @@ final class ApiOffHostTest extends FunctionalTestCase
     private function serviceIds(ContainerInterface $container): array
     {
         self::assertTrue(method_exists($container, 'getServiceIds'));
-        $ids = array_map('strval', $container->getServiceIds());
+        $ids = array_map(strval(...), $container->getServiceIds());
         sort($ids);
 
         return $ids;

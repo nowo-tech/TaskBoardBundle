@@ -132,15 +132,15 @@ final class TaskApiValuesTest extends TestCase
         $users = new EmptyTaskApiUsers();
         self::assertNull($users->find('id'));
         self::assertSame([], $users->profiles([new stdClass()], $principal));
-        $this->assertRefused(404, 'ACCESS_001', static fn () => $users->apiId(new stdClass()));
+        $this->assertRefused(404, 'ACCESS_001', static fn (): string => $users->apiId(new stdClass()));
 
         $time = new DenyingTaskApiTimeEntries();
-        $this->assertRefused(403, 'TIME_001', static fn () => $time->list($principal, new TaskApiTimeQuery('team')));
-        $this->assertRefused(403, 'TIME_001', static fn () => $time->log($principal, null, new TaskApiNewTimeEntry('team', new DateTimeImmutable(), 60)));
+        $this->assertRefused(403, 'TIME_001', static fn (): TaskApiTimePage => $time->list($principal, new TaskApiTimeQuery('team')));
+        $this->assertRefused(403, 'TIME_001', static fn (): TaskApiTimeEntry => $time->log($principal, null, new TaskApiNewTimeEntry('team', new DateTimeImmutable(), 60)));
 
         $board = new TaskBoard('Board', 'board', null);
         $file  = new UploadedFile(__FILE__, 'a.txt', null, null, true);
-        $this->assertRefused(403, 'FILE_001', static fn () => (new DenyingTaskApiAttachments())->store($principal, new Task(board: $board, title: 'T', creator: null), $file));
+        $this->assertRefused(403, 'FILE_001', static fn (): TaskApiAttachment => (new DenyingTaskApiAttachments())->store($principal, new Task(board: $board, title: 'T', creator: null), $file));
     }
 
     public function testTheTimeHookHasNoDelete(): void
@@ -164,7 +164,7 @@ final class TaskApiValuesTest extends TestCase
 
     public function testAFilterValueOfTheWrongTypeIsRefused(): void
     {
-        $this->assertRefused(400, 'INPUT_002', static fn () => TaskApiTaskFilter::fromQuery(['statuses' => 5]));
+        $this->assertRefused(400, 'INPUT_002', static fn (): TaskApiTaskFilter => TaskApiTaskFilter::fromQuery(['statuses' => 5]));
         self::assertSame(['open'], TaskApiTaskFilter::fromQuery(['statuses' => 'Open'])->statuses);
     }
 

@@ -118,7 +118,7 @@ final class TaskQuestionFormType extends AbstractType
                 'expanded'                  => true,
                 'multiple'                  => true,
                 'choices'                   => array_values($byId),
-                'choice_value'              => static fn (?TaskQuestionRecipientCandidate $candidate): string => $candidate === null ? '' : $candidate->id,
+                'choice_value'              => static fn (?TaskQuestionRecipientCandidate $candidate): string => $candidate->id ?? '',
                 'choice_label'              => static fn (TaskQuestionRecipientCandidate $candidate): string => $candidate->label,
                 'choice_translation_domain' => false,
                 'choice_attr'               => static fn (TaskQuestionRecipientCandidate $candidate): array => $candidate->external ? ['data-nowo-task-question-external' => '1'] : [],

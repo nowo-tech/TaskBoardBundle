@@ -36,12 +36,12 @@ final class BoardSearchContractTest extends TaskBoardSearchKitTestCase
         return true;
     }
 
-    protected function seed(int|string $tenant, string $text): int|string
+    protected function seed(int|string $tenant, string $text): string
     {
         return $this->board($tenant, $text)->getId();
     }
 
-    protected function seedHidden(int|string $tenant, string $text): int|string
+    protected function seedHidden(int|string $tenant, string $text): string
     {
         $id                = $this->board($tenant, $text)->getId();
         $this->denied[$id] = true;
@@ -49,7 +49,7 @@ final class BoardSearchContractTest extends TaskBoardSearchKitTestCase
         return $id;
     }
 
-    protected function seedArchived(int|string $tenant, string $text): int|string
+    protected function seedArchived(int|string $tenant, string $text): string
     {
         $board = $this->board($tenant, $text);
         $board->archive();

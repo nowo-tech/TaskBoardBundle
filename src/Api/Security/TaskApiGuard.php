@@ -180,7 +180,7 @@ final readonly class TaskApiGuard
     {
         return $principal->where->reachesBoard($board)
             && $this->ownsTenant($principal->user, $board->getTenantKey())
-            && $this->workspace->spaceOfTenant($principal, $board->getTenantKey()) !== null
+            && $this->workspace->spaceOfTenant($principal, $board->getTenantKey()) instanceof TaskApiSpace
             && $this->access->canViewBoard($principal->user, $board);
     }
 

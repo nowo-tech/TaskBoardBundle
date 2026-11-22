@@ -151,7 +151,7 @@ final class TaskSearchDefinition extends TaskBoardSearchDefinition
     {
         $assignees = $context->get(self::ASSIGNEES, []);
 
-        return $this->item($row, $query, is_array($assignees) && $row instanceof Task && is_array($assignees[$row->getId()] ?? null) ? array_values(array_filter($assignees[$row->getId()], 'is_string')) : []);
+        return $this->item($row, $query, is_array($assignees) && $row instanceof Task && is_array($assignees[$row->getId()] ?? null) ? array_values(array_filter($assignees[$row->getId()], is_string(...))) : []);
     }
 
     /** The row without the assignees (a caller that does not run prepareItems()). */

@@ -90,7 +90,7 @@ final class HostPortValuesTest extends TestCase
         yield 'zero limit' => [static fn (): TaskCriteria => TaskCriteria::forTenants(['a'])->page(0, 0)];
         yield 'big limit' => [static fn (): TaskCriteria => TaskCriteria::forTenants(['a'])->page(0, 501)];
         yield 'inverted window' => [static fn (): TaskCriteria => TaskCriteria::forTenants(['a'])->dueBetween(new DateTimeImmutable('2026-02-01'), new DateTimeImmutable('2026-01-01'))];
-        yield 'too many boards' => [static fn (): TaskCriteria => TaskCriteria::forBoards(array_map('strval', range(1, 501)))];
+        yield 'too many boards' => [static fn (): TaskCriteria => TaskCriteria::forBoards(array_map(strval(...), range(1, 501)))];
         yield 'board negative offset' => [static fn (): BoardCriteria => BoardCriteria::forTenants(['a'])->page(-1)];
         yield 'board big limit' => [static fn (): BoardCriteria => BoardCriteria::forTenants(['a'])->page(0, 501)];
         yield 'too many tenants' => [static fn (): BoardCriteria => BoardCriteria::forTenants(array_map(static fn (int $i): string => 't' . $i, range(1, 501)))];

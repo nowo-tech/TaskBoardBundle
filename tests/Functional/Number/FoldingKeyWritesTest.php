@@ -34,7 +34,7 @@ final class FoldingKeyWritesTest extends TaskNumberTestCase
     {
         $this->foldKeyColumns($this->em);
         $this->owner = $this->user('owner@example.com');
-        $creator     = static::getContainer()->get(TaskBoardCreatorInterface::class);
+        $creator     = self::getContainer()->get(TaskBoardCreatorInterface::class);
         self::assertInstanceOf(TaskBoardCreatorInterface::class, $creator);
 
         self::assertSame('roadmap', $creator->create(new TaskBoardFormData(name: 'Roadmap'), $this->owner, 'Bob')->getSlug());
@@ -77,8 +77,8 @@ final class FoldingKeyWritesTest extends TaskNumberTestCase
         if (!$platform instanceof AbstractMySQLPlatform) {
             self::markTestSkipped('MySQL / MariaDB only');
         }
-        static::$taskBoardConfig = self::CONFIG + ['sync' => ['enabled' => true, 'credential_resolver' => 'app.sync_credentials']];
-        $this->reconfigure(static::$taskBoardConfig);
+        self::$taskBoardConfig = self::CONFIG + ['sync' => ['enabled' => true, 'credential_resolver' => 'app.sync_credentials']];
+        $this->reconfigure(self::$taskBoardConfig);
         $this->foldKeyColumns($this->em);
         $db = $this->em->getConnection();
         $c  = $platform instanceof MariaDBPlatform ? 'utf8mb4_nopad_bin' : 'utf8mb4_0900_bin';

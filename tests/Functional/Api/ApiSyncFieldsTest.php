@@ -26,7 +26,7 @@ final class ApiSyncFieldsTest extends ApiTestCase
 {
     protected function setUp(): void
     {
-        static::$hostConfig = SyncFunctionalTestCase::SYNC_CONFIG;
+        self::$hostConfig = SyncFunctionalTestCase::SYNC_CONFIG;
         parent::setUp();
     }
 
@@ -178,7 +178,7 @@ final class ApiSyncFieldsTest extends ApiTestCase
             $kept = $this->em->find(Task::class, $task->getId());
             self::assertInstanceOf(Task::class, $kept);
             self::assertSame([$title, null, true], [$kept->getTitle(), $kept->getColumn(), $kept->isCompleted()]);
-            self::assertSame($tags, array_map('mb_strtolower', $kept->getTags()));
+            self::assertSame($tags, array_map(mb_strtolower(...), $kept->getTags()));
         }
     }
 

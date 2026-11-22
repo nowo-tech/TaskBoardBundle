@@ -233,7 +233,7 @@ final readonly class TaskManager implements TaskManagerInterface
         $columns = $this->orderedColumns($task->getBoard());
         // Since 2.16.0 (audit PC-L2): new tags on a task that stays in its column are asked too (operation `retag`).
         if (!$moves && $newColumn instanceof BoardColumn && $data->tags !== $oldTags) {
-            $this->assertTransition($task->getBoard(), $task, $newColumn, $user, self::retag($via), $data->tags);
+            $this->assertTransition($task->getBoard(), $task, $newColumn, $user, $this->retag($via), $data->tags);
         }
         if ($moves) {
             if ($newColumn instanceof BoardColumn) {
@@ -392,7 +392,7 @@ final readonly class TaskManager implements TaskManagerInterface
         $column = $task->getColumn();
         if ($column instanceof BoardColumn) {
             // Since 2.16.0 (audit PC-L2): the column transition policy is asked about the new tags (operation `retag`).
-            $this->assertTransition($task->getBoard(), $task, $column, $user, self::retag($via), [...$oldTags, $tag]);
+            $this->assertTransition($task->getBoard(), $task, $column, $user, $this->retag($via), [...$oldTags, $tag]);
         }
         $task->setTags([...$oldTags, $tag]);
         $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Tags, $oldTags, $task->getTags());
@@ -574,7 +574,7 @@ final readonly class TaskManager implements TaskManagerInterface
     /**
      * Since 2.16.0 (audit PC-L2): the caller's channel, as operation `retag` (`web` without a caller's).
      */
-    private static function retag(?ColumnTransitionVia $via): ColumnTransitionVia
+    private function retag(?ColumnTransitionVia $via): ColumnTransitionVia
     {
         return new ColumnTransitionVia($via->channel ?? ColumnTransitionVia::WEB, ColumnTransitionVia::OP_RETAG);
     }
@@ -656,7 +656,7 @@ final readonly class TaskManager implements TaskManagerInterface
             doneColumnName: $done?->getName(),
             canPrevious: $index > 0,
             canNext: $next !== null && ($index < 0 || $index < $last),
-            canDone: $done !== null && (!$isDoneNow || !$task->isCompleted()),
+            canDone: $done instanceof BoardColumn && (!$isDoneNow || !$task->isCompleted()),
             isCompleted: $task->isCompleted(),
         );
     }

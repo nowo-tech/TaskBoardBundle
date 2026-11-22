@@ -78,7 +78,7 @@ final class ApiWriteMatrixTest extends ApiTestCase
             }
         });
         foreach (['another project' => TaskApiWhere::limitedTo(['tenant-b'], []), 'a board outside where' => TaskApiWhere::limitedTo([], [$this->sideBoardId]), 'a removed member' => null] as $case => $where) {
-            $denied = $where === null;
+            $denied = !$where instanceof TaskApiWhere;
             foreach (TaskApiLevel::cases() as $level) {
                 $this->issueToken($level, $where ?? TaskApiWhere::everything());
                 foreach ($this->endpoints() as $name => [, , $call]) {

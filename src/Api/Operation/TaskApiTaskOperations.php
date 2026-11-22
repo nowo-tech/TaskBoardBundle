@@ -24,6 +24,7 @@ use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
+use Nowo\TaskBoardBundle\Entity\TaskCustomField;
 use Nowo\TaskBoardBundle\Enum\TaskDependencyType;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
@@ -43,6 +44,7 @@ use Nowo\TaskBoardBundle\Service\TaskManager;
 use Nowo\TaskBoardBundle\Service\TaskMemberAssigner;
 use Nowo\TaskBoardBundle\Support\ColumnTypes;
 use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
+use Nowo\TaskBoardBundle\Template\Entity\TaskTemplate;
 use Nowo\TaskBoardBundle\Template\TaskTemplateManager;
 use Nowo\TaskBoardBundle\Tree\TaskReparenterInterface;
 use Nowo\TaskBoardBundle\Tree\TaskReparentResult;
@@ -175,7 +177,7 @@ final readonly class TaskApiTaskOperations
 
             return $task;
         });
-        $targets = $parent !== null ? ['parent' => $parent->getId()] : [];
+        $targets = $parent instanceof Task ? ['parent' => $parent->getId()] : [];
         if ($template !== null) {
             $targets['template'] = $template;
         }
@@ -438,11 +440,11 @@ final readonly class TaskApiTaskOperations
                 $ownFieldsOnly = !$item->hasAny('priority', 'time_estimate', 'assignees', 'tags');
                 $tasks[$index] = $this->guard->task($principal, $id, $ownFieldsOnly ? TaskApiCapability::WorkOnTask : TaskApiCapability::EditTasks);
             } catch (TaskApiRefusal $refusal) {
-                $failures[$index] = self::failure($index, $fields['id'] ?? null, $refusal);
+                $failures[$index] = $this->failure($index, $fields['id'] ?? null, $refusal);
             }
         }
         if ($failures !== []) {
-            throw self::bulkRefused($failures);
+            throw $this->bulkRefused($failures);
         }
         // Since 2.15.1 (REQ-SEC-006): the keys are compared byte for byte, never through PHP's array keys, so a
         // look-alike tenant (`Acme` next to `acme`, a null next to an empty key) is a second space, not the same one.
@@ -468,7 +470,7 @@ final readonly class TaskApiTaskOperations
             foreach ($ordered as $index => $task) {
                 $current = $this->transaction->lockedRevision($task);
                 if ($bases[$index] !== null && $bases[$index] !== $current) {
-                    $failures[$index] = self::failure($index, $task->getId(), TaskApiRefusal::stale($current));
+                    $failures[$index] = $this->failure($index, $task->getId(), TaskApiRefusal::stale($current));
                 }
             }
             $plans = [];
@@ -479,12 +481,12 @@ final readonly class TaskApiTaskOperations
                 try {
                     $plans[$index] = $this->bulkPlan($principal, $task, $inputs[$index]);
                 } catch (TaskApiRefusal $refusal) {
-                    $failures[$index] = self::failure($index, $task->getId(), $refusal);
+                    $failures[$index] = $this->failure($index, $task->getId(), $refusal);
                 }
             }
             $failures += $this->bulkLimits($tasks, $plans);
             if ($failures !== []) {
-                throw self::bulkRefused($failures);
+                throw $this->bulkRefused($failures);
             }
             $changed = [];
             foreach ($plans as $index => $plan) {
@@ -493,7 +495,7 @@ final readonly class TaskApiTaskOperations
                 } catch (TaskApiRefusal $refusal) {
                     // Audit PC-L1: a refusal decided while writing (a host rule that counts the items written before
                     // this one) is still `BULK_001` with its item in `failures`; run() rolls every write back.
-                    throw self::bulkRefused([$index => self::failure($index, $tasks[$index]->getId(), $refusal)]);
+                    throw $this->bulkRefused([$index => $this->failure($index, $tasks[$index]->getId(), $refusal)]);
                 }
             }
 
@@ -563,7 +565,7 @@ final readonly class TaskApiTaskOperations
             $board = $tasks[$indexes[0]]->getBoard();
             if ($this->tasks->activeTaskRefusal($board, count($indexes)) instanceof LimitRefusal) {
                 foreach ($indexes as $index) {
-                    $failures[$index] = self::failure($index, $tasks[$index]->getId(), new TaskApiRefusal(403, 'PLAN_002', 'The limit of active tasks is reached'));
+                    $failures[$index] = $this->failure($index, $tasks[$index]->getId(), new TaskApiRefusal(403, 'PLAN_002', 'The limit of active tasks is reached'));
                 }
             }
         }
@@ -612,7 +614,7 @@ final readonly class TaskApiTaskOperations
     /**
      * @return array<string, mixed>
      */
-    private static function failure(int $index, mixed $id, TaskApiRefusal $refusal): array
+    private function failure(int $index, mixed $id, TaskApiRefusal $refusal): array
     {
         return ['index' => $index, 'id' => is_string($id) ? $id : null, 'status' => $refusal->status, 'ECODE' => $refusal->ecode, 'err' => $refusal->getMessage()] + $refusal->extra;
     }
@@ -620,7 +622,7 @@ final readonly class TaskApiTaskOperations
     /**
      * @param array<int, array<string, mixed>> $failures by index
      */
-    private static function bulkRefused(array $failures): TaskApiRefusal
+    private function bulkRefused(array $failures): TaskApiRefusal
     {
         ksort($failures);
 
@@ -728,7 +730,6 @@ final readonly class TaskApiTaskOperations
         }
         // Since 2.22.0 (Beacon spec 241 T020): `$stored`, what the host stored in an earlier attempt of the same request (a
         // write unit's replay): it is not asked again, so a replay leaves one file.
-        $committed = false;
         if ($stored instanceof TaskApiAttachment) {
             $attachment = $stored;
             $committed  = true;
@@ -775,7 +776,7 @@ final readonly class TaskApiTaskOperations
         $task = $this->guard->task($principal, $taskId, TaskApiCapability::EditTasks);
         // Since 2.19.0 (FR-028): a native field of the task's board is writable; any other (a provider's) stays 409.
         $field = $this->customFields?->fieldOfBoard($task->getBoard(), $fieldId);
-        if ($field === null || !$input instanceof TaskApiInput) {
+        if (!$field instanceof TaskCustomField || !$input instanceof TaskApiInput) {
             throw new TaskApiRefusal(409, 'FIELD_001', 'Custom fields are read-only: a provider sync owns them');
         }
         if (!$input->has('value')) {
@@ -828,7 +829,7 @@ final readonly class TaskApiTaskOperations
         $removed = 0;
         foreach ($this->dependencies->findBetween($task, $other) as $dependency) {
             $type = $dependency->getDependencyType();
-            if (!in_array($type, $types, true) || ($taskWaits !== null && $this->waits($task, $dependency->getSourceTask()->getId() === $task->getId(), $type) !== $taskWaits)) {
+            if (!in_array($type, $types, true) || ($taskWaits !== null && $this->waits($dependency->getSourceTask()->getId() === $task->getId(), $type) !== $taskWaits)) {
                 continue;
             }
             // @igor-ignore - Call on a stateless readonly service (persists through Doctrine); no state kept in the worker.
@@ -844,7 +845,7 @@ final readonly class TaskApiTaskOperations
     }
 
     /** Whether, in this relation, the task waits on the other one (ClickUp's `depends_on`). */
-    private function waits(Task $task, bool $taskIsSource, TaskDependencyType $type): bool
+    private function waits(bool $taskIsSource, TaskDependencyType $type): bool
     {
         return $taskIsSource ? $type === TaskDependencyType::BlockedBy : $type === TaskDependencyType::Blocks;
     }
@@ -903,7 +904,7 @@ final readonly class TaskApiTaskOperations
             return null;
         }
         $template = $this->templates->usable($principal->user, $board, $id);
-        if ($template === null) {
+        if (!$template instanceof TaskTemplate) {
             throw new TaskApiRefusal(400, 'INPUT_002', 'Invalid template_id');
         }
         $this->templates->prefill(
@@ -972,7 +973,7 @@ final readonly class TaskApiTaskOperations
      */
     private function tags(array $tags): array
     {
-        $tags = array_values(array_unique(array_map('trim', $tags)));
+        $tags = array_values(array_unique(array_map(trim(...), $tags)));
         foreach ($tags as $tag) {
             $this->validate($tag, TaskConstraints::tagName(), 'tags');
         }

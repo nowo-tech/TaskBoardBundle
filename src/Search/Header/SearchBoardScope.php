@@ -169,7 +169,7 @@ final readonly class SearchBoardScope
             $scanned += count($rows);
             foreach ($rows as $index => $board) {
                 // Only a folding collation (MySQL / MariaDB `*_ci`) returns such a row; inScope() itself is unit-tested.
-                if (!self::inScope($board, $tenants, $boards, $excludedTenants, $excludedBoards) || !self::listed($board, $listed)) {
+                if (!self::inScope($board, $tenants, $boards, $excludedTenants, $excludedBoards) || !$this->listed($board, $listed)) {
                     continue; // @codeCoverageIgnore
                 }
                 $tenant = null;
@@ -207,7 +207,7 @@ final readonly class SearchBoardScope
      */
     private function listedBoards(object $user, ?array $tenants): array|false
     {
-        if ($this->eventDispatcher === null) {
+        if (!$this->eventDispatcher instanceof EventDispatcherInterface) {
             return [];
         }
         $listed = [];
@@ -231,7 +231,7 @@ final readonly class SearchBoardScope
      *
      * @param array<string, list<string>> $listed
      */
-    private static function listed(TaskBoard $board, array $listed): bool
+    private function listed(TaskBoard $board, array $listed): bool
     {
         $ids = $listed[''] ?? $listed[(string) $board->getTenantKey()] ?? null;
 

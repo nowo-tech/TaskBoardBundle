@@ -9,6 +9,7 @@ use Nowo\TaskBoardBundle\Question\TaskQuestionAnswerInput;
 use Nowo\TaskBoardBundle\Question\TaskQuestionConflictException;
 use Nowo\TaskBoardBundle\Question\TaskQuestionInput;
 use Nowo\TaskBoardBundle\Question\TaskQuestionOptionInput;
+use Nowo\TaskBoardBundle\Question\TaskQuestionPublication;
 use Nowo\TaskBoardBundle\Question\TaskQuestionRefusedException;
 use Nowo\TaskBoardBundle\Question\TaskQuestionView;
 use Nowo\TaskBoardBundle\Tests\Functional\App\PredictableCsrfTokenManager;
@@ -117,7 +118,7 @@ final class TaskQuestionPortsTest extends QuestionTestCase
             self::assertSame(2, $conflict->currentVersion);
         }
         $stranger = $this->user('stranger@example.com');
-        $this->expectForbidden(fn () => $this->manager()->publish($stranger, $question));
+        $this->expectForbidden(fn (): TaskQuestionPublication => $this->manager()->publish($stranger, $question));
 
         ScriptedQuestionPublisher::$publishedLabel = '  ';
         $publication                               = $this->manager()->publish($this->owner, $question, 2);
@@ -126,7 +127,7 @@ final class TaskQuestionPortsTest extends QuestionTestCase
         self::assertNotNull($question->getPublishedAt());
 
         $this->manager()->withdraw($this->owner, $question, 'Superseded by the call');
-        $this->expectForbidden(fn () => $this->manager()->publish($this->owner, $question));
+        $this->expectForbidden(fn (): TaskQuestionPublication => $this->manager()->publish($this->owner, $question));
     }
 
     public function testTheViewWithoutASignedInUser(): void

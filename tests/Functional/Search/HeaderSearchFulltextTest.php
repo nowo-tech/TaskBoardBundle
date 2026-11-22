@@ -19,7 +19,7 @@ final class HeaderSearchFulltextTest extends HeaderSearchTestCase
 {
     protected function setUp(): void
     {
-        static::$taskBoardConfig = ['search' => ['fulltext' => true]];
+        self::$taskBoardConfig = ['search' => ['fulltext' => true]];
         parent::setUp();
         if (!$this->em->getConnection()->getDatabasePlatform() instanceof AbstractMySQLPlatform) {
             self::markTestSkipped('FULLTEXT runs on MySQL / MariaDB only.');

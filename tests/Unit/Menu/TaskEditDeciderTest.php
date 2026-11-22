@@ -25,6 +25,7 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorage;
 use Symfony\Component\Security\Core\Authentication\Token\UsernamePasswordToken;
+use Twig\TwigFunction;
 
 /**
  * Since 2.22.0: the board page decides who may edit each of its tasks with one board decision
@@ -94,7 +95,7 @@ final class TaskEditDeciderTest extends TestCase
         self::assertNull($twig->context($board));
         self::assertNull($twig->taskMenu($task, null));
         self::assertNull($twig->menuForm('/menu'));
-        self::assertSame(['nowo_task_board_menu_context', 'nowo_task_board_task_menu', 'nowo_task_board_context_menus', 'nowo_task_board_menu_form'], array_map(static fn ($function): string => $function->getName(), $twig->getFunctions()));
+        self::assertSame(['nowo_task_board_menu_context', 'nowo_task_board_task_menu', 'nowo_task_board_context_menus', 'nowo_task_board_menu_form'], array_map(static fn (TwigFunction $function): string => $function->getName(), $twig->getFunctions()));
     }
 
     public function testATaskOfAnotherBoardGetsNoMenuFromThisPage(): void

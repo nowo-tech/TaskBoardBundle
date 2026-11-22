@@ -65,7 +65,7 @@ final class DddHostKernelTest extends WebTestCase
     {
         $this->client = self::createClient();
         $this->client->disableReboot();
-        $em = static::getContainer()->get('app.task_board_em');
+        $em = self::getContainer()->get('app.task_board_em');
         self::assertInstanceOf(TaskBoardEntityManager::class, $em);
         $this->em = $em;
         $tool     = new SchemaTool($em);
@@ -75,7 +75,7 @@ final class DddHostKernelTest extends WebTestCase
 
     public function testTheDddHostWorksThroughThePortsAndThePages(): void
     {
-        $container = static::getContainer();
+        $container = self::getContainer();
         $users     = DddUsers::all();
         $ana       = $users['u-ana'];
         $bruno     = $users['u-bruno'];
@@ -188,7 +188,7 @@ final class DddHostKernelTest extends WebTestCase
 
     private function repositoryBoard(string $id): TaskBoard
     {
-        $boards = static::getContainer()->get(TaskBoardRepositoryInterface::class);
+        $boards = self::getContainer()->get(TaskBoardRepositoryInterface::class);
         self::assertInstanceOf(TaskBoardRepositoryInterface::class, $boards);
         $board = $boards->findById($id);
         self::assertInstanceOf(TaskBoard::class, $board);

@@ -565,7 +565,7 @@ final class TaskBoardManageControllerAccessTest extends TestCase
             }
         };
         $request  = Request::create('/', 'POST');
-        $response = $this->controller($this->owner, currentRequest: $request, formData: new BoardColumnFormData('Todo', type: ColumnType::Done), rowLock: $rowLock)
+        $response = $this->controller($this->owner, formData: new BoardColumnFormData('Todo', type: ColumnType::Done), currentRequest: $request, rowLock: $rowLock)
             ->updateColumn($this->board->getId(), $this->column->getId(), $request);
 
         self::assertSame(302, $response->getStatusCode());

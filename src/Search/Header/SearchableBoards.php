@@ -38,6 +38,6 @@ final readonly class SearchableBoards
      */
     public function ids(): array
     {
-        return array_map('strval', array_keys($this->boards));
+        return array_map(strval(...), array_keys($this->boards));
     }
 }

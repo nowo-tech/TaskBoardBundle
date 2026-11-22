@@ -272,12 +272,12 @@ final readonly class TaskBoardResourceAccessChecker
     public function defaultBoardReach(object $user, bool $manageRoles = true): BoardViewReach
     {
         $dispatcher = $this->eventDispatcher;
-        $listeners  = $dispatcher !== null && (!$dispatcher instanceof SymfonyEventDispatcherInterface || $dispatcher->hasListeners(TaskBoardEvents::BOARD_ACCESS_CHECK));
+        $listeners  = $dispatcher instanceof EventDispatcherInterface && (!$dispatcher instanceof SymfonyEventDispatcherInterface || $dispatcher->hasListeners(TaskBoardEvents::BOARD_ACCESS_CHECK));
         if (!$this->scopingEnabled || ($manageRoles && $this->hasManageRole($user))) {
             return new BoardViewReach(true, [], $listeners);
         }
 
-        return new BoardViewReach(false, array_map('strval', array_keys($this->teamIdsOf($user))), $listeners);
+        return new BoardViewReach(false, array_map(strval(...), array_keys($this->teamIdsOf($user))), $listeners);
     }
 
     /**

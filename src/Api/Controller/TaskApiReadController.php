@@ -10,17 +10,14 @@ use Nowo\TaskBoardBundle\Api\Security\TaskApiRequestListener;
 use Nowo\TaskBoardBundle\Api\Serializer\TaskApiReadSerializer;
 use Nowo\TaskBoardBundle\Api\TaskApiRefusal;
 use Nowo\TaskBoardBundle\Api\TaskApiRevision;
-use Nowo\TaskBoardBundle\Api\Value\TaskApiSpace;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiTaskFilter;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiTimeEntry;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiTimeQuery;
-use Nowo\TaskBoardBundle\Api\Value\TaskApiUser;
+use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskBoardFolder;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
-use Nowo\TaskBoardBundle\Entity\TaskCustomField;
 use Nowo\TaskBoardBundle\Routing\TaskBoardRouteLoader;
-use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncField;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Attribute\Route;
@@ -52,7 +49,7 @@ final readonly class TaskApiReadController
     {
         $spaces = $this->operations->spaces(TaskApiRequestListener::principalOf($request), $teamId);
 
-        return new JsonResponse(['spaces' => array_map(fn (TaskApiSpace $space): array => $this->serializer->space($space), $spaces)]);
+        return new JsonResponse(['spaces' => array_map($this->serializer->space(...), $spaces)]);
     }
 
     #[Route('/v2/space/{spaceId}', name: 'nowo_task_board_api_space', methods: ['GET'])]
@@ -133,12 +130,12 @@ final readonly class TaskApiReadController
         $markdown  = TaskApiTaskFilter::flag($query, 'include_markdown_description');
         // Since 2.10.0 (spec 214): ClickUp's `custom_task_ids=true` names the task by its number, within `space_id` or `list_id`.
         $page = TaskApiTaskFilter::flag($query, 'custom_task_ids')
-            ? $this->operations->taskByNumber($principal, $taskId, self::text($query, 'space_id'), self::text($query, 'list_id'), $markdown)
+            ? $this->operations->taskByNumber($principal, $taskId, $this->text($query, 'space_id'), $this->text($query, 'list_id'), $markdown)
             : $this->operations->task($principal, $taskId, $markdown);
         $found = $page->tasks[0];
         $task  = $this->serializer->task($found, $page);
         if (TaskApiTaskFilter::flag($query, 'include_subtasks')) {
-            $task['subtasks'] = array_map(static fn ($subtask): array => ['id' => $subtask->getId(), 'name' => $subtask->getTitle()], $page->subtasks[$found->getId()] ?? []);
+            $task['subtasks'] = array_map(static fn (Task $subtask): array => ['id' => $subtask->getId(), 'name' => $subtask->getTitle()], $page->subtasks[$found->getId()] ?? []);
         }
 
         // Since 2.16.0 (spec 234, FR-018): the revision as an ETag, for `If-Match` on the update.
@@ -161,7 +158,7 @@ final readonly class TaskApiReadController
     {
         $members = $this->operations->members(TaskApiRequestListener::principalOf($request), $taskId);
 
-        return new JsonResponse(['members' => array_map(fn (TaskApiUser $user): ?array => $this->serializer->user($user), $members)]);
+        return new JsonResponse(['members' => array_map($this->serializer->user(...), $members)]);
     }
 
     #[Route('/v2/space/{spaceId}/tag', name: 'nowo_task_board_api_space_tags', methods: ['GET'])]
@@ -179,8 +176,8 @@ final readonly class TaskApiReadController
         $fields = $this->operations->allBoardFields(TaskApiRequestListener::principalOf($request), $listId);
 
         return new JsonResponse(['fields' => [
-            ...array_map(fn (TaskCustomField $field): array => $this->serializer->nativeField($field), $fields['native']),
-            ...array_map(fn (TaskSyncField $field): array => $this->serializer->field($field), $fields['synced']),
+            ...array_map($this->serializer->nativeField(...), $fields['native']),
+            ...array_map($this->serializer->field(...), $fields['synced']),
         ]]);
     }
 
@@ -208,7 +205,7 @@ final readonly class TaskApiReadController
     }
 
     /** @param array<mixed> $query */
-    private static function text(array $query, string $name): ?string
+    private function text(array $query, string $name): ?string
     {
         return is_string($query[$name] ?? null) ? $query[$name] : null;
     }

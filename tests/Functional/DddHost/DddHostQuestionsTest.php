@@ -10,6 +10,7 @@ use Nowo\TaskBoardBundle\Dto\TaskBoardFormData;
 use Nowo\TaskBoardBundle\Dto\TaskFormData;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Question\Entity\TaskQuestion;
+use Nowo\TaskBoardBundle\Question\Entity\TaskQuestionAnswer;
 use Nowo\TaskBoardBundle\Question\TaskQuestionAnswerInput;
 use Nowo\TaskBoardBundle\Question\TaskQuestionInput;
 use Nowo\TaskBoardBundle\Question\TaskQuestionManager;
@@ -84,7 +85,7 @@ final class DddHostQuestionsTest extends KernelTestCase
         self::assertSame(TaskQuestionState::Answered, $loaded->getState());
         self::assertInstanceOf(TaskBoardUserRef::class, $loaded->getAskedBy());
         self::assertSame('u-ana', $loaded->getAskedBy()->id);
-        self::assertSame(['member:u-bruno', 'contact:42'], array_map(static fn ($a): string => $a->getAnsweredBySubject(), $loaded->getAnswers()));
+        self::assertSame(['member:u-bruno', 'contact:42'], array_map(static fn (TaskQuestionAnswer $a): string => $a->getAnsweredBySubject(), $loaded->getAnswers()));
         $snapshot = TaskQuestionSnapshot::of($loaded);
         self::assertSame('u-ana', $snapshot->askedById);
         self::assertSame(['No'], $snapshot->currentAnswer?->optionLabels);

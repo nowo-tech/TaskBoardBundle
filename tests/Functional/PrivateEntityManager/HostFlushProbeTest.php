@@ -144,7 +144,7 @@ final class HostFlushProbeTest extends FunctionalTestCase
     public function testThePrivateManagerHasNoProbe(): void
     {
         self::ensureKernelShutdown();
-        static::$taskBoardConfig = ['database' => ['private_entity_manager' => true]];
+        self::$taskBoardConfig = ['database' => ['private_entity_manager' => true]];
         parent::setUp();
         self::assertFalse(self::getContainer()->has(TaskBoardHostFlushProbe::class));
         $host = $this->host();

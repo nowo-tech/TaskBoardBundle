@@ -22,6 +22,7 @@ use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\Support\ColumnTypes;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncField;
+use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncFieldValue;
 
 use function array_map;
 use function array_slice;
@@ -318,14 +319,14 @@ final class TaskApiReadSerializer
      */
     public function user(?TaskApiUser $user): ?array
     {
-        return $user === null ? null : [
+        return $user instanceof TaskApiUser ? [
             'id'             => $user->id,
             'username'       => $user->username,
             'email'          => $user->email,
             'color'          => $user->color,
             'initials'       => self::initials($user->username),
             'profilePicture' => $user->profilePicture,
-        ];
+        ] : null;
     }
 
     /** ClickUp's initials: the first letter of the first two words, upper case. */
@@ -462,7 +463,7 @@ final class TaskApiReadSerializer
             $native[] = $this->nativeField($field) + ['value' => isset($values[$field->getId()]) ? self::nativeValue($values[$field->getId()]) : null];
         }
 
-        return [...$native, ...array_map(static fn ($value): array => [
+        return [...$native, ...array_map(static fn (TaskSyncFieldValue $value): array => [
             'id'    => $value->getField()->getId(),
             'name'  => $value->getField()->getName(),
             'type'  => $value->getField()->getRemoteType(),

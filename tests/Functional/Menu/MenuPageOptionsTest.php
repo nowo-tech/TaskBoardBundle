@@ -82,7 +82,7 @@ final class MenuPageOptionsTest extends FunctionalTestCase
     private function boot(array $config): void
     {
         self::ensureKernelShutdown();
-        static::$taskBoardConfig = $config;
+        self::$taskBoardConfig = $config;
         $this->setUp();
         $this->board = $this->board();
         $this->task  = $this->task($this->board, 'Plan the launch');

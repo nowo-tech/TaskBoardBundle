@@ -155,7 +155,6 @@ final readonly class TaskCopier
      */
     public function copy(Task $source, TaskCopyOptions $options, object $actor, ?string $fingerprint = null): TaskCopyResult
     {
-        $target = $options->targetBoard ?? $source->getBoard();
         if ($fingerprint !== null && $this->preview($source, $options, $actor)->fingerprint !== $fingerprint) {
             throw new TaskCopyRefusedException('stale');
         }

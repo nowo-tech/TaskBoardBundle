@@ -98,7 +98,7 @@ final class ApiConflictTest extends ApiTestCase
         $task                               = $this->task($this->board, 'Raced', 1);
         $em                                 = $this->em;
         $taskId                             = $task->getId();
-        RecordingTransitionPolicy::$decider = static function () use ($em, $taskId): ?ColumnTransitionDecision {
+        RecordingTransitionPolicy::$decider = static function () use ($em, $taskId): ColumnTransitionDecision {
             $em->getConnection()->executeStatement('UPDATE task_board_tasks SET position = 7 WHERE id = ?', [$taskId]);
             $em->find(Task::class, $taskId)?->setTitle('Unsaved');
 
@@ -126,7 +126,7 @@ final class ApiConflictTest extends ApiTestCase
         $taskId = $task->getId();
         $em     = $this->em;
         $this->em->clear();
-        $dispatcher = static::getContainer()->get('event_dispatcher');
+        $dispatcher = self::getContainer()->get('event_dispatcher');
         self::assertInstanceOf(EventDispatcherInterface::class, $dispatcher);
         $dispatcher->addListener(KernelEvents::CONTROLLER, static function () use ($em, $taskId): void {
             $em->find(Task::class, $taskId)?->setTitle('Unsaved');
@@ -165,7 +165,7 @@ final class ApiConflictTest extends ApiTestCase
         $connection                         = $this->em->getConnection();
         $columnId                           = $this->column($to)->getId();
         $taskId                             = $task->getId();
-        RecordingTransitionPolicy::$decider = static function (ColumnTransition $transition) use ($connection, $columnId, $taskId): ?ColumnTransitionDecision {
+        RecordingTransitionPolicy::$decider = static function (ColumnTransition $transition) use ($connection, $columnId, $taskId): ColumnTransitionDecision {
             $connection->executeStatement('UPDATE task_board_tasks SET column_id = ? WHERE id = ?', [$columnId, $taskId]);
 
             return ColumnTransitionDecision::allow();

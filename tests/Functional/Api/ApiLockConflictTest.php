@@ -87,7 +87,7 @@ final class ApiLockConflictTest extends ApiTestCase
      */
     public function testAListenerDeadlockAfterTheCreateNeverLeadsToASecondTask(): void
     {
-        $dispatcher = static::getContainer()->get('event_dispatcher');
+        $dispatcher = self::getContainer()->get('event_dispatcher');
         self::assertInstanceOf(EventDispatcherInterface::class, $dispatcher);
         $dispatcher->addListener(TaskBoardEvents::TASK_CREATED, static function (): never {
             throw new DeadlockException(self::driver(), null);
@@ -112,7 +112,7 @@ final class ApiLockConflictTest extends ApiTestCase
         $connection = $this->em->getConnection();
         $boardId    = $this->board->getId();
         $calls      = 0;
-        $dispatcher = static::getContainer()->get('event_dispatcher');
+        $dispatcher = self::getContainer()->get('event_dispatcher');
         self::assertInstanceOf(EventDispatcherInterface::class, $dispatcher);
         $dispatcher->addListener(KernelEvents::CONTROLLER, static function () use ($connection, $boardId, &$calls): void {
             // The first request commits a host step, then deadlocks; a second one would create the task.
@@ -139,7 +139,7 @@ final class ApiLockConflictTest extends ApiTestCase
 
     private function failWith(Throwable $failure): void
     {
-        $dispatcher = static::getContainer()->get('event_dispatcher');
+        $dispatcher = self::getContainer()->get('event_dispatcher');
         self::assertInstanceOf(EventDispatcherInterface::class, $dispatcher);
         $dispatcher->addListener(KernelEvents::CONTROLLER, static function () use ($failure): never {
             throw $failure;

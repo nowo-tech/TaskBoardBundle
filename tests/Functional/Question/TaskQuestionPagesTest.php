@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\Tests\Functional\Question;
 
 use DateTimeImmutable;
 use Nowo\TaskBoardBundle\Question\Entity\TaskQuestion;
+use Nowo\TaskBoardBundle\Question\Entity\TaskQuestionOption;
 use Nowo\TaskBoardBundle\Question\Entity\TaskQuestionRecipient;
 use Nowo\TaskBoardBundle\Question\TaskQuestionAnswerInput;
 use Nowo\TaskBoardBundle\Question\TaskQuestionChoiceMode;
@@ -32,7 +33,7 @@ final class TaskQuestionPagesTest extends QuestionTestCase
         self::assertCount(1, $crawler->filter('[data-testid="nowo-task-questions"]'));
         self::assertCount(1, $crawler->filter('details#nowo-task-question-ask[open]'));
         self::assertCount(1, $crawler->filter('[data-testid="nowo-task-comment-ask-question"]'));
-        self::assertStringContainsString('bob@example.com', (string) $crawler->filter('[data-testid="nowo-task-question-form"]')->text());
+        self::assertStringContainsString('bob@example.com', $crawler->filter('[data-testid="nowo-task-question-form"]')->text());
 
         $this->client->request('POST', '/tools/task-board/task/' . $this->task->getId() . '/question', ['task_question' => [
             'text'               => 'Which hosting?',
@@ -49,7 +50,7 @@ final class TaskQuestionPagesTest extends QuestionTestCase
         ]]);
         self::assertResponseRedirects('/tools/task-board/task/' . $this->task->getId() . '#nowo-task-questions');
         $question = $this->only();
-        self::assertSame(['Hetzner', 'AWS'], array_map(static fn ($o): string => $o->getLabel(), $question->getOptions()));
+        self::assertSame(['Hetzner', 'AWS'], array_map(static fn (TaskQuestionOption $o): string => $o->getLabel(), $question->getOptions()));
         self::assertTrue($question->getOptions()[0]->isRecommended());
         self::assertTrue($this->logged('task_question_ask'));
 

@@ -100,9 +100,9 @@ final class TaskMenuValuesTest extends TestCase
             {
             }
 
-            public function start(object $user, string $taskId, ClientType $clientType): object
+            public function start(object $user, string $taskId, ClientType $clientType): stdClass
             {
-                if ($this->failure !== null) {
+                if ($this->failure instanceof Throwable) {
                     throw $this->failure;
                 }
                 $this->calls[] = [$taskId, $clientType];

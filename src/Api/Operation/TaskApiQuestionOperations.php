@@ -70,7 +70,7 @@ final readonly class TaskApiQuestionOperations
     public function taskQuestions(TaskApiPrincipal $principal, string $taskId, ?string $state): array
     {
         $task      = $this->guard->task($principal, $taskId, TaskApiCapability::ReadOwn);
-        $wanted    = self::state($state);
+        $wanted    = $this->state($state);
         $questions = array_values(array_filter($this->query->forTask($task), static fn (TaskQuestion $question): bool => !$wanted instanceof TaskQuestionState || $question->getState() === $wanted));
 
         return [$task, $questions];
@@ -237,7 +237,7 @@ final readonly class TaskApiQuestionOperations
         }
     }
 
-    private static function state(?string $state): ?TaskQuestionState
+    private function state(?string $state): ?TaskQuestionState
     {
         if ($state === null || $state === '') {
             return null;

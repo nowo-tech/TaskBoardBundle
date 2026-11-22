@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Tests\Functional;
 
 use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
+use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\Event\ColumnCreatedEvent;
@@ -168,7 +169,7 @@ final class BeaconHooksTest extends FunctionalTestCase
         self::assertInstanceOf(ColumnCreatedEvent::class, $created);
         self::assertSame([$review->getId(), 'Review', 3, (string) $this->owner->getId(), null], [$created->columnId, $created->name, $created->position, $created->actorId, $created->tenantKey]);
 
-        $columns->update($review, new BoardColumnFormData(name: 'Review', color: null, icon: null), $this->owner);
+        $columns->update($review, new BoardColumnFormData(name: 'Review'), $this->owner);
         self::assertCount(1, $this->events, 'nothing changed');
         $columns->update($review, new BoardColumnFormData(name: 'QA', color: '#123456'), $this->owner);
         $updated = $this->events[1][1];
@@ -176,7 +177,7 @@ final class BeaconHooksTest extends FunctionalTestCase
         self::assertSame(['QA', 'Review', ['name', 'color']], [$updated->name, $updated->previousName, $updated->changedFields]);
         self::assertTrue($updated->isRenamed());
 
-        $ids = array_map(static fn ($column): string => $column->getId(), $board->getColumns()->toArray());
+        $ids = array_map(static fn (BoardColumn $column): string => $column->getId(), $board->getColumns()->toArray());
         $columns->reorder($board, $ids, $this->owner);
         self::assertCount(2, $this->events, 'the same order');
         $columns->reorder($board, [$ids[3], $ids[0], $ids[1], $ids[2]], $this->owner);
@@ -216,7 +217,7 @@ final class BeaconHooksTest extends FunctionalTestCase
     {
         $board = $this->board('Import', ['To do', 'Done']);
         $this->listen(TaskBoardEvents::COLUMN_CREATED);
-        $this->dispatcher()->addListener(TaskBoardEvents::COLUMN_CREATED, static function (ColumnCreatedEvent $event): void {
+        $this->dispatcher()->addListener(TaskBoardEvents::COLUMN_CREATED, static function (ColumnCreatedEvent $event): never {
             throw new RuntimeException('host listener ' . $event->name);
         });
 

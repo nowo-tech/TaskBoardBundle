@@ -64,7 +64,7 @@ final class KeyCollation
     public static function warnAboutPartialVersion(Connection $connection, ?LoggerInterface $logger): void
     {
         $platform = $connection->getDatabasePlatform();
-        if ($logger === null || !$platform instanceof AbstractMySQLPlatform || $platform instanceof MariaDBPlatform) {
+        if (!$logger instanceof LoggerInterface || !$platform instanceof AbstractMySQLPlatform || $platform instanceof MariaDBPlatform) {
             return;
         }
         $version = self::configuredVersion($connection);

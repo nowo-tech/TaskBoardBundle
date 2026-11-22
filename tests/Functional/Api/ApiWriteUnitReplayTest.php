@@ -131,7 +131,7 @@ final class ApiWriteUnitReplayTest extends ApiTestCase
     {
         $task       = $this->task($this->board, 'With a file');
         $em         = $this->em;
-        $dispatcher = static::getContainer()->get('event_dispatcher');
+        $dispatcher = self::getContainer()->get('event_dispatcher');
         self::assertInstanceOf(EventDispatcherInterface::class, $dispatcher);
         $dispatcher->addListener(KernelEvents::CONTROLLER_ARGUMENTS, static function (ControllerArgumentsEvent $event) use ($em, $firstInRolledBackTransaction): void {
             $controller = $event->getController();

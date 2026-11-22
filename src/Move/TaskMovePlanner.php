@@ -168,9 +168,9 @@ final readonly class TaskMovePlanner
             syncDetached: $synced,
             reimportKeys: $counts['reimport'],
             numberChanges: $number,
+            fingerprint: hash('sha256', json_encode($facts, JSON_THROW_ON_ERROR)),
             importedFields: $fields,
             snapshot: $snapshot,
-            fingerprint: hash('sha256', json_encode($facts, JSON_THROW_ON_ERROR)),
         );
     }
 
@@ -312,7 +312,7 @@ final readonly class TaskMovePlanner
             ->where('IDENTITY(v.task) IN (:ids)')->setParameter('ids', $ids)
             ->orderBy('f.name')->getQuery()->getSingleColumnResult();
 
-        return array_values(array_map('strval', $names));
+        return array_values(array_map(strval(...), $names));
     }
 
     /**

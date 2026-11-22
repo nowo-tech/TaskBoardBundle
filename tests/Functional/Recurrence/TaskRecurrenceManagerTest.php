@@ -240,7 +240,7 @@ final class TaskRecurrenceManagerTest extends CopyTestCase
         $series              = $this->manager()->create($task, $this->monthly(), $this->owner);
         $this->quota()->deny = [TaskBoardQuotaCheckEvent::ACTION_TASK_CREATE];
 
-        $this->assertRefused('quota', fn () => $this->manager()->createOccurrence($series, 'date:2026-12-01'));
+        $this->assertRefused('quota', fn (): ?\Nowo\TaskBoardBundle\Entity\Task => $this->manager()->createOccurrence($series, 'date:2026-12-01'));
         self::assertTrue($this->em->isOpen(), 'audit IC-I3: the refusal comes before the transaction');
         self::assertCount(1, $this->quota()->asked, 'asked once');
         $this->manager()->block($series);

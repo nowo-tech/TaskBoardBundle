@@ -174,7 +174,7 @@ final class ApiReadMatrixTest extends ApiTestCase
     {
         ApiTestHost::$planAllows = false;
         $this->issueToken();
-        foreach ($this->endpoints() as $name => $path) {
+        foreach ($this->endpoints() as $path) {
             $this->get($path);
             $this->assertRefused(403, 'PLAN_001');
         }
