@@ -201,6 +201,7 @@ jobs:
         ports:
           - 3306:3306
         options: >-
+          --tmpfs /var/lib/mysql
           --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
           --health-interval=5s
           --health-timeout=3s
@@ -220,6 +221,14 @@ jobs:
 
       - name: Install dependencies (Symfony 7.4)
         run: bash .github/ci/composer-install.sh 7.4 '^2.10'
+
+      # CI speed: the server is a throwaway. Its data directory is on tmpfs (service option above) and these
+      # settings drop the per-commit fsync, so the per-test schema drop/create (tests/Functional/FunctionalTestCase)
+      # no longer waits on the runner's disk. Locking, isolation levels and deadlock behaviour are unchanged.
+      - name: Relax durability on the throwaway MySQL (no change to locking or isolation)
+        run: |
+          CID=$(docker ps -q --filter "ancestor=mysql:8.4")
+          docker exec "$CID" mysql -h127.0.0.1 -uroot -proot -e "SET GLOBAL innodb_flush_log_at_trx_commit=0; SET GLOBAL sync_binlog=0;"
 
       - name: Run the functional suite against MySQL
         env:
@@ -245,6 +254,7 @@ jobs:
         ports:
           - 3306:3306
         options: >-
+          --tmpfs /var/lib/mysql
           --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
           --health-interval=5s
           --health-timeout=3s
@@ -264,6 +274,14 @@ jobs:
 
       - name: Install dependencies (Symfony 7.4)
         run: bash .github/ci/composer-install.sh 7.4 '^2.10'
+
+      # CI speed: the server is a throwaway. Its data directory is on tmpfs (service option above) and these
+      # settings drop the per-commit fsync, so the per-test schema drop/create (tests/Functional/FunctionalTestCase)
+      # no longer waits on the runner's disk. Locking, isolation levels and deadlock behaviour are unchanged.
+      - name: Relax durability on the throwaway MySQL (no change to locking or isolation)
+        run: |
+          CID=$(docker ps -q --filter "ancestor=mysql:9.7")
+          docker exec "$CID" mysql -h127.0.0.1 -uroot -proot -e "SET GLOBAL innodb_flush_log_at_trx_commit=0; SET GLOBAL sync_binlog=0;"
 
       - name: Run the functional suite against MySQL 9
         env:
