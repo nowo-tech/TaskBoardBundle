@@ -11,8 +11,12 @@ use Nowo\TaskBoardBundle\Form\ConnectionLinkFormType;
 use Nowo\TaskBoardBundle\Form\TaskImportFormType;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
+use RegexIterator;
 use Symfony\Component\Form\Extension\Validator\ValidatorExtension;
 use Symfony\Component\Form\FormFactoryInterface;
+use Symfony\Component\Form\FormInterface;
 use Symfony\Component\Form\Forms;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\Translation\Loader\YamlFileLoader;
@@ -22,11 +26,12 @@ use Symfony\Component\Yaml\Yaml;
 
 use function dirname;
 use function is_array;
+use function sprintf;
 
 /**
  * Symfony translates constraint messages (`message:`, `mimeTypesMessage:` ...) in the `validators` domain, whatever
  * `translation_domain` the form declares. A dotted key that lives only in `NowoTaskBoardBundle.<locale>.yaml` would reach
- * the user as raw text. (`buildViolation(...)->setTranslationDomain(...)` and `invalid_message` name their own domain.)
+ * the user as raw text. (`buildViolation(...)->setTranslationDomain(...)` and `invalid_message` name their own domain.).
  */
 #[CoversNothing]
 final class ConstraintMessagesTest extends TestCase
@@ -36,7 +41,7 @@ final class ConstraintMessagesTest extends TestCase
     /**
      * @return list<string>
      */
-    private static function shippedLocales(): array
+    private function shippedLocales(): array
     {
         $locales = [];
         foreach (glob(dirname(__DIR__, 3) . self::TRANSLATIONS . '/NowoTaskBoardBundle.*.yaml') ?: [] as $file) {
@@ -56,7 +61,7 @@ final class ConstraintMessagesTest extends TestCase
     public static function dottedConstraintMessages(): array
     {
         $found = [];
-        $files = new \RegexIterator(new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(dirname(__DIR__, 3) . '/src')), '/\.php$/');
+        $files = new RegexIterator(new RecursiveIteratorIterator(new RecursiveDirectoryIterator(dirname(__DIR__, 3) . '/src')), '/\.php$/');
         foreach ($files as $file) {
             // Controllers name their own flash / JSON `message:` payloads: they are not constraint options.
             if (str_contains((string) $file, '/src/Controller/')) {
@@ -77,7 +82,7 @@ final class ConstraintMessagesTest extends TestCase
         self::assertContains('task_board.import.form.file_invalid', $messages);
         self::assertContains('task_board.sync.browser.pick_list', $messages);
 
-        $locales = self::shippedLocales();
+        $locales = $this->shippedLocales();
         self::assertCount(7, $locales);
         foreach ($locales as $locale) {
             $file = dirname(__DIR__, 3) . self::TRANSLATIONS . '/validators.' . $locale . '.yaml';
@@ -97,7 +102,7 @@ final class ConstraintMessagesTest extends TestCase
         file_put_contents($tmp, "<?php echo 1;\n");
 
         try {
-            foreach (self::shippedLocales() as $locale) {
+            foreach ($this->shippedLocales() as $locale) {
                 $factory = $this->factory($locale);
 
                 $import = $factory->create(TaskImportFormType::class, new TaskImportFormData());
@@ -121,7 +126,7 @@ final class ConstraintMessagesTest extends TestCase
     /**
      * @return list<string>
      */
-    private function messages(\Symfony\Component\Form\FormInterface $form): array
+    private function messages(FormInterface $form): array
     {
         $out = [];
         foreach ($form->getErrors(true) as $error) {
