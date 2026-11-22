@@ -1,7 +1,8 @@
 {#
     Since 2.23.0 (Beacon spec 242): the viewer's open questions as a dashboard component —
     {{ include('@NowoTaskBoardBundle/manage/_my_questions.html.twig', {limit: 5}) }}. Variables: limit (default 5), tab
-    (to_answer | asked, default to_answer). Renders nothing with task_questions.enabled: false.
+    (to_answer | asked, default to_answer). Renders nothing with task_questions.enabled: false. 2.30: an empty list is
+    UiKit's `empty` (one sentence).
 #}
 {% set _b = 'NowoTaskBoardBundle' %}
 {% if nowo_task_board_questions_enabled() %}
@@ -15,7 +16,8 @@
                 <li class="nowo-task-my-questions__item"><a href="{{ path(nowo_task_board_route('task'), {taskId: question.task.id, _fragment: 'nowo-task-question-' ~ question.id}) }}">{{ question.text }}</a> <span class="{{ nowo_ui_class('muted', _b) }}">{{ question.task.title }}{% if question.dueOn %} · <time datetime="{{ question.dueOn|date('Y-m-d') }}">{{ question.dueOn|date('Y-m-d') }}</time>{% endif %}</span></li>
                 {% if loop.last %}</ul>{% endif %}
             {% else %}
-                <p class="{{ nowo_ui_class('muted', _b) }}">{{ ('task_board.question.mine.empty.' ~ _tab)|trans({}, _b) }}</p>
+                {# 2.30: UiKit `empty`, one sentence (no bordered paragraph, no default second line). #}
+                {{ include(nowo_ui_partial('empty', _b), {empty: {title: null, message: ('task_board.question.mine.empty.' ~ _tab)|trans({}, _b), action: null}, bundle: _b, region: 'empty'}, false) }}
             {% endfor %}
             <a class="{{ nowo_ui_class('btn_sm', _b) }} {{ nowo_ui_class('btn_link', _b) }}" href="{{ path(nowo_task_board_route('my_questions'), _tab == 'asked' ? {tab: 'asked'} : {}) }}">{{ 'task_board.question.mine.see_all'|trans({}, _b) }}</a>
         </div>

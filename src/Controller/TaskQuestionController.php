@@ -215,7 +215,7 @@ final class TaskQuestionController extends AbstractController
             ],
             array_slice($rows, ($page - 1) * $perPage, $perPage),
             pagination: $total > 0 ? Pagination::fromTotal($total, $page, $perPage, Pagination::ALLOWED_PER_PAGE, $this->perPage, $route, ($tab === TaskQuestionView::TAB_ASKED ? ['tab' => $tab] : []) + ['per_page' => (string) $perPage], $params) : null,
-            empty: new EmptyState(TaskBoardPages::label('task_board.question.mine.empty.' . $tab)),
+            empty: new EmptyState(message: TaskBoardPages::label('task_board.question.mine.empty.' . $tab)),
             caption: TaskBoardPages::label('task_board.question.mine.title'),
             bundle: TaskBoardPages::BUNDLE,
             layout: $twig instanceof Environment ? $this->pages->layout($twig) : null,

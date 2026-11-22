@@ -246,6 +246,12 @@ final class TaskBoardExtensionTest extends TestCase
 
         self::assertNotEmpty($container->getExtensionConfig('framework'));
         self::assertNotEmpty($container->getExtensionConfig('doctrine'));
+        // DoctrineBundle 3.4 deprecates the mapping `alias`: no prepended mapping carries one.
+        foreach ($container->getExtensionConfig('doctrine') as $config) {
+            foreach ($config['orm']['mappings'] ?? [] as $mapping) {
+                self::assertArrayNotHasKey('alias', $mapping);
+            }
+        }
     }
 
     public function testPrependNoOpWithoutOptionalExtensions(): void

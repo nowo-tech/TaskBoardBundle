@@ -1994,7 +1994,7 @@ tenants the resolver opens to the viewer by key count; every row needs `canViewT
 A dashboard includes the same list:
 
 ```twig
-{{ include('@NowoTaskBoardBundle/manage/_my_questions.html.twig', {limit: 5}) }}   {# tab: 'asked' for the other list #}
+{{ include('@NowoTaskBoardBundle/manage/_my_questions.html.twig', {limit: 5}) }}   {# tab: 'asked' for the other list; an empty list is UiKit's `empty` (one sentence), on the page and in the component #}
 ```
 
 Twig functions: `nowo_task_board_questions_enabled()`, `nowo_task_board_questions(task)`,
