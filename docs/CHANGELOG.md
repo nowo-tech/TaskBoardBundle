@@ -128,6 +128,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- My open questions: the empty list is one sentence through UiKit's `empty` partial. The page passed the sentence as the empty state's *title*, so UiKit printed its default "No items found." as a second line under it; it is now the message, alone. The dashboard component (`manage/_my_questions.html.twig`) renders its empty list through the same partial instead of a muted paragraph. Texts are unchanged.
+
 ## [2.29.1] - 2026-11-21
 
 ### Fixed

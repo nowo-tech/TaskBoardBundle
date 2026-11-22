@@ -205,6 +205,11 @@ final class TaskQuestionPagesTest extends QuestionTestCase
         $crawler = $this->client->request('GET', '/tools/task-board/questions?tab=asked&per_page=7&page=0');
         self::assertResponseIsSuccessful();
         self::assertCount(0, $crawler->filter('[data-testid="nowo-task-my-question-row"]'));
+        // 2.30: the empty list is UiKit's `empty`: one sentence, no default second line.
+        self::assertCount(1, $crawler->filter('.nowo-ui-empty__message'));
+        self::assertSame('None of your questions is waiting for an answer.', $crawler->filter('.nowo-ui-empty__message')->text());
+        self::assertCount(0, $crawler->filter('.nowo-ui-empty__title'));
+        self::assertStringNotContainsString('No items found', (string) $this->client->getResponse()->getContent());
 
         $this->login($this->owner);
         $crawler = $this->client->request('GET', '/tools/task-board/questions?tab=asked');

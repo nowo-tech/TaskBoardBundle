@@ -151,6 +151,8 @@ final class TaskQuestionPortsTest extends QuestionTestCase
         self::assertStringContainsString('nowo-task-question-' . $question->getId(), $html);
         $html = $twig->render('@NowoTaskBoardBundle/manage/_my_questions.html.twig', ['tab' => 'asked']);
         self::assertStringContainsString('None of your questions is waiting for an answer.', $html);
+        self::assertStringContainsString('nowo-ui-empty__message', $html, 'The dashboard component empty list is UiKit\'s `empty`.');
+        self::assertStringNotContainsString('No items found', $html);
         self::assertInstanceOf(TaskQuestion::class, $this->manager()->find($question->getId()));
     }
 
