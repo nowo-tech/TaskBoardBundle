@@ -15,6 +15,7 @@ use Nowo\TaskBoardBundle\Dto\TaskLinkFormData;
 use Nowo\TaskBoardBundle\Dto\TaskMemberFormData;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
 use Nowo\TaskBoardBundle\Enum\TaskDependencyType;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
@@ -43,6 +44,8 @@ use function array_map;
 use function array_slice;
 use function count;
 use function ksort;
+use function range;
+use function str_repeat;
 
 /**
  * Since 2.29.0 (DDD-host checklist B1 / B7 / B8): the id-based host ports on the functional kernel: a host passes ids and
@@ -132,6 +135,7 @@ final class HostPortsTest extends FunctionalTestCase
             self::fail('A stale revision must be refused.');
         } catch (TaskChangedException $changed) {
             self::assertSame($view->revision + 1, $changed->currentRevision);
+            self::assertSame('CONFLICT_001', $changed::CODE, 'audit ZD-I5: the house conflict code');
         }
         try {
             $this->commands->moveTask($this->ownerRef, $view->id, null, 0, $view->revision);
@@ -270,6 +274,58 @@ final class HostPortsTest extends FunctionalTestCase
             }
         }
         self::assertSame(1, $this->query->countTasks(TaskCriteria::forBoards([$board->getId()])));
+    }
+
+    /**
+     * Audit ZD-L1: the port applies the forms' TaskConstraints, so a host passing user input cannot store what the forms
+     * refuse (a `javascript:` link, a colour that leaves `style="…"`, more than 20 tags, over-long texts).
+     */
+    public function testTheFormsConstraintsAreAppliedBeforeAnyWrite(): void
+    {
+        $board = $this->board();
+        $task  = $this->commands->createTask($this->ownerRef, $board->getId(), new TaskFormData('Work', color: '#AABBCC', tags: ['a', 'b']));
+        $tags  = array_map(static fn (int $i): string => 'tag' . $i, range(1, 21));
+        $calls = [
+            'javascript: link'  => fn (): string => $this->commands->addLink($this->ownerRef, $task->id, new TaskLinkFormData(url: 'javascript:alert(1)')),
+            'data: link'        => fn (): string => $this->commands->addLink($this->ownerRef, $task->id, new TaskLinkFormData(url: 'data:text/html,<b>x</b>')),
+            'long link label'   => fn (): string => $this->commands->addLink($this->ownerRef, $task->id, new TaskLinkFormData(url: 'https://example.com', label: str_repeat('l', 256))),
+            'long external id'  => fn (): string => $this->commands->addLink($this->ownerRef, $task->id, new TaskLinkFormData(url: 'https://example.com', externalId: str_repeat('e', 129))),
+            'colour on create'  => fn (): TaskView => $this->commands->createTask($this->ownerRef, $board->getId(), new TaskFormData('Red', color: 'red;')),
+            'colour on update'  => fn (): TaskView => $this->commands->updateTask($this->ownerRef, $task->id, new TaskFormData('Work', color: '#fff;background:url(x)')),
+            '21 tags'           => fn (): TaskView => $this->commands->updateTask($this->ownerRef, $task->id, new TaskFormData('Work', tags: $tags)),
+            'long tag'          => fn (): TaskView => $this->commands->createTask($this->ownerRef, $board->getId(), new TaskFormData('Tagged', tags: [str_repeat('t', 65)])),
+            'blank tag'         => fn (): TaskView => $this->commands->createTask($this->ownerRef, $board->getId(), new TaskFormData('Tagged', tags: [''])),
+            'non-string tag'    => fn (): TaskView => $this->commands->createTask($this->ownerRef, $board->getId(), new TaskFormData('Tagged', tags: [42])), // @phpstan-ignore argument.type
+            'long comment'      => fn (): string => $this->commands->addComment($this->ownerRef, $task->id, str_repeat('c', 5001)),
+            'long time note'    => fn (): string => $this->commands->logTime($this->ownerRef, $task->id, 30, new DateTimeImmutable(), str_repeat('n', 513)),
+            'long object label' => fn (): string => $this->commands->addHostObjectLink($this->ownerRef, $task->id, 'invoice', 'INV-9', str_repeat('l', 256)),
+            'column colour'     => fn (): string => $this->commands->addColumn($this->ownerRef, $board->getId(), new BoardColumnFormData('Doing', color: 'red;')),
+        ];
+        foreach ($calls as $name => $call) {
+            try {
+                $call();
+                self::fail('"' . $name . '" must be refused.');
+            } catch (InvalidArgumentException) {
+            }
+        }
+
+        $this->em->clear();
+        $loaded = $this->em->find(Task::class, $task->id);
+        self::assertInstanceOf(Task::class, $loaded);
+        self::assertCount(0, $loaded->getLinks(), 'no link stored');
+        self::assertSame(0, $this->em->getRepository(TaskComment::class)->count(['task' => $task->id]), 'no comment stored');
+        self::assertSame('#aabbcc', $loaded->getColor(), 'stored lower-case, unchanged');
+        self::assertSame(['a', 'b'], $loaded->getTags());
+        self::assertSame(1, $this->query->countTasks(TaskCriteria::forBoards([$board->getId()])));
+
+        // What the forms accept still passes: 20 tags, an http link, the longest texts.
+        $this->commands->updateTask($this->ownerRef, $task->id, new TaskFormData('Work', color: '#00ff00', tags: array_slice($tags, 0, 20)));
+        $this->commands->addLink($this->ownerRef, $task->id, new TaskLinkFormData(url: 'http://intranet/spec', label: str_repeat('l', 255), externalId: str_repeat('e', 128)));
+        $this->commands->addComment($this->ownerRef, $task->id, str_repeat('c', 5000));
+        $this->commands->logTime($this->ownerRef, $task->id, 30, new DateTimeImmutable(), str_repeat('n', 512));
+        $this->commands->addColumn($this->ownerRef, $board->getId(), new BoardColumnFormData('Doing', color: '#123'));
+        $this->em->clear();
+        self::assertCount(20, $this->em->find(Task::class, $task->id)?->getTags() ?? []);
     }
 
     public function testColumnsAreAddedAtAPositionAndReordered(): void

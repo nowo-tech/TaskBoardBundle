@@ -258,6 +258,7 @@ services:
         arguments:
             $managerRegistry: '@?doctrine'
             $rowLock: '@?Nowo\TaskBoardBundle\Service\OrderedRowLockInterface'
+            $validator: '@?validator'
     Nowo\TaskBoardBundle\Service\TaskCommandsInterface:
         alias: Nowo\TaskBoardBundle\Service\TaskCommands
         public: true

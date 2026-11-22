@@ -839,12 +839,16 @@ copies of the user's detached time entries, in batches; idempotent).
   commits and dropped when it rolls back.
 - **Concurrency.** A task write locks the task's row first (after the column it enters, in the bundle's fixed lock
   order). Pass the `TaskView::$revision` you read as `$expectedRevision` to `updateTask` / `moveTask`: a task changed
-  meanwhile throws `TaskChangedException` (map it to **409 Conflict**, with `currentRevision`) and nothing is written.
+  meanwhile throws `TaskChangedException` (map it to **409 Conflict** with `X-Conflict-Code: TaskChangedException::CODE`,
+  i.e. `CONFLICT_001`, and `currentRevision`) and nothing is written.
   A lock conflict (deadlock, lock wait timeout) throws `Nowo\TransactionContract\TransientStorageFailure`: nothing was
   written, retry (an HTTP edge answers 503 with `Retry-After`).
 - The other errors are the pages' ones: `TaskReopenRefusedException` (your active-task limit),
   `ColumnTransitionRefusedException`, `UnassignableUserException`, `TaskLinkedToProviderException`, and
-  `InvalidArgumentException` for invalid input (checked before anything is written).
+  `InvalidArgumentException` for invalid input (checked before anything is written). Since 2.30.2 the input goes through
+  the same `Validation\TaskConstraints` as the page forms: link URLs http(s) only, task colour `#rrggbb`, column colour
+  hex, at most 20 tags of at most 64 characters, comment, time note, link label and external id lengths. Map it to
+  **422** at an HTTP edge, as the Task API does for its validation errors.
 
 **Access by id** (`TaskBoardAccessInterface`): `canAccess`, `canViewBoard`, `canEditBoard`, `canManageBoard`,
 `canViewTask`, `canEditTask`, `canTrackTime`, `filterBoardIds` (at most 500). An unknown user or id answers `false`.
