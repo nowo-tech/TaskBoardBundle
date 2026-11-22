@@ -13,6 +13,12 @@ use RuntimeException;
  */
 final class TaskChangedException extends RuntimeException
 {
+    /**
+     * Since 2.30.2 (audit ZD-I5): the house conflict code a host answers with (409, `X-Conflict-Code: CONFLICT_001`):
+     * nothing was written, a retry after reading the task again is safe.
+     */
+    public const CODE = 'CONFLICT_001';
+
     public function __construct(public readonly int $currentRevision)
     {
         parent::__construct('TaskBoard: the task changed meanwhile; read it again.');

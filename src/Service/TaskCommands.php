@@ -39,6 +39,9 @@ use Nowo\TaskBoardBundle\ValueObject\UserRef;
 use Nowo\TaskBoardBundle\View\TaskView;
 use Nowo\TaskBoardBundle\View\Views;
 use Nowo\TransactionContract\TransientStorageFailure;
+use Symfony\Component\Validator\Constraint;
+use Symfony\Component\Validator\Validation;
+use Symfony\Component\Validator\Validator\ValidatorInterface;
 use Throwable;
 
 use function array_diff;
@@ -47,6 +50,7 @@ use function array_unique;
 use function array_values;
 use function count;
 use function is_scalar;
+use function is_string;
 use function max;
 use function mb_strlen;
 use function min;
@@ -59,11 +63,17 @@ use function trim;
  *
  * Stateless (FrankenPHP worker mode with kernel reset off): every dependency is a stateless service or one the bundle
  * resets at each boundary; a failed unit resets a closed manager through the registry and reloads the task it touched.
+ *
+ * Since 2.30.2 (audit ZD-L1): the input goes through the same {@see TaskConstraints} as the page forms (http(s) link
+ * URLs, hex task and column colours, at most {@see TaskConstraints::TAGS_MAX} tags, comment / note / label / external id
+ * lengths) before anything is written; a value the forms refuse is an {@see InvalidArgumentException}.
  */
 final readonly class TaskCommands implements TaskCommandsInterface
 {
     /** Rows per batch of {@see self::clearTimeEntrySnapshotsForUser()}. */
     public const BATCH = 500;
+
+    private ValidatorInterface $validator;
 
     public function __construct(
         private EntityManagerInterface $entityManager,
@@ -85,7 +95,10 @@ final readonly class TaskCommands implements TaskCommandsInterface
         private TaskBoardUsers $userReferences = new TaskBoardUsers(),
         // The fixed lock order of the bundle (columns, then tasks): a column a write enters is locked before the task.
         private ?OrderedRowLockInterface $rowLock = null,
+        // Since 2.30.2 (audit ZD-L1): checks the input against TaskConstraints; a standalone validator when none is given.
+        ?ValidatorInterface $validator = null,
     ) {
+        $this->validator = $validator ?? Validation::createValidator();
     }
 
     public function createTask(UserRef $creator, string $boardId, TaskFormData $data, ?string $parentId = null, bool $completed = false): TaskView
@@ -102,7 +115,7 @@ final readonly class TaskCommands implements TaskCommandsInterface
                 throw new InvalidArgumentException('TaskBoard: the parent task is on another board.');
             }
         }
-        $this->assertTitle($data->title);
+        $this->assertTaskData($data);
         // The host's plan (QUOTA_CHECK), as the board page asks before a new task.
         $plan = $this->quota->refusal(TaskBoardQuotaCheckEvent::ACTION_TASK_CREATE, $board->getTenantKey(), $board, 1, $actor);
         if ($plan !== null) {
@@ -127,7 +140,7 @@ final readonly class TaskCommands implements TaskCommandsInterface
     {
         $user = $this->actor($actor);
         $task = $this->editableTask($user, $taskId);
-        $this->assertTitle($data->title);
+        $this->assertTaskData($data);
 
         return $this->unit(function () use ($task, $data, $user, $expectedRevision): TaskView {
             $this->lockColumn($data->columnId !== $task->getColumn()?->getId() ? $data->columnId : null);
@@ -237,6 +250,7 @@ final readonly class TaskCommands implements TaskCommandsInterface
         if (trim($body) === '') {
             throw new InvalidArgumentException('TaskBoard: a comment cannot be blank.');
         }
+        $this->check($body, TaskConstraints::commentBody(), 'TaskBoard: a comment is too long.');
 
         // @igor-ignore - Call on a stateless bundle service / a Doctrine entity loaded for this call; nothing is kept on the service.
         return $this->unit(fn (): string => $this->comments->add($task, $user, $body, array_values($mentionIds))->getId(), $task);
@@ -249,6 +263,10 @@ final readonly class TaskCommands implements TaskCommandsInterface
         if (trim($data->url) === '' || mb_strlen($data->url) > TaskConstraints::URL_MAX) {
             throw new InvalidArgumentException('TaskBoard: a link needs a URL of at most 2048 characters.');
         }
+        // Audit ZD-L1: http(s) only, as the link form (no javascript:, data:, vbscript: … stored for a host template).
+        $this->check($data->url, TaskConstraints::linkUrl(), 'TaskBoard: a link URL must be an http or https URL.');
+        $this->check($data->label, TaskConstraints::linkLabel(), 'TaskBoard: a link label has at most 255 characters.');
+        $this->check($data->externalId, TaskConstraints::linkExternalId(), 'TaskBoard: a link external id has at most 128 characters.');
 
         return $this->unit(fn (): string => $this->links->attach($task, $data, $user)->getId(), $task);
     }
@@ -260,6 +278,7 @@ final readonly class TaskCommands implements TaskCommandsInterface
         if (trim($objectType) === '' || trim($objectId) === '') {
             throw new InvalidArgumentException('TaskBoard: a host object link needs a type and an id.');
         }
+        $this->check($label, TaskConstraints::linkLabel(), 'TaskBoard: a link label has at most 255 characters.');
 
         return $this->unit(function () use ($task, $objectType, $objectId, $user, $label): string {
             // The task's row locked: two concurrent links of the same object never add two rows.
@@ -309,6 +328,7 @@ final readonly class TaskCommands implements TaskCommandsInterface
         if ($minutes < 1 || $minutes > TaskConstraints::MAX_MINUTES) {
             throw new InvalidArgumentException('TaskBoard: minutes must be between 1 and 10080.');
         }
+        $this->check($note, TaskConstraints::timeNote(), 'TaskBoard: a time note has at most 512 characters.');
 
         return $this->unit(fn (): string => $this->time->log($task, $actor, $minutes, $loggedAt, $note)->getId(), $task);
     }
@@ -320,6 +340,7 @@ final readonly class TaskCommands implements TaskCommandsInterface
         if (trim($data->name) === '' || mb_strlen($data->name) > TaskConstraints::COLUMN_NAME_MAX) {
             throw new InvalidArgumentException('TaskBoard: a column needs a name of 1 to 128 characters.');
         }
+        $this->check($data->color, TaskConstraints::columnColor(), 'TaskBoard: a column colour is a hex colour (#rgb, #rgba, #rrggbb or #rrggbbaa).');
 
         return $this->unit(function () use ($board, $data, $user, $position): string {
             // @igor-ignore - Call on a stateless bundle service / a Doctrine entity loaded for this call; nothing is kept on the service.
@@ -479,12 +500,40 @@ final readonly class TaskCommands implements TaskCommandsInterface
     }
 
     /**
+     * The task form's rules (audit ZD-L1): title, `#rrggbb` colour, at most {@see TaskConstraints::TAGS_MAX} tags of at
+     * most {@see TaskConstraints::TAG_MAX} characters.
+     *
      * @throws InvalidArgumentException
      */
-    private function assertTitle(string $title): void
+    private function assertTaskData(TaskFormData $data): void
     {
-        if (trim($title) === '' || mb_strlen($title) > TaskConstraints::TITLE_MAX) {
+        if (trim($data->title) === '' || mb_strlen($data->title) > TaskConstraints::TITLE_MAX) {
             throw new InvalidArgumentException('TaskBoard: a task needs a title of 1 to 255 characters.');
+        }
+        $this->check($data->title, TaskConstraints::taskTitle(), 'TaskBoard: a task needs a title of 1 to 255 characters.');
+        $this->check($data->color, TaskConstraints::taskColor(), 'TaskBoard: a task colour is #rrggbb.');
+        if (count($data->tags) > TaskConstraints::TAGS_MAX) {
+            throw new InvalidArgumentException('TaskBoard: a task has at most 20 tags.');
+        }
+        foreach ($data->tags as $tag) {
+            if (!is_string($tag)) {
+                throw new InvalidArgumentException('TaskBoard: a tag is a string of 1 to 64 characters.');
+            }
+            $this->check($tag, TaskConstraints::tagName(), 'TaskBoard: a tag is a string of 1 to 64 characters.');
+        }
+    }
+
+    /**
+     * The value against the forms' constraints; any violation is the given refusal.
+     *
+     * @param list<Constraint> $constraints
+     *
+     * @throws InvalidArgumentException
+     */
+    private function check(mixed $value, array $constraints, string $message): void
+    {
+        if ($this->validator->validate($value, $constraints)->count() > 0) {
+            throw new InvalidArgumentException($message);
         }
     }
 

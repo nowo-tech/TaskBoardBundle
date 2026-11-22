@@ -130,6 +130,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `TaskChangedException::CODE` (`CONFLICT_001`): the conflict code a host answers with (409, `X-Conflict-Code`) when a host-port write finds the task changed (audit ZD-I5).
+
+### Fixed
+
+- Security (audit ZD-L1, Low): `TaskCommandsInterface` now checks its input with the same `Validation\TaskConstraints` as the page forms before anything is written: `addLink()` refuses URLs that are not http(s) (`javascript:`, `data:` …) and over-long labels / external ids, `createTask()` / `updateTask()` refuse a colour that is not `#rrggbb`, more than 20 tags and tags over 64 characters, `addComment()` a body over the comment limit, `logTime()` a note over 512 characters, `addHostObjectLink()` a label over 255 characters, and `addColumn()` a colour that is not hex. A refused value is an `InvalidArgumentException`, as the other invalid input of the port. Before, a host passing user input could store values the forms refuse (the bundle's own pages escaped or neutralised them; host templates, the Task API task output, the change history and events got them raw). Affected: 2.29.0 to 2.30.1.
+
 ## [2.30.1] - 2026-11-22
 
 ### Fixed
