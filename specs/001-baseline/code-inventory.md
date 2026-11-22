@@ -2,7 +2,7 @@
 
 **Baseline spec**: [`spec.md`](spec.md)  
 **Package**: `nowo-tech/task-board-bundle`  
-**Last audited**: 2026-11-16 (2.20.0: every tracked file of `src/`, releases 1.10–2.20)
+**Last audited**: 2026-11-22 (v2.30.0: every tracked file of `src/`, releases 1.10–2.30; 2026-11-16: 2.20.0)
 
 Production scope excludes Vitest sources (`*.test.ts`).
 
@@ -237,10 +237,7 @@ Files added by the 1.27.0 stack. The coverage summary below is the 2026-11-03 au
 | `Resources/assets/src/add-task-modal-controller.ts` | Modal Stimulus controllers | FR-UI-007 |
 | `Resources/assets/src/board-controller.ts` | Frontend assets | FR-UI-002 |
 | `Resources/assets/src/css-vars.ts` | CSP-safe CSS variables from data attributes | FR-UI-008 |
-| `Resources/assets/src/dialog-controller.ts` | Native <dialog> modals (since 1.14) | FR-UI-007 |
 | `Resources/assets/src/edit-column-modal-controller.ts` | Modal Stimulus controllers | FR-UI-007 |
-| `Resources/assets/src/filter-collapse-controller.ts` | Foldable filter card (since 1.17) | FR-UI-004 |
-| `Resources/assets/src/filter-collapse-utils.ts` | Foldable filter card (since 1.17) | FR-UI-004 |
 | `Resources/assets/src/gantt-controller.ts` | Frontend assets | FR-UI-003 |
 | `Resources/assets/src/gantt-scale.ts` | Gantt scales (since 1.15) | FR-UI-003, FR-GANTT-001 |
 | `Resources/assets/src/list-filter-controller.ts` | Frontend assets | FR-UI-004 |
@@ -248,13 +245,11 @@ Files added by the 1.27.0 stack. The coverage summary below is the 2026-11-03 au
 | `Resources/assets/src/list-sort-utils.ts` | List view sorting | FR-UI-004 |
 | `Resources/assets/src/mention-controller.ts` | @mention picker (since 1.16) | FR-UI-008, FR-COMMENT-002 |
 | `Resources/assets/src/mention-utils.ts` | @mention picker (since 1.16) | FR-UI-008, FR-COMMENT-002 |
-| `Resources/assets/src/modal-toggle.ts` | Native <dialog> modals (since 1.14) | FR-UI-007 |
 | `Resources/assets/src/option-filter-controller.ts` | Filterable option lists in dialogs | FR-UI-008 |
 | `Resources/assets/src/option-filter-utils.ts` | Filterable option lists in dialogs | FR-UI-008 |
 | `Resources/assets/src/picker-controller.ts` | Colour / icon picker (since 1.11) | FR-UI-008, FR-COLSET-001 |
 | `Resources/assets/src/storage.ts` | Safe localStorage access | FR-UI-008 |
 | `Resources/assets/src/subtask-tree-controller.ts` | Frontend assets | FR-UI-005 |
-| `Resources/assets/src/task-board.css` | Frontend assets | FR-UI-010 |
 | `Resources/assets/src/task-board.ts` | Frontend assets | FR-UI-001 |
 | `Resources/assets/src/task-links-modal-controller.ts` | Modal Stimulus controllers | FR-UI-007 |
 | `Resources/assets/src/task-members-modal-controller.ts` | Modal Stimulus controllers | FR-UI-007 |
@@ -275,8 +270,6 @@ Files added by the 1.27.0 stack. The coverage summary below is the 2026-11-03 au
 
 | Source file | Spec section | Requirement IDs |
 | --- | --- | --- |
-| `Resources/views/layout.html.twig` | Twig manage UI | FR-TPL-001 |
-| `Resources/views/layout_integrate_host.html.twig` | Bridge template for host layout integration (REQ-UI-001) | FR-TPL-001 |
 | `Resources/views/manage/_add_column_modal.html.twig` | Twig manage UI | FR-TPL-001 |
 | `Resources/views/manage/_add_task_modal.html.twig` | Twig manage UI | FR-TPL-001 |
 | `Resources/views/manage/_board_column.html.twig` | Twig manage UI | FR-TPL-001 |
@@ -286,11 +279,9 @@ Files added by the 1.27.0 stack. The coverage summary below is the 2026-11-03 au
 | `Resources/views/manage/_column_sets_dialogs.html.twig` | Column set dialogs (since 1.11) | FR-TPL-001, FR-COLSET-001 |
 | `Resources/views/manage/_disclosure.html.twig` | Twig manage UI | FR-TPL-001 |
 | `Resources/views/manage/_edit_column_modal.html.twig` | Twig manage UI | FR-TPL-001 |
-| `Resources/views/manage/_flashes.html.twig` | Twig manage UI | FR-TPL-001 |
 | `Resources/views/manage/_icon.html.twig` | Twig manage UI | FR-TPL-001 |
 | `Resources/views/manage/_import_help.html.twig` | Twig manage UI | FR-TPL-001 |
 | `Resources/views/manage/_inline_task_add.html.twig` | Twig manage UI | FR-TPL-001 |
-| `Resources/views/manage/_page_header.html.twig` | Twig manage UI | FR-TPL-001 |
 | `Resources/views/manage/_subtask_tree.html.twig` | Subtask tree (since 1.10) | FR-TPL-001, FR-TREE-001 |
 | `Resources/views/manage/_task_blocks.html.twig` | Twig manage UI | FR-TPL-001 |
 | `Resources/views/manage/_task_card.html.twig` | Twig manage UI | FR-TPL-001 |
@@ -318,7 +309,6 @@ Files added by the 1.27.0 stack. The coverage summary below is the 2026-11-03 au
 | `Resources/views/manage/list.html.twig` | Twig manage UI | FR-TPL-001 |
 | `Resources/views/manage/task.html.twig` | Twig manage UI | FR-TPL-001 |
 | `Resources/views/manage/task_panel.html.twig` | Task panel fragment for side drawers (since 1.11) | FR-TPL-001, FR-PANEL-001 |
-| `Resources/views/task_board/index.html.twig` | Twig manage UI | FR-TPL-001 |
 
 ## Config & translations
 
@@ -986,22 +976,166 @@ Grouped by feature; each row names the semantic requirement of [`spec.md`](spec.
 | `View/TaskBoardDefaultViewPolicyInterface.php` | FR-PORT-001 |
 | `View/TaskBoardDefaultViewResolverInterface.php` | FR-PORT-001 |
 
+## Additions 2.21-2.30 (locks, menus, API conflicts, questions, calendar sources, header search, host ports)
+
+Grouped by feature; each row names the semantic requirement of [`spec.md`](spec.md#additions-221230).
+
+| Source file | Requirement IDs |
+| --- | --- |
+| `Resources/config/services_questions.yaml` | FR-QUEST-001 |
+| `Question/Entity/TaskQuestion.php` | FR-QUEST-001 |
+| `Question/Entity/TaskQuestionAnswer.php` | FR-QUEST-001 |
+| `Question/Entity/TaskQuestionOption.php` | FR-QUEST-001 |
+| `Question/Entity/TaskQuestionRecipient.php` | FR-QUEST-001 |
+| `Resources/config/doctrine-xml/question/TaskQuestion.orm.xml` | FR-QUEST-001 |
+| `Resources/config/doctrine-xml/question/TaskQuestionAnswer.orm.xml` | FR-QUEST-001 |
+| `Resources/config/doctrine-xml/question/TaskQuestionOption.orm.xml` | FR-QUEST-001 |
+| `Resources/config/doctrine-xml/question/TaskQuestionRecipient.orm.xml` | FR-QUEST-001 |
+| `Question/DefaultTaskQuestionRecipientResolver.php` | FR-QUEST-001 |
+| `Question/TaskQuestionAnswerInput.php` | FR-QUEST-001 |
+| `Question/TaskQuestionAnswerSnapshot.php` | FR-QUEST-001 |
+| `Question/TaskQuestionChoiceMode.php` | FR-QUEST-001 |
+| `Question/TaskQuestionConflictException.php` | FR-QUEST-001 |
+| `Question/TaskQuestionDecisionPublisherInterface.php` | FR-QUEST-001 |
+| `Question/TaskQuestionExternalAnswerInterface.php` | FR-QUEST-001 |
+| `Question/TaskQuestionInput.php` | FR-QUEST-001 |
+| `Question/TaskQuestionManager.php` | FR-QUEST-001 |
+| `Question/TaskQuestionOptionInput.php` | FR-QUEST-001 |
+| `Question/TaskQuestionOptionSnapshot.php` | FR-QUEST-001 |
+| `Question/TaskQuestionPublication.php` | FR-QUEST-001 |
+| `Question/TaskQuestionQuery.php` | FR-QUEST-001 |
+| `Question/TaskQuestionRecipientCandidate.php` | FR-QUEST-001 |
+| `Question/TaskQuestionRecipientResolverInterface.php` | FR-QUEST-001 |
+| `Question/TaskQuestionRecipientSnapshot.php` | FR-QUEST-001 |
+| `Question/TaskQuestionRefusedException.php` | FR-QUEST-001 |
+| `Question/TaskQuestionSnapshot.php` | FR-QUEST-001 |
+| `Question/TaskQuestionState.php` | FR-QUEST-001 |
+| `Question/TaskQuestionView.php` | FR-QUEST-001 |
+| `Event/AbstractTaskQuestionEvent.php` | FR-QUEST-001 |
+| `Event/TaskQuestionAnsweredEvent.php` | FR-QUEST-001 |
+| `Event/TaskQuestionAskedEvent.php` | FR-QUEST-001 |
+| `Event/TaskQuestionWithdrawnEvent.php` | FR-QUEST-001 |
+| `Controller/TaskQuestionController.php` | FR-QUEST-002 |
+| `Dto/TaskQuestionAnswerFormData.php` | FR-QUEST-002 |
+| `Dto/TaskQuestionFormData.php` | FR-QUEST-002 |
+| `Dto/TaskQuestionWithdrawFormData.php` | FR-QUEST-002 |
+| `Form/TaskQuestionAnswerFormType.php` | FR-QUEST-002 |
+| `Form/TaskQuestionFormType.php` | FR-QUEST-002 |
+| `Form/TaskQuestionWithdrawFormType.php` | FR-QUEST-002 |
+| `Resources/assets/src/task-questions.ts` | FR-QUEST-002 |
+| `Resources/views/manage/_my_question_row.html.twig` | FR-QUEST-002 |
+| `Resources/views/manage/_my_questions.html.twig` | FR-QUEST-002 |
+| `Resources/views/manage/_task_question_card.html.twig` | FR-QUEST-002 |
+| `Resources/views/manage/_task_questions_section.html.twig` | FR-QUEST-002 |
+| `Resources/views/manage/my_questions.html.twig` | FR-QUEST-002 |
+| `Api/Controller/TaskApiQuestionController.php` | FR-QUEST-002 |
+| `Api/Operation/TaskApiQuestionOperations.php` | FR-QUEST-002 |
+| `Api/Security/TaskApiActors.php` | FR-API-004 |
+| `Api/Security/TaskApiCommitWatermark.php` | FR-API-004 |
+| `Api/Security/TaskApiConflictResponseFormatter.php` | FR-API-004 |
+| `Doctrine/LockConflictChain.php` | FR-API-004 |
+| `Service/OrderedRowLockInterface.php` | FR-LOCK-001 |
+| `Repository/DoctrineOrmOrderedRowLock.php` | FR-LOCK-001 |
+| `Controller/TaskMenuController.php` | FR-MENU-001 |
+| `Menu/TaskMenu.php` | FR-MENU-001 |
+| `Menu/TaskMenuBuilder.php` | FR-MENU-001 |
+| `Menu/TaskMenuContext.php` | FR-MENU-001 |
+| `Menu/TaskMenuOperation.php` | FR-MENU-001 |
+| `Menu/TaskTimerStart.php` | FR-MENU-001 |
+| `Menu/TaskTimerStarterInterface.php` | FR-MENU-001 |
+| `Twig/TaskMenuTwigExtension.php` | FR-MENU-001 |
+| `Text/ReservedAttributeStripper.php` | FR-MENU-001 |
+| `Resources/assets/src/column-collapse.ts` | FR-MENU-001 |
+| `Resources/assets/src/task-menu-shared.ts` | FR-MENU-001 |
+| `Resources/views/manage/_column_menu.html.twig` | FR-MENU-001 |
+| `Resources/views/manage/_focus_mode_toggle.html.twig` | FR-MENU-001 |
+| `Resources/views/manage/_task_menu.html.twig` | FR-MENU-001 |
+| `Resources/views/manage/_task_menu_shared.html.twig` | FR-MENU-001 |
+| `Bridge/TimeTrack/TimeTrackTaskTimerStarter.php` | FR-MENU-001 |
+| `Calendar/CalendarEvent.php` | FR-CAL-002 |
+| `Calendar/CalendarEventCollector.php` | FR-CAL-002 |
+| `Calendar/CalendarEventRange.php` | FR-CAL-002 |
+| `Calendar/CalendarEventReschedule.php` | FR-CAL-002 |
+| `Calendar/CalendarEventRescheduleResult.php` | FR-CAL-002 |
+| `Calendar/CalendarEventRescheduleStatus.php` | FR-CAL-002 |
+| `Calendar/CalendarEventReschedulerInterface.php` | FR-CAL-002 |
+| `Calendar/CalendarEventShown.php` | FR-CAL-002 |
+| `Calendar/CalendarEventSourceInterface.php` | FR-CAL-002 |
+| `Dto/TaskCalendarEventEntry.php` | FR-CAL-002 |
+| `Form/CalendarEventMoveFormType.php` | FR-CAL-002 |
+| `Resources/views/manage/_calendar_event.html.twig` | FR-CAL-002 |
+| `Resources/views/manage/_calendar_event_move_dialog.html.twig` | FR-CAL-002 |
+| `Resources/views/manage/_calendar_events.html.twig` | FR-CAL-002 |
+| `Bridge/SearchKit/BoardSearchDefinition.php` | FR-SRCH-010 |
+| `Bridge/SearchKit/TaskBoardSearchDefinition.php` | FR-SRCH-010 |
+| `Bridge/SearchKit/TaskSearchDefinition.php` | FR-SRCH-010 |
+| `Event/SearchScopeEvent.php` | FR-SRCH-010 |
+| `Security/BoardViewReach.php` | FR-SRCH-010 |
+| `Search/Header/BoardHeaderSearch.php` | FR-SRCH-010 |
+| `Search/Header/SearchBoardScope.php` | FR-SRCH-010 |
+| `Search/Header/SearchHit.php` | FR-SRCH-010 |
+| `Search/Header/SearchHitMapper.php` | FR-SRCH-010 |
+| `Search/Header/SearchHits.php` | FR-SRCH-010 |
+| `Search/Header/SearchTenants.php` | FR-SRCH-010 |
+| `Search/Header/SearchText.php` | FR-SRCH-010 |
+| `Search/Header/SearchViewer.php` | FR-SRCH-010 |
+| `Search/Header/SearchViewers.php` | FR-SRCH-010 |
+| `Search/Header/SearchableBoard.php` | FR-SRCH-010 |
+| `Search/Header/SearchableBoards.php` | FR-SRCH-010 |
+| `Search/Header/TaskHeaderSearch.php` | FR-SRCH-010 |
+| `Search/Header/TaskReference.php` | FR-SRCH-010 |
+| `Search/Header/TaskSearchExtras.php` | FR-SRCH-010 |
+| `Search/Header/TaskTextMatch.php` | FR-SRCH-010 |
+| `Search/Header/TaskTextMatchFunction.php` | FR-SRCH-010 |
+| `Doctrine/RolledBackHostRows.php` | FR-ORM-011 |
+| `Doctrine/TaskBoardHostFlushProbe.php` | FR-ORM-011 |
+| `Doctrine/HostCommitEventRelay.php` | FR-ORM-011 |
+| `Bridge/TimeTrack/TaskBoardTaskDirectory.php` | FR-TT-001 |
+| `Bridge/TimeTrack/TaskBoardTeamDirectory.php` | FR-TT-001 |
+| `Bridge/TimeTrack/TimeTrackScopeKeys.php` | FR-TT-001 |
+| `ValueObject/UserRef.php` | FR-ID-001 |
+| `Service/TaskCommandsInterface.php` | FR-ID-001 |
+| `Service/TaskCommands.php` | FR-ID-001 |
+| `Service/TaskBoardAccessInterface.php` | FR-ID-001 |
+| `Service/TaskBoardIdAccessChecker.php` | FR-ID-001 |
+| `Service/TaskBoardQueryInterface.php` | FR-ID-001 |
+| `Service/TaskBoardQuery.php` | FR-ID-001 |
+| `Service/TaskFlowStatsInterface.php` | FR-ID-001 |
+| `Service/TaskFlowStats.php` | FR-ID-001 |
+| `Dto/BoardCriteria.php` | FR-ID-001 |
+| `Dto/TaskCriteria.php` | FR-ID-001 |
+| `Enum/TaskSort.php` | FR-ID-001 |
+| `Exception/TaskBoardAccessDeniedException.php` | FR-ID-001 |
+| `Exception/TaskBoardQuotaRefusedException.php` | FR-ID-001 |
+| `Exception/TaskChangedException.php` | FR-ID-001 |
+| `User/TaskBoardUserLocator.php` | FR-ID-001 |
+| `Security/RoleHolderUser.php` | FR-ID-001 |
+| `Security/UserRoleCheck.php` | FR-ID-001 |
+| `View/BoardPage.php` | FR-ID-001 |
+| `View/BoardView.php` | FR-ID-001 |
+| `View/TaskColumnEntry.php` | FR-ID-001 |
+| `View/TaskCompletionSample.php` | FR-ID-001 |
+| `View/TaskFlowDay.php` | FR-ID-001 |
+| `View/TaskPage.php` | FR-ID-001 |
+| `View/TaskView.php` | FR-ID-001 |
+| `View/Views.php` | FR-ID-001 |
+
 ## Coverage summary
 
-| Category | Files | Mapped |
-| --- | ---: | ---: |
-| PHP | 176 | 176 |
-| TypeScript & CSS | 31 | 31 |
-| Legacy assets | 2 | 2 |
-| Twig | 44 | 44 |
-| Config & i18n | 9 | 9 |
-| Earlier sections not counted above (provider sync additions 1.27.0, files added since 2026-11-01) | 22 | 22 |
-| Additions 1.23–2.20 (incl. 10 Vitest files) | 645 | 645 |
-| Vitest files of the exclusion note below (`filter-collapse-utils.test.ts` no longer exists) | 10 | 10 |
-| **Total tracked `src/` files** | **939** | **939** |
+| Section | Rows |
+| --- | ---: |
+| PHP classes (`src/**/*.php`) | 182 |
+| Provider sync additions in 1.27.0 (`src/`) | 28 |
+| TypeScript & CSS (`src/Resources/assets/src/`) | 26 |
+| Legacy assets (`src/Resources/public/`) | 2 |
+| Twig views (`src/Resources/views/`) | 39 |
+| Config & translations | 9 |
+| Additions 1.23–2.20 (API, sync, ports, numbers, calendar, recurrence, folders, fields, templates) | 645 |
+| Additions 2.21-2.30 (locks, menus, API conflicts, questions, calendar sources, header search, host ports) | 137 |
+| **Rows in this file** | **1068** |
 
-PHP + TypeScript sources: **206** (all mapped).
+Production files under `src/` (everything tracked except co-located Vitest files): **1058**, all named in this inventory (one row per file; a few rows name a file by directory glob in the older sections).
 
-Excluded (11 Vitest files): `Resources/assets/src/css-vars.test.ts`, `Resources/assets/src/filter-collapse-utils.test.ts`, `Resources/assets/src/gantt-scale.test.ts`, `Resources/assets/src/list-filter-utils.test.ts`, `Resources/assets/src/list-sort-utils.test.ts`, `Resources/assets/src/mention-utils.test.ts`, `Resources/assets/src/option-filter-utils.test.ts`, `Resources/assets/src/storage.test.ts`, `Resources/assets/src/task-board-css.test.ts`, `Resources/assets/src/task-nav-utils.test.ts`, `Resources/assets/src/time-utils.test.ts`.
+Excluded (23 co-located Vitest files, test artifacts): `Resources/assets/src/anchor-utils.test.ts`, `Resources/assets/src/ask-confirm.test.ts`, `Resources/assets/src/board-create-steps-controller.test.ts`, `Resources/assets/src/board-openers.test.ts`, `Resources/assets/src/calendar-utils.test.ts`, `Resources/assets/src/column-collapse.test.ts`, `Resources/assets/src/css-vars.test.ts`, `Resources/assets/src/edit-column-current-icon.test.ts`, `Resources/assets/src/edit-column-delete-warning.test.ts`, `Resources/assets/src/edit-column-humans-only.test.ts`, `Resources/assets/src/filter-fold.test.ts`, `Resources/assets/src/gantt-scale.test.ts`, `Resources/assets/src/list-filter-utils.test.ts`, `Resources/assets/src/list-sort-utils.test.ts`, `Resources/assets/src/mention-utils.test.ts`, `Resources/assets/src/option-filter-utils.test.ts`, `Resources/assets/src/storage.test.ts`, `Resources/assets/src/sync-utils.test.ts`, `Resources/assets/src/task-board-css.test.ts`, `Resources/assets/src/task-menu-shared.test.ts`, `Resources/assets/src/task-nav-utils.test.ts`, `Resources/assets/src/task-questions.test.ts`, `Resources/assets/src/time-utils.test.ts`.
 
-Audit command: `git ls-files src | wc -l` → **939** (2026-11-16, 2.20.0), every file named in this inventory (20 of them co-located Vitest files). The 2026-11-01 count of production sources without Vitest files was **262**.
+Audit command: `git ls-files src | wc -l` → **1081** (2026-11-22, v2.30.0); `git ls-files src | grep -vc '\.test\.ts$'` → **1058** production files.
