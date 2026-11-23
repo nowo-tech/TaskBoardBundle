@@ -133,6 +133,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+TaskBoard 3.0 (REQ-ARCH-001 rules 3 and 6): only what 2.x announced through deprecation notices is removed. See
+UPGRADING "To 3.0.0".
+
+### Removed
+
+- **BREAKING:** the application's-manager mode. `database.private_entity_manager` unset or `false` (deprecated since
+  2.28.0 / 2.15.0) made every TaskBoard write flush `database.entity_manager`, the application's manager. TaskBoard now
+  always reads and writes through its private entity manager (as with `true` since 2.15): your pending changes are no
+  longer flushed by TaskBoard. The host-flush probe of 2.28 (`Doctrine\TaskBoardHostFlushProbe`, internal), its notice
+  and the 2.27 code that detached only the unreferenced TaskBoard rows from the application's manager
+  (`Doctrine\RolledBackHostRows` and the host branch of `Doctrine\BundleEntityDetacher`, internal) are gone.
+- **BREAKING:** the 22 entity-typed host interfaces of 2.14 (deprecated since 2.15.0): `Api\Hook\TaskApiAuthenticatorInterface`,
+  `TaskApiAttachmentsInterface`, `TaskApiTimeEntriesInterface`, `Assignee\TaskAssigneeProviderInterface`,
+  `Comment\TaskCommentCauseLabelerInterface`, `TaskMentionCandidatesResolverInterface`,
+  `History\TaskChangeCauseLabelerInterface`, `Import\BoardAwareTaskImportUserResolverInterface`,
+  `TaskImportLinkLookupInterface`, `Move\TaskBoardTargetsInterface`, `View\TaskBoardDefaultViewResolverInterface`,
+  `Tenancy\FirstBoardProvisionerInterface`, `Sync\Hook\AttributionOnlyResolverInterface`,
+  `ImportedTimeEntrySinkInterface`, `OwnerlessTimeEntrySinkInterface`, `InlineImageRewriterInterface`,
+  `PeopleInviterInterface`, `ProviderCredentialResolverInterface`, `SyncActorResolverInterface`,
+  `SyncLimitCheckerInterface`, `SyncPersonResolverInterface`, `TaskAttachmentStorageInterface`. Implement their 2.15
+  framework-free twins (same configuration keys). The bundle's own defaults and gates use internal seams
+  (`Port\Internal\*`, `@internal`).
+- **BREAKING:** the entity getters and public entity properties of the events (deprecated since 2.15.0 / 2.29.0):
+  `getTask()` of the task events and `TaskAccessCheckEvent`, `TaskMovedEvent::getFromColumn()` / `getToColumn()`,
+  `TaskMemberAddedEvent::getMember()`, `TaskCommentEvent::getComment()`, `TaskMentionEvent::getComment()`,
+  `BoardAccessCheckEvent::getBoard()`, `ColumnSetQueryEvent::getBoard()`, `ColumnSetAccessCheckEvent::getColumnSet()`,
+  `BoardListQueryEvent::getSubject()`; the public `$board` of `BoardCreatedEvent`, `BoardUpdatedEvent`,
+  `TaskBoardQuotaCheckEvent` and the sync events, `$task` of `TaskRemoteArchivedEvent` / `TaskRemoteRestoredEvent`,
+  `$user` of `ColumnDeleteCheckEvent`, `$actor` of the column events, `$person` / `$task` of
+  `Sync\Time\ImportedTimeEntryCandidate` (now private; constructors unchanged).
+- **BREAKING:** `TaskBoardEvents::BOARD_LIST_RESULT`, `TASK_LIST_QUERY`, `TASK_LIST_RESULT`, `TASK_READ_ONLY_RESOLVE`,
+  `MEMBER_LIST_QUERY` (deprecated since 2.10.0, never dispatched) and `Api\TaskApiWhere::reachesBoard()` (2.15.0).
+- **BREAKING:** the 2.0 layout bridge (`manage/_legacy_layout.html.twig`, the Twig functions
+  `nowo_task_board_legacy_layout()` / `nowo_task_board_legacy_blocks()`): a `web_ui.layout_template` without the UiKit
+  canonical blocks now fails when a page is rendered, naming the layout. The Twig function
+  `nowo_task_board_btn_class()` (deprecated since 2.0.0).
+- **BREAKING:** the 2.30 inline dialogs (deprecated since 2.31.0): the task page partials ignore `memberForm`,
+  `linkForm`, `priorityForm`, `dependencyForm`, `subtaskImportForm` and `timeEntryForm`; the board pages no longer pass
+  `restoreForms` / `columnSetDeleteForms`; `TaskQuestionView::section()` lost `$withForms` and the cards their
+  `answerForm` / `withdrawForm` / `publishForm`.
+- **BREAKING:** the configuration keys `firewall` (deprecated since 1.7, no effect; also the parameter
+  `nowo_task_board.firewall`), `templates.layout` and `templates.css_framework` (2.0.0). Each fails the build naming
+  its replacement.
+- **BREAKING:** `Bridge\TimeTrack\TaskBoardTaskProvider` and `TaskBoardTeamContextProvider` (deprecated since 2.28.0)
+  and the extension's `TIME_TRACK_LEGACY_TASK_PROVIDER` / `TIME_TRACK_LEGACY_TEAM_PROVIDER`: TimeTrack asks
+  `nowo_task_board.task_provider` / `team_context_provider` (its 1.23 directories). Works with
+  `nowo-tech/time-track-bundle` `^1.23 || ^2.0`.
+
+### Changed
+
+- **BREAKING:** `database.private_entity_manager`: `false` fails the build; `true` is accepted as a deprecated no-op
+  (removed in 4.0). The parameter `nowo_task_board.database.private_entity_manager` is always `true`.
+- **BREAKING:** a service that still uses a removed host interface fails the container build (new internal
+  `DependencyInjection\Compiler\RemovedPortsPass`, run before optimization at priority 1000 and again at 99): an alias
+  or a decorator of a removed id, an autodiscovered class that implements one (Symfony would drop it silently, and a
+  host decorator that restricted access would vanish), and the service a port's configuration key names.
+- The private manager refuses, with a clear message and before anything is written: a TaskBoard row the application's
+  manager holds handed to a TaskBoard write that persists it (was a duplicate INSERT), an application user not saved yet
+  on a TaskBoard row (was Doctrine's "A new entity was found through the relationship"), an object of the wrong class on
+  a to-one, and a reference that cannot be found. A TaskBoard row the application's manager holds, set on a to-one of a
+  new TaskBoard row, is re-resolved by id (audit lessons XS / W1-2).
+- The import link lookup (no configuration key): a host aliases `Import\TaskImportLinkFinderInterface` to its service
+  (in 2.x it aliased the removed `Import\TaskImportLinkLookupInterface`); `TaskBoardPortsPass` then asks it through its
+  gate. Without the alias the bundle's `DoctrineTaskImportLinkLookup` answers, as before.
+- `Number\TaskNumberBackfiller`: the `$logger` argument (2.27, for the removed mode) is ignored (deprecated, removed in
+  4.0).
+
+### Security
+
+- 2.x support: after 3.0.0 the 2.x line receives security fixes for 6 months (Moderate and above backported to the
+  last 2.x minor; Low fixed in 3.x only).
+
 ## [2.32.0] - 2026-11-23
 
 ### Added

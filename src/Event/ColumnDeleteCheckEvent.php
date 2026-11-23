@@ -24,13 +24,13 @@ final class ColumnDeleteCheckEvent extends Event
 
     /**
      * @param list<string> $columnIds the board's columns, in order
-     * @param object $user who views the board (deprecated since 2.29.0, use {@see self::getUserId()}; removed in 3.0)
+     * @param object $user who views the board (since 3.0.0 no longer public: read {@see self::getUserId()})
      */
     public function __construct(
         public readonly string $boardId,
         public readonly ?string $tenantKey,
         public readonly array $columnIds,
-        public readonly object $user,
+        private readonly object $user,
     ) {
         $this->occurredAt = new DateTimeImmutable();
     }

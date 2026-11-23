@@ -11,12 +11,11 @@ use Nowo\TaskBoardBundle\Api\Value\TaskApiUpload;
 use Nowo\TaskBoardBundle\ValueObject\TaskSnapshot;
 
 /**
- * Since 2.15.0 (REQ-ARCH-001 rules 1 and 3): the framework-free twin of {@see TaskApiAttachmentsInterface}: stores a file
+ * Since 2.15.0 (REQ-ARCH-001 rules 1 and 3): the framework-free twin of `TaskApiAttachmentsInterface` (the 2.14 interface, removed in 3.0): stores a file
  * for a task, given as a {@see TaskSnapshot} and a {@see TaskApiUpload} instead of the entity and the `UploadedFile`. All
  * upload checks live here, as before (FR-014).
  *
- * Set `api.hooks.attachments` to a service implementing it. A service that also implements the deprecated interface is
- * asked through that one until 3.0.
+ * Set `api.hooks.attachments` to a service implementing it.
  */
 interface TaskApiAttachmentStoreInterface
 {

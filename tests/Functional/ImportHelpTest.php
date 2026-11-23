@@ -40,6 +40,7 @@ final class ImportHelpTest extends FunctionalTestCase
         $render = static fn (array $context): Crawler => new Crawler($twig->render('@NowoTaskBoardBundle/manage/_task_subtask_import.html.twig', $context + [
             'task'              => $task,
             'subtaskImportForm' => $factory->create(TaskImportFormType::class, new TaskImportFormData())->createView(),
+            'dialog_fragment'   => true, // since 3.0.0 the dialog renders only from its route (on demand)
         ]));
 
         self::assertCount(0, $render([])->filter('[data-testid="nowo-task-import-help-link"]'));
@@ -76,6 +77,7 @@ final class ImportHelpTest extends FunctionalTestCase
             'task'              => $task,
             'subtaskImportForm' => $factory->create(TaskImportFormType::class, new TaskImportFormData(source: $source))->createView(),
             'help_link'         => $link,
+            'dialog_fragment'   => true,
         ]));
 
         $follow = $render(['url' => '/manual/import#old', 'label' => 'Format and examples', 'anchor_from' => 'source'], TaskImportSource::TaskBoardJson);

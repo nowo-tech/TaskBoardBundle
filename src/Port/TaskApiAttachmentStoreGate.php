@@ -4,16 +4,16 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Port;
 
-use Nowo\TaskBoardBundle\Api\Hook\TaskApiAttachmentsInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiAttachmentStoreInterface;
 use Nowo\TaskBoardBundle\Api\TaskApiPrincipal;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiAttachment;
 use Nowo\TaskBoardBundle\DependencyInjection\Compiler\TaskBoardPortsPass;
 use Nowo\TaskBoardBundle\Entity\Task;
+use Nowo\TaskBoardBundle\Port\Internal\TaskApiAttachmentsInterface;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 
 /**
- * Since 2.15.0: asks a host {@see TaskApiAttachmentStoreInterface} where the bundle asks the deprecated {@see TaskApiAttachmentsInterface}. Exceptions propagate. Stateless.
+ * Since 2.15.0: asks a host {@see TaskApiAttachmentStoreInterface} where the bundle asks its internal seam {@see TaskApiAttachmentsInterface}. Exceptions propagate. Stateless.
  *
  * @internal built by {@see Ports} / {@see TaskBoardPortsPass}
  */

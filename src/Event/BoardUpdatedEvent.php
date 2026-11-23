@@ -19,8 +19,7 @@ final class BoardUpdatedEvent extends Event
      * @param list<string> $changed the fields that changed: `name`, `description`
      */
     public function __construct(
-        /** @deprecated since 2.15.0, use getBoardId(), getTenantKey() or getBoardSnapshot(); removed in 3.0 */
-        public readonly TaskBoard $board,
+        private readonly TaskBoard $board,
         public readonly object $actor,
         public readonly array $changed,
     ) {

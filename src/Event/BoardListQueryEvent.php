@@ -29,16 +29,6 @@ final class BoardListQueryEvent extends Event
 
     private readonly DateTimeImmutable $occurredAt;
 
-    /**
-     * The user whose boards are listed.
-     *
-     * @deprecated since 2.29.0 (DDD-host checklist B4), use {@see self::getSubjectId()}; removed in 3.0
-     */
-    public function getSubject(): object
-    {
-        return $this->subject;
-    }
-
     /** Since 2.29.0: the id of the user whose boards are listed (`getId()` as a string; null without a usable id). */
     public function getSubjectId(): ?string
     {

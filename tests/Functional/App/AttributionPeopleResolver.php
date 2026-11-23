@@ -6,9 +6,9 @@ namespace Nowo\TaskBoardBundle\Tests\Functional\App;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
-use Nowo\TaskBoardBundle\Sync\Hook\AttributionOnlyResolverInterface;
+use Nowo\TaskBoardBundle\Port\Internal\AttributionOnlyResolverInterface;
+use Nowo\TaskBoardBundle\Port\Internal\SyncPersonResolverInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncPersonMatch;
-use Nowo\TaskBoardBundle\Sync\Hook\SyncPersonResolverInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\RemotePerson;
 use Nowo\TaskBoardBundle\Sync\Provider\RemotePersonRef;
 use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\AppUser;

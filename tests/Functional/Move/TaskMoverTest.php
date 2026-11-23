@@ -175,7 +175,7 @@ final class TaskMoverTest extends CopyTestCase
         $refusal             = $this->assertRefused('quota', fn (): TaskMovePlan => $this->mover()->move($task, $target, [], $plan->fingerprint, $this->owner));
         self::assertSame('Your plan is full.', $refusal->hostMessage());
         self::assertSame(1, $this->quota()->asked[0]->count, 'the open tasks that arrive');
-        self::assertSame($target, $this->quota()->asked[0]->board);
+        self::assertSame($target->getId(), $this->quota()->asked[0]->getBoardId());
 
         $this->clear();
         self::assertSame($source->getId(), $this->reload($task)->getBoard()->getId());

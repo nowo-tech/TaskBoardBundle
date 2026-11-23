@@ -63,8 +63,8 @@
 | `database.mapping_type` | `attribute` | Since 2.15.0 (REQ-ARCH-001 rule 2). `xml`: the TaskBoard entities are mapped from `Resources/config/doctrine-xml` (same tables) instead of the ORM attributes. |
 | `database.user_reference` | `entity` | Since 2.15.0 (REQ-ARCH-001 rule 2). `id`: the rows keep the host user's id in a string column instead of a relation to `user_class` (which then need not be a Doctrine entity); needs `user_directory`. Changes the schema of the user columns. |
 | `user_directory` | `null` | Since 2.15.0: service id of a `User\\TaskBoardUserDirectoryInterface` (finds a host user by id). Required with `database.user_reference: id`. |
-| `database.private_entity_manager` | `null` | Since 2.15.0 (REQ-ARCH-001 rule 6). `true`: the bundle reads and writes its rows through a private entity manager created on the connection, mapping, caches and event manager of `database.entity_manager`, so a TaskBoard write never flushes, clears or closes the application's manager (see [Architecture](ARCHITECTURE.md#persistence)). `null` keeps the 2.14 behaviour, deprecated since 2.28.0 (a notice when the container is built, and the host-flush probe: one notice per application entity class whose pending changes a TaskBoard flush writes, see [UPGRADING "To 2.28.0"](UPGRADING.md#to-2280)); `false` too, deprecated since 2.15: `true` becomes the only mode in 3.0. |
-| `events.after_host_commit` | `false` | Since 2.29.0 (REQ-ARCH-001 rule 7, DDD-host checklist B4). Opt-in, recommended for DDD hosts (planned as the 3.0 default). With `database.private_entity_manager: true` and doctrine/dbal 4: when your application wrapped a TaskBoard write in its own transaction, the task, member, comment, time, dependency, link and column change events wait for **your** commit (and are dropped when you roll back), then run at the next idle point (the next TaskBoard event outside a transaction, the main request's `kernel.response`, or the end of the request / message / command). Without an open transaction they are dispatched at once. `false`: dispatched after TaskBoard's own write, inside your transaction when there is one (2.28 behaviour). Ignored without the private entity manager or with doctrine/dbal 3. See [USAGE "Host ports by id"](USAGE.md#host-ports-by-id-since-229). |
+| `database.private_entity_manager` | `null` | Since 3.0.0 the private entity manager is the only mode (REQ-ARCH-001 rule 6): the bundle reads and writes its rows through a private entity manager created on the connection, mapping, caches and event manager of `database.entity_manager`, so a TaskBoard write never flushes, clears or closes the application's manager (see [Architecture](ARCHITECTURE.md#persistence)). `true` is accepted as a no-op (deprecated, remove it; removed in 4.0); `false` fails the build. |
+| `events.after_host_commit` | `false` | Since 2.29.0 (REQ-ARCH-001 rule 7, DDD-host checklist B4). Opt-in, recommended for DDD hosts. With doctrine/dbal 4: when your application wrapped a TaskBoard write in its own transaction, the task, member, comment, time, dependency, link and column change events wait for **your** commit (and are dropped when you roll back), then run at the next idle point (the next TaskBoard event outside a transaction, the main request's `kernel.response`, or the end of the request / message / command). Without an open transaction they are dispatched at once. `false`: dispatched after TaskBoard's own write, inside your transaction when there is one (2.28 behaviour). Ignored with doctrine/dbal 3. See [USAGE "Host ports by id"](USAGE.md#host-ports-by-id-since-229). |
 
 Tables created by the bundle (with default prefix):
 
@@ -316,7 +316,7 @@ Events dispatched by `TaskBoardResourceAccessChecker` (requires the `event_dispa
 
 `deny()` always wins over the built-in rules; `grant()` opens a board/task the built-in rules would refuse.
 
-The constants `BOARD_LIST_RESULT`, `TASK_LIST_QUERY`, `TASK_LIST_RESULT`, `TASK_READ_ONLY_RESOLVE` and `MEMBER_LIST_QUERY` are **reserved** and not dispatched yet (no event classes exist for them); use `TaskAccessCheckEvent::markReadOnly()` for read-only tasks.
+The never-dispatched constants `BOARD_LIST_RESULT`, `TASK_LIST_QUERY`, `TASK_LIST_RESULT`, `TASK_READ_ONLY_RESOLVE` and `MEMBER_LIST_QUERY` were removed in 3.0; use `TaskAccessCheckEvent::markReadOnly()` for read-only tasks.
 
 ```php
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
@@ -338,9 +338,9 @@ Override via `templates/bundles/NowoTaskBoardBundle/` or config:
 
 ```yaml
 nowo_task_board:
+    web_ui:
+        layout_template: null        # see Layout integration below
     templates:
-        layout: '@NowoTaskBoardBundle/layout.html.twig'  # see Layout integration below
-        css_framework: tabler                            # see CSS framework below
         index: '@NowoTaskBoardBundle/manage/index.html.twig'
         board: '@NowoTaskBoardBundle/manage/board.html.twig'
         list: '@NowoTaskBoardBundle/manage/list.html.twig'
@@ -357,11 +357,9 @@ nowo_task_board:
 | `web_ui.layout_template` | `null` | Since 2.0.0: layout of the pages; null = `nowo_ui_kit.layouts.admin`. |
 | `web_ui.templates.<page>` | none | Since 2.0.0: template per page; wins over `templates.<page>`. |
 | `web_ui.context_menus` | `null` | Since 2.22.0: the context menu of the board cards, list rows and column headers (right-click, Shift+F10 / ContextMenu key, long press) with the items of their «⋮» menu. `null` follows UiKit's `theme.context_menus`; `true` / `false` force it on or off for TaskBoard's pages (`true` also loads UiKit's `nowo-ui-context-menu.js` there). The «⋮» menus are always there. See [USAGE](USAGE.md#task-and-column-menus). |
-| `templates.layout` | `null` | Deprecated since 2.0.0: use `web_ui.layout_template`. |
 | `templates.page_header` | `true` | Since 2.0.0: `false` leaves the header out of the board, list, Gantt and import pages. |
 | `board.toolbar` | `true` | Since 2.0.0: `false` leaves the strip above the board out. |
 | `task_panel.toolbar` | `true` | Since 2.0.0: `false` leaves the trail and actions out of the panel. The panel root keeps `data-nowo-task-can-edit` (since 2.6.0). |
-| `templates.css_framework` | `null` | Deprecated since 2.0.0 and ignored: set `nowo_ui_kit.css_framework`. |
 | `templates.index` | `@NowoTaskBoardBundle/manage/index.html.twig` | Boards index page. |
 | `templates.board` | `@NowoTaskBoardBundle/manage/board.html.twig` | Kanban board page. |
 | `templates.list` | `@NowoTaskBoardBundle/manage/list.html.twig` | List view page. |
@@ -374,55 +372,19 @@ nowo_task_board:
 
 ## Layout integration (REQ-UI-001)
 
-Manage pages `{% extends nowo_task_board_layout %}` (Twig global from `templates.layout`) and call `{{ parent() }}` in `stylesheets` / `javascripts` so host and bundle assets stack.
-
-**Set `templates.layout` and `templates.css_framework`** so TaskBoard renders inside your admin shell with the right CSS stack — do not fork every manage page:
-
-```yaml
-nowo_task_board:
-    templates:
-        layout: 'base.html.twig'   # project chrome (header, sidebar, flash area)
-        css_framework: bootstrap5  # or tabler | custom | …
-```
-
-| Piece | Role |
-|-------|------|
-| `@NowoTaskBoardBundle/layout.html.twig` | Demo full-HTML layout (Tabler CDN + navbar when `css_framework` is `tabler` / Bootstrap). Used only when `templates.layout` keeps the default. |
-
-### CSS framework
-
-| Value | Behaviour |
-|-------|-----------|
-| `tabler` (default) | Same look as the demo. Manage markup uses Tabler / Bootstrap 5-compatible classes and Tabler Icons (`ti ti-*`). |
-| `bootstrap5` / `bootstrap` / `bootstrap4` | Treat like Bootstrap; existing page classes remain compatible. Host (or demo layout) provides Bootstrap/Tabler CSS. |
-| `tailwind` / `foundation` | Accepted for host alignment; pages still emit Bootstrap/Tabler classes until macros exist — provide compatible CSS or map via your layout. |
-| `custom` / `none` | Rely on semantic `nowo-ui-*` classes and **host CSS**. Do not expect Bootstrap utility classes to style the UI. |
-
-Since 2.0.0 the pages fill the UiKit canonical blocks, see [TEMPLATES](TEMPLATES.md). A pre-2.0 layout goes through a bridge until 3.0, see [UPGRADING](UPGRADING.md#to-200-uikit-page-contract).
+Since 2.0.0 the pages fill the UiKit canonical blocks (`nowo_ui_page_header`, `nowo_ui_flashes`, `nowo_ui_content`,
+`nowo_ui_modals`), see [TEMPLATES](TEMPLATES.md). `web_ui.layout_template` names your layout (null =
+`nowo_ui_kit.layouts.admin`); the CSS stack is UiKit's (`nowo_ui_kit.css_framework`).
 
 ```yaml
 nowo_task_board:
-    templates:
-        layout: 'platform/admin/task_board_bridge.html.twig'
+    web_ui:
+        layout_template: 'admin/layout.html.twig'   # renders the UiKit canonical blocks
 ```
 
-Example bridge:
-
-```twig
-{% extends 'base.html.twig' %}
-
-{% block body %}
-    {% block nowo_ui_content %}{% endblock %}
-{% endblock %}
-
-{% block stylesheets %}
-    {{ parent() }}
-{% endblock %}
-
-{% block javascripts %}
-    {{ parent() }}
-{% endblock %}
-```
+Since 3.0.0 a layout without the canonical blocks fails when a page is rendered (the 2.x bridge for such layouts, and
+the keys `templates.layout` / `templates.css_framework`, were removed), see
+[UPGRADING](UPGRADING.md#templates-twig-and-layout).
 
 ### FormKit profile (REQ-TWIG-005)
 
@@ -442,7 +404,6 @@ hooks (the profile does not add classes or convention keys to them).
 |--------|---------|-------------|
 | `route_prefix` | `''` | Prepended to all route paths |
 | `dashboard_route` | `null` | Route name for "back" link in manage UI |
-| `firewall` | `main` | **Deprecated since 1.7, no effect.** Never read by the bundle; protect the manage routes in your `security.yaml` (see [Firewall](#firewall)). Remove the key |
 
 ### Tenancy, boards and assignees (since 1.10)
 
@@ -459,14 +420,14 @@ All optional; the defaults keep the 1.9 behaviour. See [Multi-tenant hosts](USAG
 | `tenancy.open_single_board` | `false` | Since 2.0.0: a tenant index opens the only board the user sees (`?boards=1` keeps the list). A `tenant_paths` entry may override it |
 | `tenancy.single_board` | `false` | One board per tenant: the tenant index opens it (created with `board.default_columns` and the tenant label as name on the first visit) |
 | `tenancy.resolver` | `null` | Service id of a `TaskBoardTenantResolverInterface` (slug → tenant, or null = 404). `null` = the slug is the tenant |
-| `assignee_provider` | `null` | Service id of a `TaskAssigneeProviderInterface`: who may be a member of a task on a board. `null` = every `user_class` user |
+| `assignee_provider` | `null` | Service id of a `TaskAssigneePolicyInterface`: who may be a member of a task on a board. `null` = every `user_class` user |
 | `board.default_columns` | To do, In progress, Done | Columns of a new board (`name`, optional `color`, optional `icon` since 1.11), in order; the last one is "done". Since 2.9.0 `icon` may be one emoji (e.g. `📝`), validated (one emoji of at most 16 bytes, `<set>:<name>` or a bare lowercase name); the name stays the name. Existing boards: `nowo:task-board:apply-default-column-icons` |
 | `board.column_icons` | 30 Tabler icons (`Configuration::DEFAULT_COLUMN_ICONS`) | Since 1.11: icons offered in the add / edit column dialogs, as `<set>:<name>` (e.g. `tabler:bug`), rendered through UiKit `components/_icon` (`ux_icon()` with `icon_set: ux_icon`, the bare name with the webfont sets). `[]` = no icon field |
 | `board.column_icon_form_type` | `null` | Since 2.9.0: form type of the column icon in the add / edit column dialogs, e.g. `Nowo\UiKitBundle\Form\EmojiPickerType`. The bundle's constraint always applies (one emoji, or an id of `board.column_icons` / `board.default_columns`). `null` = the grid of `board.column_icons` |
 | `board.column_icon_form_options` | `{}` | Since 2.9.0: options of `column_icon_form_type` (e.g. `{max_bytes: 16}` for the emoji picker) |
 | `board.top_level_only` | `false` | The Kanban board shows top-level tasks only, with a done / total subtask counter on the card |
 | `board.max_tasks` | `500` | Since 1.21 ([REQ-PERF-001](#query-budget-since-121)): the most tasks the board, list, Gantt and task pages load per board |
-| `board.default_view_resolver` | `null` | Since 1.24: service id of a `TaskBoardDefaultViewResolverInterface` (the view a board opens in for a user: `board`, `list` or `gantt`). The plain board route redirects to the list / Gantt route; `?view=board`, XHR and links from the same board keep the board view. `null` = always the board view |
+| `board.default_view_resolver` | `null` | Since 1.24: service id of a `TaskBoardDefaultViewPolicyInterface` (the view a board opens in for a user: `board`, `list` or `gantt`). The plain board route redirects to the list / Gantt route; `?view=board`, XHR and links from the same board keep the board view. `null` = always the board view |
 | `board.create_dialog_header` | `null` | Since 1.24: request header of the host's dialogs (e.g. `X-Beacon-Dialog`). An invalid *New board* carrying it answers `422` with only `manage/_board_create_form.html.twig`; without it, `422` with the index page and the dialog open |
 
 Host object link resolvers (`TaskObjectLinkResolverInterface`) need no option: they are autoconfigured.
@@ -510,8 +471,8 @@ contents, CSRF tokens. See [SECURITY.md](SECURITY.md#logging-and-personal-data).
 | Option | Default | Description |
 |--------|---------|-------------|
 | `comments.readers_can_comment` | `true` | People who may read a task but not edit it (read-only boards) may comment (comment-only access). `false` = editors only |
-| `comments.cause_labeler` | `null` | Since 2.10 (spec 216): service id of a `Comment\TaskCommentCauseLabelerInterface`: how a comment shows why it was written (`TaskChangeContext`, e.g. an automation rule); null = no cause is shown |
-| `comments.mention_resolver` | `null` | Service id of a `Nowo\TaskBoardBundle\Comment\TaskMentionCandidatesResolverInterface`: who may be @mentioned (the people who can read the task). `null` = the board's assignable users, else its creator and task members |
+| `comments.cause_labeler` | `null` | Since 2.10 (spec 216): service id of a `Comment\TaskCommentCauseTextInterface`: how a comment shows why it was written (`TaskChangeContext`, e.g. an automation rule); null = no cause is shown |
+| `comments.mention_resolver` | `null` | Service id of a `Nowo\TaskBoardBundle\Comment\TaskMentionCandidatesProviderInterface`: who may be @mentioned (the people who can read the task). `null` = the board's assignable users, else its creator and task members |
 
 ### Gantt (since 1.15)
 
@@ -569,8 +530,7 @@ When [TimeTrack Bundle](https://github.com/nowo-tech/TimeTrackBundle) is install
 | `nowo_task_board.team_context_provider` | `TaskBoardTeamDirectory` (since 2.28.0; TimeTrack's framework-free `TeamDirectoryInterface`) |
 
 Since 2.28.0 TaskBoard needs TimeTrack 1.23 or later (`^1.23 || ^2.0`). The 1.x classes `TaskBoardTaskProvider` and
-`TaskBoardTeamContextProvider` stay registered under their class while TimeTrack has its 1.x interfaces (deprecated,
-removed in 3.0).
+`TaskBoardTeamContextProvider` (deprecated since 2.28.0) were removed in 3.0.
 
 Wire them in `nowo_time_track` config — see [INSTALLATION.md](INSTALLATION.md).
 
@@ -619,7 +579,7 @@ scope of the `TaskImportSource` it supports.
 ### Assignees by name (since 1.22)
 
 Rows that name assignees instead of giving an e-mail (ClickUp, Jira, Trello, the own format) are resolved through
-`assignee_provider` (`TaskAssigneeProviderInterface::assignableUsers()` of the board): the one user whose display name
+`assignee_provider` (`TaskAssigneePolicyInterface::assignableUsers()` of the board): the one user whose display name
 (`UserLabel::of()`: `displayName`, `fullName`, e-mail, username, identifier) equals the name, ignoring case and
 spaces. Without an `assignee_provider`, names are not resolved and the import warns.
 
@@ -664,7 +624,7 @@ See [UPGRADING](UPGRADING.md#to-1300) for the measurements.
 
 ### Cross-board lookup (since 1.22)
 
-`Nowo\TaskBoardBundle\Import\TaskImportLinkLookupInterface` (default `DoctrineTaskImportLinkLookup`) tells the import
+`Nowo\TaskBoardBundle\Import\TaskImportLinkFinderInterface` (default `DoctrineTaskImportLinkLookup`) tells the import
 which source ids (and fingerprints of rows without an id) are already imported into another board of the same
 tenant; those rows are skipped. The bundle's own format is not checked. Alias it to
 your own service to change the rule (return `[]` to allow copies across boards).
@@ -678,12 +638,12 @@ Opt-in: with `enabled: false` (the default) there are no sync routes, services, 
 nowo_task_board:
     sync:
         enabled: false
-        credential_resolver: ~        # REQUIRED when enabled: ProviderCredentialResolverInterface service id
-        attachment_storage: ~         # TaskAttachmentStorageInterface; null = files refused (storage_disabled)
-        inline_image_rewriter: ~      # InlineImageRewriterInterface; null = MapInlineImageRewriter
-        limit_checker: ~              # SyncLimitCheckerInterface (host quotas); null = none
+        credential_resolver: ~        # REQUIRED when enabled: ProviderCredentialSourceInterface service id
+        attachment_storage: ~         # SyncedFileStorageInterface; null = files refused (storage_disabled)
+        inline_image_rewriter: ~      # SyncedImageRewriterInterface; null = MapInlineImageRewriter
+        limit_checker: ~              # SyncQuotaPolicyInterface (host quotas); null = none
         runner: ~                     # SyncRunnerInterface (e.g. Messenger); null = InlineSyncRunner
-        actor_resolver: ~             # SyncActorResolverInterface; null = request user, else who linked the board (disabled users refused, 1.24)
+        actor_resolver: ~             # SyncActorProviderInterface; null = request user, else who linked the board (disabled users refused, 1.24)
         actor_checker: ~              # since 1.24: UserCheckerInterface run with checkPreAuth() on the default resolver's actor
         providers:
             clickup:
@@ -732,12 +692,12 @@ nowo_task_board:
         lookup:
             cache_pool: ~             # PSR-6 pool for the list search (300 s, keyed by a hash of the connection ref); null = no cache
         people:
-            resolver: ~               # SyncPersonResolverInterface; null = DefaultSyncPersonResolver (1.23 e-mail semantics, one directory per board)
+            resolver: ~               # SyncPersonDirectoryInterface; null = DefaultSyncPersonResolver (1.23 e-mail semantics, one directory per board)
             require_verified_email: true   # false = an unverified e-mail match is applied as `auto` (1.23 parity)
             reassign_batch_size: 500  # 50–2000
             # Since 1.27.0 (TB-SYNC-2): the People page / step (see sync.md "People page and step")
             step: false               # true = linking scans the people and opens the People page; its save starts the import
-            inviter: ~                # PeopleInviterInterface ("Invite by e-mail"); null = no invite option
+            inviter: ~                # PeopleInvitationInterface ("Invite by e-mail"); null = no invite option
             page_size: 50             # people per page (10–200)
             candidate_limit: 200      # host users offered per select (1–1000)
             reapply_seconds: 10       # seconds a save (and the end of each sync) spends re-applying changed mappings (0–60)
@@ -752,7 +712,7 @@ nowo_task_board:
             enabled: true
             max_items_per_run: 2000   # new checklist subtasks per run (also asked from sync.limit_checker)
         time_entries:
-            sink: ~                   # ImportedTimeEntrySinkInterface; null = the time phase never runs
+            sink: ~                   # ImportedTimeEntryReceiverInterface; null = the time phase never runs
             window_days: 30           # 1–30
             max_assignees_per_call: 25     # 1–100 (upstream limit TO CONFIRM)
             max_entries_per_window: 10000  # at or above it the window is halved (upstream cap TO CONFIRM)
@@ -854,7 +814,7 @@ pnpm install && pnpm run build
 | --- | --- | --- |
 | `move.enabled` | `false` | The routes `task_move_board` and `task_duplicate`, and the panel's two actions |
 | `move.max_subtasks` | `200` | The most subtasks a move or a duplicate carries; more is refused with the count |
-| `move.targets` | `null` | Service id of a `Move\TaskBoardTargetsInterface`. null: the active boards of the task's tenant the user may edit |
+| `move.targets` | `null` | Service id of a `Move\TaskBoardTargetIdsInterface`. null: the active boards of the task's tenant the user may edit |
 | `routes.task_move_board` | `/tools/task-board/task/{taskId}/move-board` | With `move.enabled`. GET, POST |
 | `routes.task_duplicate` | `/tools/task-board/task/{taskId}/duplicate` | With `move.enabled`. GET, POST |
 | `web_ui.templates.task_move` / `task_duplicate` | `@NowoTaskBoardBundle/manage/task_move.html.twig` / `task_duplicate.html.twig` | The two pages |
@@ -863,7 +823,7 @@ pnpm install && pnpm run build
 
 | Key | Default | What it does |
 | --- | --- | --- |
-| `history.cause_labeler` | `null` | Since 2.3 (spec 216): service id of a `History\TaskChangeCauseLabelerInterface`; null = the history shows no cause |
+| `history.cause_labeler` | `null` | Since 2.3 (spec 216): service id of a `History\TaskChangeCauseTextInterface`; null = the history shows no cause |
 | `recurrence.enabled` | `false` | The two tables, `TaskRecurrenceManager`, the Repeat section, page and icon, and the routes below |
 | `recurrence.max_subtasks` | `200` | The most subtasks an occurrence copies; a series over it is refused |
 | `routes.task_recurrence` | `/tools/task-board/task/{taskId}/recurrence` | GET, POST |

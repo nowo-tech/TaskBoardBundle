@@ -41,14 +41,6 @@ final class ColumnSetQueryEvent extends Event
         return $this->subject;
     }
 
-    /**
-     * @deprecated since 2.15.0, use {@see self::getBoardId()} or {@see self::getBoardSnapshot()}; removed in 3.0
-     */
-    public function getBoard(): ?TaskBoard
-    {
-        return $this->board;
-    }
-
     public function getTenantKey(): ?string
     {
         return $this->tenantKey;

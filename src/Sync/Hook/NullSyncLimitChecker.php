@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Sync\Hook;
 
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Port\Internal\SyncLimitCheckerInterface;
 
 /** Since 1.23: no host quota (the bundle's own caps still apply). */
 final readonly class NullSyncLimitChecker implements SyncLimitCheckerInterface

@@ -6,7 +6,7 @@ namespace Nowo\TaskBoardBundle\Tests\Support\TwinPorts;
 
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Move\TaskBoardTargetIdsInterface;
-use Nowo\TaskBoardBundle\Move\TaskBoardTargetsInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TaskBoardTargetsInterface;
 use Nowo\TaskBoardBundle\ValueObject\TaskSnapshot;
 
 final readonly class TwinTargetIds implements TaskBoardTargetIdsInterface

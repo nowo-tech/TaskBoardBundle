@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Tests\Support\TwinPorts;
 
-use Nowo\TaskBoardBundle\Tenancy\FirstBoardProvisionerInterface;
+use Nowo\TaskBoardBundle\Port\Internal\FirstBoardProvisionerInterface;
 use Nowo\TaskBoardBundle\Tenancy\FirstBoardProvisioningInterface;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenant;
 

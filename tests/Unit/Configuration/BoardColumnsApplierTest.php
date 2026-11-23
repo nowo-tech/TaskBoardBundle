@@ -13,9 +13,9 @@ use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Enum\ColumnType;
 use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
+use Nowo\TaskBoardBundle\Port\Internal\SyncLimitCheckerInterface;
 use Nowo\TaskBoardBundle\Support\ColumnTypes;
 use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
-use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 

@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\Move;
 
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Port\Internal\TaskBoardTargetsInterface;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 

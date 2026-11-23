@@ -19,14 +19,11 @@ use Nowo\TaskBoardBundle\Api\Hook\EmptyTaskApiMembers;
 use Nowo\TaskBoardBundle\Api\Hook\EmptyTaskApiUsers;
 use Nowo\TaskBoardBundle\Api\Hook\EmptyTaskApiWorkspace;
 use Nowo\TaskBoardBundle\Api\Hook\ManualTaskApiTimeEntries;
-use Nowo\TaskBoardBundle\Api\Hook\TaskApiAttachmentsInterface;
-use Nowo\TaskBoardBundle\Api\Hook\TaskApiAuthenticatorInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiCommentEditPolicyInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiIdempotencyStoreInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiMembersInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiPlanGateInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiRateLimiterInterface;
-use Nowo\TaskBoardBundle\Api\Hook\TaskApiTimeEntriesInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiUsersInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiWorkspaceInterface;
 use Nowo\TaskBoardBundle\Api\Idempotency\DoctrineTaskApiIdempotencyStore;
@@ -37,13 +34,10 @@ use Nowo\TaskBoardBundle\Api\Repository\TaskApiQueryRepository;
 use Nowo\TaskBoardBundle\Api\Security\TaskApiActors;
 use Nowo\TaskBoardBundle\Api\Security\TaskApiCommitWatermark;
 use Nowo\TaskBoardBundle\Api\Security\TaskApiConflictResponseFormatter;
-use Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface;
 use Nowo\TaskBoardBundle\Bridge\SearchKit\BoardSearchDefinition;
 use Nowo\TaskBoardBundle\Bridge\SearchKit\TaskSearchDefinition;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\ImportedTimeAggregatorListener;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTaskDirectory;
-use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTaskProvider;
-use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTeamContextProvider;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTeamDirectory;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TimeTrackScopeKeys;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TimeTrackTaskTimeBillableDefaultProvider;
@@ -54,7 +48,6 @@ use Nowo\TaskBoardBundle\Calendar\CalendarDayAnnotator;
 use Nowo\TaskBoardBundle\Calendar\CalendarEventCollector;
 use Nowo\TaskBoardBundle\Calendar\CalendarEventSourceInterface;
 use Nowo\TaskBoardBundle\Comment\DefaultTaskMentionCandidatesResolver;
-use Nowo\TaskBoardBundle\Comment\TaskMentionCandidatesResolverInterface;
 use Nowo\TaskBoardBundle\Controller\TaskBoardManageController;
 use Nowo\TaskBoardBundle\Controller\TaskCopyController;
 use Nowo\TaskBoardBundle\Copy\TaskCopier;
@@ -64,7 +57,6 @@ use Nowo\TaskBoardBundle\DependencyInjection\Compiler\TaskBoardPortsPass;
 use Nowo\TaskBoardBundle\Doctrine\HostCommitEventRelay;
 use Nowo\TaskBoardBundle\Doctrine\PrivateEntityManagerMiddleware;
 use Nowo\TaskBoardBundle\Doctrine\TaskBoardEntityManager;
-use Nowo\TaskBoardBundle\Doctrine\TaskBoardHostFlushProbe;
 use Nowo\TaskBoardBundle\Doctrine\TaskBoardManagerRegistry;
 use Nowo\TaskBoardBundle\Doctrine\TaskBoardMetadataListener;
 use Nowo\TaskBoardBundle\Doctrine\TaskRevisionListener;
@@ -84,7 +76,6 @@ use Nowo\TaskBoardBundle\Member\NoMemberBadges;
 use Nowo\TaskBoardBundle\Menu\TaskMenuBuilder;
 use Nowo\TaskBoardBundle\Menu\TaskTimerStarterInterface;
 use Nowo\TaskBoardBundle\Move\DefaultTaskBoardTargets;
-use Nowo\TaskBoardBundle\Move\TaskBoardTargetsInterface;
 use Nowo\TaskBoardBundle\Move\TaskMovePlanner;
 use Nowo\TaskBoardBundle\Move\TaskMover;
 use Nowo\TaskBoardBundle\MultiBoard\DoctrineMultiBoardTaskQuery;
@@ -94,6 +85,19 @@ use Nowo\TaskBoardBundle\MultiBoard\NullMultiBoardScopeProvider;
 use Nowo\TaskBoardBundle\Number\TaskNumberBackfiller;
 use Nowo\TaskBoardBundle\Number\TaskNumberLedger;
 use Nowo\TaskBoardBundle\Number\TaskNumberListener;
+use Nowo\TaskBoardBundle\Port\Internal\InlineImageRewriterInterface;
+use Nowo\TaskBoardBundle\Port\Internal\ProviderCredentialResolverInterface;
+use Nowo\TaskBoardBundle\Port\Internal\SyncActorResolverInterface;
+use Nowo\TaskBoardBundle\Port\Internal\SyncLimitCheckerInterface;
+use Nowo\TaskBoardBundle\Port\Internal\SyncPersonResolverInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TaskApiAttachmentsInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TaskApiAuthenticatorInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TaskApiTimeEntriesInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TaskAssigneeProviderInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TaskAttachmentStorageInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TaskBoardDefaultViewResolverInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TaskBoardTargetsInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TaskMentionCandidatesResolverInterface;
 use Nowo\TaskBoardBundle\Provenance\NoWriteProvenance;
 use Nowo\TaskBoardBundle\Provenance\WriteProvenanceProviderInterface;
 use Nowo\TaskBoardBundle\Question\DefaultTaskQuestionRecipientResolver;
@@ -162,18 +166,12 @@ use Nowo\TaskBoardBundle\Sync\File\OutboundUrlGuardAdapter;
 use Nowo\TaskBoardBundle\Sync\File\UrlGuardInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\ConnectionCreatorActorResolver;
 use Nowo\TaskBoardBundle\Sync\Hook\DefaultSyncPersonResolver;
-use Nowo\TaskBoardBundle\Sync\Hook\InlineImageRewriterInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\InlineSyncRunner;
 use Nowo\TaskBoardBundle\Sync\Hook\MapInlineImageRewriter;
 use Nowo\TaskBoardBundle\Sync\Hook\NullSyncLimitChecker;
 use Nowo\TaskBoardBundle\Sync\Hook\NullTaskAttachmentStorage;
-use Nowo\TaskBoardBundle\Sync\Hook\ProviderCredentialResolverInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncActorProviderInterface;
-use Nowo\TaskBoardBundle\Sync\Hook\SyncActorResolverInterface;
-use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
-use Nowo\TaskBoardBundle\Sync\Hook\SyncPersonResolverInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncRunnerInterface;
-use Nowo\TaskBoardBundle\Sync\Hook\TaskAttachmentStorageInterface;
 use Nowo\TaskBoardBundle\Sync\People\PeopleMappingService;
 use Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleReassigner;
 use Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleScanner;
@@ -200,20 +198,17 @@ use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
 use Nowo\TaskBoardBundle\User\TaskBoardUserDirectoryInterface;
 use Nowo\TaskBoardBundle\User\TaskBoardUsers;
 use Nowo\TaskBoardBundle\View\NullTaskBoardDefaultViewResolver;
-use Nowo\TaskBoardBundle\View\TaskBoardDefaultViewResolverInterface;
 use Nowo\TimeTrackBundle\Event\TimeEntryCreatedEvent;
 use Nowo\TimeTrackBundle\Event\TimeEntryImportedEvent;
 use Nowo\TimeTrackBundle\Event\TimeTrackEvents;
 use Nowo\TimeTrackBundle\Integration\TaskDirectoryInterface;
-use Nowo\TimeTrackBundle\Integration\TaskProviderInterface;
-use Nowo\TimeTrackBundle\Integration\TeamContextProviderInterface;
 use Nowo\TimeTrackBundle\Integration\TimeEntryBillableDefaultProviderInterface;
 use Nowo\TimeTrackBundle\Repository\TimesheetRepositoryInterface;
 use Nowo\TimeTrackBundle\Service\TimerService;
 use Nowo\TimeTrackBundle\Timesheet\PeriodLockGuard;
 use Nowo\TimeTrackBundle\Timesheet\TimesheetScopeProviderInterface;
-use Nowo\TransactionDoctrine\HostFlushProbe;
 use Nowo\TransactionDoctrine\Symfony\Conflict\ConflictResponseFormatterInterface;
+use Symfony\Component\Config\Definition\Exception\InvalidConfigurationException;
 use Symfony\Component\Config\FileLocator;
 use Symfony\Component\DependencyInjection\Argument\IteratorArgument;
 use Symfony\Component\DependencyInjection\Argument\TaggedIteratorArgument;
@@ -234,7 +229,6 @@ use function is_array;
 use function is_string;
 use function rtrim;
 use function sprintf;
-use function trigger_deprecation;
 
 /**
  * Loads bundle configuration and registers services.
@@ -271,19 +265,11 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         private readonly string $conflictFormatterInterface = ConflictResponseFormatterInterface::class,
         // Since 2.22.0: the service id of TimeTrack's timer use cases ("Start timer" of the task menu).
         private readonly string $timeTrackTimerService = self::TIME_TRACK_TIMER_SERVICE,
-        // Since 2.28.0: the deprecated 1.x TimeTrack ports (removed in TimeTrack 2.0), each a string so a TimeTrack
-        // without them still loads: while they exist, the 1.x implementations stay registered and the 1.x scope port is used.
-        private readonly string $timeTrackLegacyTaskProvider = self::TIME_TRACK_LEGACY_TASK_PROVIDER,
-        private readonly string $timeTrackLegacyTeamProvider = self::TIME_TRACK_LEGACY_TEAM_PROVIDER,
+        // Since 2.28.0: TimeTrack's deprecated 1.x scope port (removed in TimeTrack 2.0), a string so a TimeTrack without it
+        // still loads: while it exists it is the service TimeTrack registers, else its framework-free twin is asked.
         private readonly string $timeTrackLegacyScopeProvider = self::TIME_TRACK_LEGACY_SCOPE_PROVIDER,
     ) {
     }
-
-    /** Since 2.28.0: TimeTrack's deprecated 1.x task port (TimeTrack < 2.0). */
-    public const TIME_TRACK_LEGACY_TASK_PROVIDER = TaskProviderInterface::class;
-
-    /** Since 2.28.0: TimeTrack's deprecated 1.x team port (TimeTrack < 2.0). */
-    public const TIME_TRACK_LEGACY_TEAM_PROVIDER = TeamContextProviderInterface::class;
 
     /** Since 2.28.0: TimeTrack's deprecated 1.x scope port (TimeTrack < 2.0). */
     public const TIME_TRACK_LEGACY_SCOPE_PROVIDER = TimesheetScopeProviderInterface::class;
@@ -311,10 +297,10 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->setParameter('nowo_task_board.route_prefix', $config['route_prefix']);
         $container->setParameter('nowo_task_board.dashboard_route', $config['dashboard_route']);
         $container->setParameter('nowo_task_board.routes', $config['routes']);
-        // Since 2.0.0: web_ui.* is the canonical name; templates.* still works, deprecated.
+        // Since 2.0.0: web_ui.templates wins over the same page key of templates.
         $config['templates'] = $config['web_ui']['templates'] + $config['templates'];
         $container->setParameter('nowo_task_board.templates', $config['templates']);
-        $container->setParameter('nowo_task_board.web_ui.layout_template', $config['web_ui']['layout_template'] ?? $config['templates']['layout']);
+        $container->setParameter('nowo_task_board.web_ui.layout_template', $config['web_ui']['layout_template']);
         // Since 2.22.0: null follows UiKit's theme.context_menus.
         $container->setParameter('nowo_task_board.web_ui.context_menus', $config['web_ui']['context_menus']);
         $container->setParameter('nowo_task_board.templates.page_header', $config['templates']['page_header']);
@@ -328,7 +314,6 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->setParameter('nowo_task_board.sync.badge.connect_link', (bool) $config['sync']['badge']['connect_link']);
         // Since 2.5.0 (TB-16).
         $container->setParameter('nowo_task_board.sync.badge.style', $config['sync']['badge']['style']);
-        $container->setParameter('nowo_task_board.firewall', $config['firewall']);
         $container->setParameter('nowo_task_board.security', $config['security']);
         $container->setParameter('nowo_task_board.security.allow_unauthenticated', $config['security']['allow_unauthenticated']);
         $container->setParameter('nowo_task_board.tenancy', $config['tenancy']);
@@ -427,28 +412,21 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
     }
 
     /**
-     * Since 2.15.0 (REQ-ARCH-001 rule 6): `database.private_entity_manager: true` registers {@see TaskBoardEntityManager}
-     * and {@see TaskBoardManagerRegistry}; {@see PrivateEntityManagerReferencesPass} then points every bundle service at
-     * them, and {@see PrivateEntityManagerPass} attaches the rollback middleware (DBAL 4) to the source manager's
-     * connection. null keeps the 2.14 wiring; false too, with a deprecation (the private manager is the only mode in 3.0).
-     * Since 2.28.0 null (unset) is deprecated too, and both register the host-flush probe ({@see TaskBoardHostFlushProbe}).
-     * The notices are raised while the container is built (once per build, not per request).
+     * Since 2.15.0 (REQ-ARCH-001 rule 6) {@see TaskBoardEntityManager} and {@see TaskBoardManagerRegistry};
+     * {@see PrivateEntityManagerReferencesPass} then points every bundle service at them, and
+     * {@see PrivateEntityManagerPass} attaches the rollback middleware (DBAL 4) to the source manager's connection. Since
+     * 3.0.0 the private manager is the only mode: `database.private_entity_manager: false` fails the build, `true` is a
+     * deprecated no-op (the Config component reports it).
+     *
+     * @throws InvalidConfigurationException with `database.private_entity_manager: false`
      */
     private function registerPrivateEntityManager(ContainerBuilder $container, ?bool $private, string $emName): void
     {
-        $container->setParameter(PrivateEntityManagerReferencesPass::PARAMETER, $private === true);
-        $container->setParameter(PrivateEntityManagerReferencesPass::SOURCE_PARAMETER, $emName);
-        if ($private === null) {
-            trigger_deprecation('nowo-tech/task-board-bundle', '2.28', self::unsetPrivateEntityManagerNotice($emName));
-        }
         if ($private === false) {
-            trigger_deprecation('nowo-tech/task-board-bundle', '2.15', '"nowo_task_board.database.private_entity_manager: false" is deprecated: TaskBoard writes then flush the application\'s entity manager, including its pending changes; the private entity manager becomes the only mode in 3.0. Set it to true (see UPGRADING.md "To 2.15.0").');
+            throw new InvalidConfigurationException(self::PRIVATE_ENTITY_MANAGER_FALSE);
         }
-        if ($private !== true) {
-            $this->registerHostFlushProbe($container);
-
-            return;
-        }
+        $container->setParameter(PrivateEntityManagerReferencesPass::PARAMETER, true);
+        $container->setParameter(PrivateEntityManagerReferencesPass::SOURCE_PARAMETER, $emName);
 
         $container->register(TaskBoardEntityManager::class, TaskBoardEntityManager::class)
             ->setArguments([new Reference('doctrine'), $emName, new Reference('logger', ContainerInterface::IGNORE_ON_INVALID_REFERENCE)])
@@ -463,6 +441,9 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
                 ->addTag('doctrine.middleware');
         }
     }
+
+    /** Since 3.0.0: the build error of `database.private_entity_manager: false`. */
+    public const PRIVATE_ENTITY_MANAGER_FALSE = '"nowo_task_board.database.private_entity_manager: false" is no longer supported: since 3.0 the private entity manager is the only mode and TaskBoard writes never flush your entity manager. Remove the option, flush your own pending changes yourself, and see UPGRADING.md "To 3.0.0" ("Private manager only").';
 
     /**
      * Since 2.29.0 (REQ-ARCH-001 rule 7, opt-in `events.after_host_commit: true`): with the private entity manager and
@@ -485,31 +466,6 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
     }
 
     /**
-     * Since 2.28.0 (REQ-ARCH-001 rule 6 deprecation layer): the notice of an unset `database.private_entity_manager`.
-     *
-     * @param string $emName `database.entity_manager`
-     */
-    public static function unsetPrivateEntityManagerNotice(string $emName): string
-    {
-        return sprintf('Not setting "nowo_task_board.database.private_entity_manager" is deprecated: every TaskBoard write then flushes your entity manager "%s", including what your application left pending in it. In 3.0 the option is removed and the private entity manager is the only mode (as if true): TaskBoard writes never flush, clear or close your manager. Opt in now with "nowo_task_board: { database: { private_entity_manager: true } }" once the "were flushed by NowoTaskBoardBundle" deprecations are gone (see UPGRADING.md "To 2.28.0").', $emName);
-    }
-
-    /**
-     * Since 2.28.0 (REQ-ARCH-001 rule 6 deprecation layer): without the private manager, every TaskBoard flush of the
-     * application's manager reports the application's pending changes it writes ({@see TaskBoardHostFlushProbe}):
-     * transaction-doctrine's shared probe when its bundle is registered, else an own one. Reset at the start of every
-     * main request, at the bundle's boundaries ({@see self::registerRequestBoundary()}) and at `kernel.reset`.
-     */
-    private function registerHostFlushProbe(ContainerBuilder $container): void
-    {
-        $container->register(TaskBoardHostFlushProbe::class, TaskBoardHostFlushProbe::class)
-            ->setArguments([new Reference(HostFlushProbe::SERVICE_ID, ContainerInterface::NULL_ON_INVALID_REFERENCE)])
-            ->addTag('doctrine.event_listener', ['event' => 'preFlush', 'method' => 'preFlush'])
-            ->addTag('kernel.event_listener', ['event' => 'kernel.request', 'method' => 'onKernelRequest', 'priority' => 4096])
-            ->addTag('kernel.reset', ['method' => 'reset']);
-    }
-
-    /**
      * Since 2.11.1 (REQ-RUNTIME-002): the optional request memos (recurrence, sync) join the ones the boundary
      * subscriber clears, as IGNORE_ON_UNINITIALIZED references (a boundary never builds a service).
      */
@@ -519,9 +475,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $state      = $subscriber->getArgument('$state');
         $values     = $state instanceof IteratorArgument ? $state->getValues() : [];
         // Since 2.15.0: the private entity manager last, after the memos that may still hold its rows.
-        // Since 2.28.0: the host-flush probe (registered without the private manager only).
         // Since 2.29.0: the host-commit relay (events.after_host_commit) before the private manager it reads.
-        foreach ([TaskRecurrenceView::class, SyncPeopleViewProvider::class, TaskBoardUsers::class, TaskBoardHostFlushProbe::class, HostCommitEventRelay::class, TaskBoardEntityManager::class] as $id) {
+        foreach ([TaskRecurrenceView::class, SyncPeopleViewProvider::class, TaskBoardUsers::class, HostCommitEventRelay::class, TaskBoardEntityManager::class] as $id) {
             if ($container->hasDefinition($id)) {
                 $values[] = new Reference($id, ContainerInterface::IGNORE_ON_UNINITIALIZED_REFERENCE);
             }
@@ -541,7 +496,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             return;
         }
         if (!is_string($api['hooks']['authenticator']) || $api['hooks']['authenticator'] === '') {
-            throw new LogicException('nowo_task_board.api.enabled needs api.hooks.authenticator: the service id of a Nowo\\TaskBoardBundle\\Api\\Hook\\TaskApiAuthenticatorInterface (the host keeps the tokens).');
+            throw new LogicException('nowo_task_board.api.enabled needs api.hooks.authenticator: the service id of a Nowo\\TaskBoardBundle\\Api\\Hook\\TaskApiRequestAuthenticatorInterface (the host keeps the tokens).');
         }
         if ($config['security']['allow_unauthenticated']) {
             throw new LogicException('nowo_task_board.api.enabled cannot be used with security.allow_unauthenticated: every board would be open to every token.');
@@ -885,7 +840,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         }
         $resolver = $sync['credential_resolver'];
         if (!is_string($resolver) || $resolver === '') {
-            throw new LogicException('nowo_task_board.sync.enabled needs sync.credential_resolver: the service id of a Nowo\\TaskBoardBundle\\Sync\\Hook\\ProviderCredentialResolverInterface (the host keeps the provider tokens).');
+            throw new LogicException('nowo_task_board.sync.enabled needs sync.credential_resolver: the service id of a Nowo\\TaskBoardBundle\\Sync\\Hook\\ProviderCredentialSourceInterface (the host keeps the provider tokens).');
         }
 
         $container->setParameter('nowo_task_board.sync.http.timeout', (float) $sync['http']['timeout']);
@@ -917,10 +872,10 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->setAlias(ProviderCredentialResolverInterface::class, $resolver);
         $container->setAlias(SyncActorResolverInterface::class, $this->serviceOr($sync['actor_resolver'], ConnectionCreatorActorResolver::class));
         // Since 2.15.1 (Beacon request): the resolver under its framework-free twin, so a host (e.g. a queued sync
-        // handler) autowires it without the deprecated interface. Since 2.15.1 (audit OM TB-I1) this alias follows
-        // `sync.actor_resolver` when that service implements the twin ({@see TaskBoardPortsPass}): a host that
-        // configured a stricter resolver autowires its own, never the bundle's default. It stays on the default below
-        // whenever the configured service is not a twin (it is asked through the deprecated interface instead).
+        // handler) autowires it. Since 2.15.1 (audit OM TB-I1) this alias follows `sync.actor_resolver` when that service
+        // implements the twin ({@see TaskBoardPortsPass}): a host that configured a stricter resolver autowires its own,
+        // never the bundle's default. It stays on the default below when the configured service's class is not known
+        // before compilation.
         $container->setParameter('nowo_task_board.sync.actor_resolver', $this->serviceOr($sync['actor_resolver'], ''));
         $container->setAlias(SyncActorProviderInterface::class, ConnectionCreatorActorResolver::class)->setPublic(true);
         // Since 1.24: the host's account checks for the default actor resolver (disabled / erased users never act).
@@ -1010,8 +965,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
     }
 
     /**
-     * Since 2.15.0: the reference the bundle injects for a host port it does not reach through the deprecated interface's
-     * id; {@see TaskBoardPortsPass} turns it into the twin's gate when the service implements only the 2.15 twin.
+     * Since 2.15.0: the reference the bundle injects for a host port it does not reach through an internal seam's id;
+     * {@see TaskBoardPortsPass} turns it into the gate of the framework-free interface the service implements.
      */
     private function portReference(ContainerBuilder $container, string $port, string $serviceId): Reference
     {
@@ -1200,15 +1155,10 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
 
         $loader->load('services_timetrack.yaml');
         // Since 2.28.0: TimeTrack's framework-free task and team directories (TimeTrack >= 1.23); TimeTrack asks them
-        // through its 1.23 twin interfaces. The deprecated 1.x implementations stay registered under their class while
-        // TimeTrack has their interfaces (a host that names them in its TimeTrack configuration), removed in 3.0.
+        // through its 1.23 interfaces. Since 3.0.0 the 1.x implementations (TaskBoardTaskProvider,
+        // TaskBoardTeamContextProvider, deprecated since 2.28.0) are gone: TaskBoard works with TimeTrack ^1.23 || ^2.0.
         $container->setAlias('nowo_task_board.task_provider', TaskBoardTaskDirectory::class);
         $container->setAlias('nowo_task_board.team_context_provider', TaskBoardTeamDirectory::class);
-        foreach ([TaskBoardTaskProvider::class => $this->timeTrackLegacyTaskProvider, TaskBoardTeamContextProvider::class => $this->timeTrackLegacyTeamProvider] as $class => $interface) {
-            if (interface_exists($interface)) {
-                $container->register($class, $class)->setAutowired(true);
-            }
-        }
 
         // Since 1.25: totals of imported entries (TimeTrack >= 1.11); TimeTrack 1.10 has no such events.
         if (class_exists($this->timeTrackImportedEvent)) {

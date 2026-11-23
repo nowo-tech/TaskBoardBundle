@@ -13,6 +13,8 @@ use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 
+use function defined;
+
 final class TaskBoardEventTest extends TestCase
 {
     public function testBoardListQueryEventCanOverrideList(): void
@@ -21,7 +23,7 @@ final class TaskBoardEventTest extends TestCase
         $board   = new TaskBoard('Demo', 'demo', new stdClass());
         $event   = new BoardListQueryEvent($subject);
 
-        self::assertSame($subject, $event->getSubject());
+        self::assertNull($event->getSubjectId(), 'a subject without an id');
         self::assertNull($event->getOverrideList());
 
         $event->overrideList([$board]);
@@ -35,7 +37,7 @@ final class TaskBoardEventTest extends TestCase
         $event   = new TaskAccessCheckEvent($subject, $task);
 
         self::assertSame($subject, $event->getSubject());
-        self::assertSame($task, $event->getTask());
+        self::assertSame($task->getId(), $event->getTaskId());
         self::assertFalse($event->isGranted());
         self::assertFalse($event->isDenied());
         self::assertFalse($event->isReadOnly());
@@ -59,7 +61,7 @@ final class TaskBoardEventTest extends TestCase
         $event   = new BoardAccessCheckEvent($subject, $board, true);
 
         self::assertSame($subject, $event->getSubject());
-        self::assertSame($board, $event->getBoard());
+        self::assertSame($board->getId(), $event->getBoardId());
         self::assertTrue($event->isDefaultGranted());
         self::assertFalse($event->isGranted());
         self::assertFalse($event->isDenied());
@@ -78,6 +80,9 @@ final class TaskBoardEventTest extends TestCase
     {
         self::assertSame('nowo_task_board.board_list_query', TaskBoardEvents::BOARD_LIST_QUERY);
         self::assertSame('nowo_task_board.task_access_check', TaskBoardEvents::TASK_ACCESS_CHECK);
-        self::assertSame('nowo_task_board.member_list_query', TaskBoardEvents::MEMBER_LIST_QUERY);
+        // Since 3.0.0 the never-dispatched constants (deprecated since 2.10.0) are gone.
+        foreach (['BOARD_LIST_RESULT', 'TASK_LIST_QUERY', 'TASK_LIST_RESULT', 'TASK_READ_ONLY_RESOLVE', 'MEMBER_LIST_QUERY'] as $removed) {
+            self::assertFalse(defined(TaskBoardEvents::class . '::' . $removed), $removed);
+        }
     }
 }

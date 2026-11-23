@@ -1,7 +1,7 @@
 {#
     Since 2.23.0 (Beacon spec 242): one question of a task. Variables: card (from Question\TaskQuestionView: question,
-    answer, superseded, overdue, answerUrl, withdrawUrl, publishUrl (2.31), answerForm, withdrawForm, publishForm (null
-    unless built withForms, deprecated), publishLabel, answerLinks, mine). The context is
+    answer, superseded, overdue, answerUrl, withdrawUrl, publishUrl (2.31), publishLabel, answerLinks, mine; since 3.0.0
+    no forms). The context is
     Markdown through the host's text renderer and the reserved-attribute stripper (nowo_task_board_text); everything else is
     plain text, escaped. The answer form carries the version read: a racing answer is refused, never overwritten.
 #}
@@ -71,11 +71,11 @@
     {% endif %}
     {#-
         Since 2.31.0 (owner rule 2026-11-23): the card renders no form. Answer, Withdraw and Publish are links to the GET of
-        their write routes, opened in the task's on-demand dialog (a page without JavaScript). A card built with forms
-        (TaskQuestionView::section(…, withForms: true), deprecated) still renders the 2.30 inline forms below.
+        their write routes, opened in the task's on-demand dialog (a page without JavaScript). Since 3.0.0 the 2.30 inline
+        forms are gone.
     -#}
     {% set _dialogId = 'nowo-task-board-task-dialog-' ~ q.task.id %}
-    {% if not card.answerForm|default(null) and not card.withdrawForm|default(null) and not card.publishForm|default(null) and (card.answerUrl|default(null) or card.withdrawUrl|default(null) or card.publishUrl|default(null)) %}
+    {% if card.answerUrl|default(null) or card.withdrawUrl|default(null) or card.publishUrl|default(null) %}
         <div class="nowo-task-question__actions">
             {% if card.answerUrl %}
                 <a href="{{ card.answerUrl }}" class="{{ nowo_ui_class('btn_sm', _b) }} {{ nowo_ui_class(q.open ? 'btn_primary' : 'btn_secondary', _b) }}" data-testid="nowo-task-question-answer-toggle" {{ nowo_ui_html_attrs(nowo_ui_remote_form_opener(_dialogId, (q.open ? 'task_board.question.answer.give' : 'task_board.question.answer.change')|trans({}, _b), false, card.answerUrl)|merge({'aria-haspopup': 'dialog'})) }}>{{ (q.open ? 'task_board.question.answer.give' : 'task_board.question.answer.change')|trans({}, _b) }}</a>
@@ -85,38 +85,6 @@
             {% endif %}
             {% if card.withdrawUrl %}
                 <a href="{{ card.withdrawUrl }}" class="{{ nowo_ui_class('btn_sm', _b) }} {{ nowo_ui_class('btn_secondary', _b) }}" data-testid="nowo-task-question-withdraw-toggle" {{ nowo_ui_html_attrs(nowo_ui_remote_form_opener(_dialogId, 'task_board.question.withdraw.action'|trans({}, _b), false, card.withdrawUrl)|merge({'aria-haspopup': 'dialog'})) }}>{{ 'task_board.question.withdraw.action'|trans({}, _b) }}</a>
-            {% endif %}
-        </div>
-    {% endif %}
-    {% if card.answerForm %}
-        {% set _af = card.answerForm %}
-        <details class="nowo-task-question__answer-box"{% if q.open and card.mine %} open{% endif %}>
-            <summary class="{{ nowo_ui_class('btn_sm', _b) }} {{ nowo_ui_class(q.open ? 'btn_primary' : 'btn_secondary', _b) }}" data-testid="nowo-task-question-answer-toggle">{{ (q.open ? 'task_board.question.answer.give' : 'task_board.question.answer.change')|trans({}, _b) }}</summary>
-            {{ form_start(_af, {method: 'POST', attr: {class: 'nowo-task-question-answer-form', 'data-testid': 'nowo-task-question-answer-form'}}) }}
-                {% if _af.options is defined %}{{ form_row(_af.options) }}{% endif %}
-                {% if _af.otherText is defined %}{{ form_row(_af.otherText) }}{% endif %}
-                {% for child in _af %}{% if not child.rendered %}{{ form_row(child) }}{% endif %}{% endfor %}
-                <button type="submit" class="{{ nowo_ui_class('btn_sm', _b) }} {{ nowo_ui_class('btn_primary', _b) }}" data-testid="nowo-task-question-answer-submit">{{ 'task_board.question.answer.submit'|trans({}, _b) }}</button>
-            {{ form_end(_af, {render_rest: false}) }}
-        </details>
-    {% endif %}
-    {% if card.publishForm or card.withdrawForm %}
-        <div class="nowo-task-question__actions">
-            {% if card.publishForm %}
-                {{ form_start(card.publishForm, {method: 'POST', attr: {class: 'nowo-task-question__publish'}}) }}
-                    {% for child in card.publishForm %}{% if not child.rendered %}{{ form_row(child) }}{% endif %}{% endfor %}
-                    <button type="submit" class="{{ nowo_ui_class('btn_sm', _b) }} {{ nowo_ui_class('btn_secondary', _b) }}" data-testid="nowo-task-question-publish">{{ card.publishLabel }}</button>
-                {{ form_end(card.publishForm, {render_rest: false}) }}
-            {% endif %}
-            {% if card.withdrawForm %}
-                <details class="nowo-task-question__withdraw">
-                    <summary class="{{ nowo_ui_class('btn_sm', _b) }} {{ nowo_ui_class('btn_secondary', _b) }}" data-testid="nowo-task-question-withdraw-toggle">{{ 'task_board.question.withdraw.action'|trans({}, _b) }}</summary>
-                    {{ form_start(card.withdrawForm, {method: 'POST', attr: {class: 'nowo-task-question-withdraw-form', 'data-testid': 'nowo-task-question-withdraw-form'}}) }}
-                        {{ form_row(card.withdrawForm.reason) }}
-                        {% for child in card.withdrawForm %}{% if not child.rendered %}{{ form_row(child) }}{% endif %}{% endfor %}
-                        <button type="submit" class="{{ nowo_ui_class('btn_sm', _b) }} {{ nowo_ui_class('btn_danger', _b) }}" data-testid="nowo-task-question-withdraw-submit">{{ 'task_board.question.withdraw.submit'|trans({}, _b) }}</button>
-                    {{ form_end(card.withdrawForm, {render_rest: false}) }}
-                </details>
             {% endif %}
         </div>
     {% endif %}

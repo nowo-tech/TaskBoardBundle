@@ -3,19 +3,12 @@
         <h2 class="nowo-task-section__title">
             {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'link'}) }}{{ 'task_board.task.links'|trans({}, 'NowoTaskBoardBundle') }}
         </h2>
-        {% set _legacy = linkForm is defined and linkForm %}
         {% set _dialogId = taskDialogId|default('nowo-task-board-task-dialog-' ~ task.id) %}
-        {% if _legacy %}
-        <button type="button" class="{{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-action="click->nowo-task-board-task-links-modal#openAdd">
-            {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}{{ 'task_board.action.add_link'|trans({}, 'NowoTaskBoardBundle') }}
-        </button>
-        {% else %}
         {#- Since 2.31.0: links to the GET of task_link / task_link_update, opened in the on-demand dialog. -#}
         {% set _src = path(nowo_task_board_route('task_link'), {taskId: task.id}|merge(taskRouteExtra|default({}))) %}
         <a href="{{ _src }}" class="{{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-testid="nowo-task-link-add" {{ nowo_ui_html_attrs(nowo_ui_remote_form_opener(_dialogId, 'task_board.task.links_modal_add_title'|trans({}, 'NowoTaskBoardBundle'), false, _src)|merge({'aria-haspopup': 'dialog'})) }}>
             {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}{{ 'task_board.action.add_link'|trans({}, 'NowoTaskBoardBundle') }}
         </a>
-        {% endif %}
     </header>
     <ul class="nowo-task-rows nowo-task-detail__links-list">
         {% for link in task.links %}
@@ -38,24 +31,6 @@
                 </li>
             {% else %}
             <li class="nowo-task-rows__item nowo-task-detail__link-row">
-                {% if _legacy %}
-                <button
-                    type="button"
-                    class="nowo-task-detail__link-edit"
-                    data-action="click->nowo-task-board-task-links-modal#openEdit"
-                    data-link-id="{{ link.id }}"
-                    data-link-type="{{ link.linkType.value }}"
-                    data-link-url="{{ link.url }}"
-                    data-link-label="{{ link.label ?? '' }}"
-                    data-link-external-id="{{ link.externalId ?? '' }}"
-                >
-                    <span class="nowo-task-detail__link-row-main">
-                        <span class="{{ nowo_ui_class('badge_info', 'NowoTaskBoardBundle') }} nowo-task-badge">{{ ('task_board.link.' ~ link.linkType.value)|trans({}, 'NowoTaskBoardBundle') }}</span>
-                        <span class="nowo-task-link__label">{{ link.label ?? link.url }}</span>
-                    </span>
-                    <span class="nowo-task-detail__link-row-meta">{{ link.url }}</span>
-                </button>
-                {% else %}
                 {% set _src = path(nowo_task_board_route('task_link_update'), {taskId: task.id, linkId: link.id}|merge(taskRouteExtra|default({}))) %}
                 <a href="{{ _src }}" class="nowo-task-detail__link-edit" data-link-id="{{ link.id }}" {{ nowo_ui_html_attrs(nowo_ui_remote_form_opener(_dialogId, 'task_board.task.links_modal_edit_title'|trans({}, 'NowoTaskBoardBundle'), false, _src)|merge({'aria-haspopup': 'dialog'})) }}>
                     <span class="nowo-task-detail__link-row-main">
@@ -64,7 +39,6 @@
                     </span>
                     <span class="nowo-task-detail__link-row-meta">{{ link.url }}</span>
                 </a>
-                {% endif %}
                 <a href="{{ link.url|nowo_task_board_safe_url }}" target="_blank" rel="noopener" class="{{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }} nowo-task-detail__link-open" title="{{ 'task_board.action.open_link'|trans({}, 'NowoTaskBoardBundle') }}">
                     {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'external-link'}) }}<span class="nowo-task-sr-only">{{ 'task_board.action.open_link'|trans({}, 'NowoTaskBoardBundle') }}</span>
                 </a>

@@ -67,7 +67,7 @@ services:
     Nowo\TaskBoardBundle\Sync\SyncTaskWriter:
         arguments:
             $tasks: '@Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface'
-            $assigneeProvider: '@?Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface'
+            $assigneeProvider: '@?Nowo\TaskBoardBundle\Port\Internal\TaskAssigneeProviderInterface'
             $translator: '@?translator'
             $storageEnabled: '%nowo_task_board.sync.storage_enabled%'
             $maxFileBytes: '%nowo_task_board.sync.attachments.max_bytes%'
@@ -121,7 +121,7 @@ services:
     Nowo\TaskBoardBundle\Sync\Hook\DefaultSyncPersonResolver:
         arguments:
             $userClass: '%nowo_task_board.user_class%'
-            $assigneeProvider: '@?Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface'
+            $assigneeProvider: '@?Nowo\TaskBoardBundle\Port\Internal\TaskAssigneeProviderInterface'
 
     Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleDirectoryService:
         public: true
@@ -178,4 +178,4 @@ services:
         arguments:
             $translator: '@?translator'
             $userClass: '%nowo_task_board.user_class%'
-            $resolver: '@Nowo\TaskBoardBundle\Sync\Hook\SyncPersonResolverInterface'
+            $resolver: '@Nowo\TaskBoardBundle\Port\Internal\SyncPersonResolverInterface'

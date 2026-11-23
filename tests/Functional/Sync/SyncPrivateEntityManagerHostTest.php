@@ -20,7 +20,7 @@ final class SyncPrivateEntityManagerHostTest extends SyncFunctionalTestCase
 
     protected static function syncConfig(): array
     {
-        return self::SYNC_CONFIG + ['database' => ['private_entity_manager' => true]];
+        return self::SYNC_CONFIG + [];
     }
 
     protected function setUp(): void

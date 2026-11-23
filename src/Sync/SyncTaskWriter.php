@@ -8,10 +8,8 @@ use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Persistence\ManagerRegistry;
 use LogicException;
-use Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface;
 use Nowo\TaskBoardBundle\Doctrine\BundleEntityDetacher;
 use Nowo\TaskBoardBundle\Doctrine\RecoveringFlusher;
-use Nowo\TaskBoardBundle\Doctrine\RolledBackHostRows;
 use Nowo\TaskBoardBundle\Doctrine\TransactionRollback;
 use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
@@ -28,8 +26,12 @@ use Nowo\TaskBoardBundle\Exception\InvalidTaskDependencyException;
 use Nowo\TaskBoardBundle\Import\Dto\ImportedTaskDto;
 use Nowo\TaskBoardBundle\Import\ImportAssigneeResolver;
 use Nowo\TaskBoardBundle\Import\ImportedTaskUpdater;
-use Nowo\TaskBoardBundle\Import\TaskImportLinkLookupInterface;
 use Nowo\TaskBoardBundle\Import\TaskImportUserResolverInterface;
+use Nowo\TaskBoardBundle\Port\Internal\InlineImageRewriterInterface;
+use Nowo\TaskBoardBundle\Port\Internal\SyncLimitCheckerInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TaskAssigneeProviderInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TaskAttachmentStorageInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TaskImportLinkLookupInterface;
 use Nowo\TaskBoardBundle\Repository\ArchiveAwareTaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Service\BoardColumnManager;
@@ -52,11 +54,8 @@ use Nowo\TaskBoardBundle\Sync\Exception\UnsafeRemoteFileException;
 use Nowo\TaskBoardBundle\Sync\Field\SyncCustomFieldWriter;
 use Nowo\TaskBoardBundle\Sync\Field\SyncFieldSuppression;
 use Nowo\TaskBoardBundle\Sync\File\RemoteFileFetcher;
-use Nowo\TaskBoardBundle\Sync\Hook\InlineImageRewriterInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
 use Nowo\TaskBoardBundle\Sync\Hook\StoredAttachment;
-use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
-use Nowo\TaskBoardBundle\Sync\Hook\TaskAttachmentStorageInterface;
 use Nowo\TaskBoardBundle\Sync\People\PeopleSession;
 use Nowo\TaskBoardBundle\Sync\People\SyncPeopleWriter;
 use Nowo\TaskBoardBundle\Sync\People\SyncUser;
@@ -75,7 +74,6 @@ use Nowo\TaskBoardBundle\Tree\TaskReparenterInterface;
 use Nowo\TaskBoardBundle\Tree\TaskTreeLimits;
 use Nowo\TaskBoardBundle\Tree\TaskTreeRefusedException;
 use Psr\Clock\ClockInterface;
-use Psr\Log\LoggerInterface;
 use Stringable;
 use Symfony\Component\Clock\NativeClock;
 use Symfony\Contracts\Translation\TranslatorInterface;
@@ -188,8 +186,6 @@ final readonly class SyncTaskWriter
         private ?TaskReparenterInterface $reparenter = null,
         // Since 2.21.1 (REQ-DI-001): the time a task was archived remotely.
         private ClockInterface $clock = new NativeClock(),
-        // Since 2.27.0 (audit WA-1): told when the TaskBoard rows of a dry run cannot be detached safely.
-        private ?LoggerInterface $logger = null,
     ) {
     }
 
@@ -311,8 +307,6 @@ final readonly class SyncTaskWriter
         $level      = $connection->getTransactionNestingLevel();
         $connection->beginTransaction();
         $this->events?->begin();
-        // Since 2.27.0 (audit WA-2): a dry run records the application rows the page writes, to forget them after the rollback.
-        $hostRows = $ctx->options->dryRun ? RolledBackHostRows::start($this->entityManager) : null;
         try {
             $columns   = $this->columns($ctx, $plan);
             $assignees = new ImportAssigneeResolver($this->userResolver, $this->assigneeProvider, $ctx->board);
@@ -346,10 +340,8 @@ final readonly class SyncTaskWriter
                 $this->events?->rollBack();
                 $ctx->taskEvents = [];
                 $ctx->pending    = [];
-                // Since 2.27.0 (REQ-RUNTIME-003 rule 2, audits WA-1/WA-2): the application rows the page wrote are forgotten,
-                // the TaskBoard rows an application entity still holds are read again, and the others leave the manager.
-                $hostRows?->forget();
-                BundleEntityDetacher::detach($this->entityManager, $this->logger, refreshKept: true);
+                // Since 2.27.0 (REQ-RUNTIME-003 rule 2): the private manager is cleared after the rollback.
+                BundleEntityDetacher::detach($this->entityManager);
                 $this->closeSession($ctx, $session);
 
                 return;
@@ -362,16 +354,12 @@ final readonly class SyncTaskWriter
             $ctx->taskEvents = [];
             RecoveringFlusher::resetIfClosed($this->entityManager, $this->managerRegistry);
             // Since 2.28.0 (audit WA-8): a page that failed before its flush (or at its commit) leaves the manager open,
-            // still holding the TaskBoard rows the page created or changed, and the application's next flush would write
-            // them after the rollback. They leave the manager as after a dry run; the application's entities stay.
+            // still holding the TaskBoard rows the page created or changed: they leave it as after a dry run.
             if ($this->entityManager->isOpen()) {
-                $hostRows?->forget();
-                BundleEntityDetacher::detach($this->entityManager, $this->logger, refreshKept: true);
+                BundleEntityDetacher::detach($this->entityManager);
             }
 
             throw $exception;
-        } finally {
-            $hostRows?->stop();
         }
         // Audit JY-L1: after the commit, outside the try: a failing host listener never reports the saved page as failed.
         $this->events?->commit(false);

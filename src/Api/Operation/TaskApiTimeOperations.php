@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Api\Operation;
 
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiPlanGateInterface;
-use Nowo\TaskBoardBundle\Api\Hook\TaskApiTimeEntriesInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiTimeEntryBillableInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiUsersInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiWorkspaceInterface;
@@ -18,6 +17,7 @@ use Nowo\TaskBoardBundle\Api\Value\TaskApiNewTimeEntry;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiTimeEntry;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Port\Internal\TaskApiTimeEntriesInterface;
 use Nowo\TaskBoardBundle\Validation\TaskConstraints;
 
 use function intdiv;

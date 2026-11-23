@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Tests\Support\TwinPorts;
 
+use Nowo\TaskBoardBundle\Port\Internal\SyncLimitCheckerInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
-use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncQuotaPolicyInterface;
 use Nowo\TaskBoardBundle\ValueObject\TaskBoardSnapshot;
 

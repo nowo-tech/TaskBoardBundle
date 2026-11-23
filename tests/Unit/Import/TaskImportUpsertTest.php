@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Tests\Unit\Import;
 
 use Doctrine\ORM\EntityManagerInterface;
-use Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
@@ -19,9 +18,10 @@ use Nowo\TaskBoardBundle\Import\Dto\TaskImportOptions;
 use Nowo\TaskBoardBundle\Import\Dto\TaskImportResult;
 use Nowo\TaskBoardBundle\Import\NullTaskImportUserResolver;
 use Nowo\TaskBoardBundle\Import\TaskBoard\TaskBoardCsvImporter;
-use Nowo\TaskBoardBundle\Import\TaskImportLinkLookupInterface;
 use Nowo\TaskBoardBundle\Import\TaskImportOrchestrator;
 use Nowo\TaskBoardBundle\Import\TaskImportSource;
+use Nowo\TaskBoardBundle\Port\Internal\TaskAssigneeProviderInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TaskImportLinkLookupInterface;
 use Nowo\TaskBoardBundle\Repository\BoardColumnRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TeamMemberRepositoryInterface;
@@ -183,7 +183,7 @@ final class TaskImportUpsertTest extends TestCase
         $open       = $this->imported('Open', 'O');
         $dispatcher = new EventDispatcher();
         $dispatcher->addListener(TaskBoardEvents::TASK_ACCESS_CHECK, static function (TaskAccessCheckEvent $event): void {
-            if ($event->getTask()->getTitle() === 'Locked') {
+            if ($event->getTaskSnapshot()->title === 'Locked') {
                 $event->grant();
                 $event->markReadOnly();
             }

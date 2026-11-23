@@ -19,7 +19,7 @@ use function array_values;
 /**
  * Since 2.28.0: TimeTrack's task directory (TimeTrackBundle >= 1.23, the framework-free twin of its task provider;
  * REQ-ARCH-001 rule 3). The service `nowo_task_board.task_provider` (TimeTrack's `task_provider` option) is this class.
- * Same answers as {@see TaskBoardTaskProvider}: the user is the {@see TimeTrackUserRef} TimeTrack builds from the
+ * Same answers as the 1.x `TaskBoardTaskProvider` it replaced (removed in 3.0.0): the user is the {@see TimeTrackUserRef} TimeTrack builds from the
  * security user; the access check needs that user object, and a reference without one (or without an id) sees no task.
  */
 final readonly class TaskBoardTaskDirectory implements TaskDirectoryInterface

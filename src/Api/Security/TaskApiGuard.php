@@ -178,7 +178,7 @@ final readonly class TaskApiGuard
 
     private function reachesBoard(TaskApiPrincipal $principal, TaskBoard $board): bool
     {
-        return $principal->where->reachesBoard($board)
+        return $principal->where->reachesBoardOf($board->getId(), $board->getTenantKey())
             && $this->ownsTenant($principal->user, $board->getTenantKey())
             && $this->workspace->spaceOfTenant($principal, $board->getTenantKey()) instanceof TaskApiSpace
             && $this->access->canViewBoard($principal->user, $board);
@@ -218,7 +218,7 @@ final readonly class TaskApiGuard
     {
         $visible = [];
         foreach ($this->boardsOfTenant($tenantKey) as $board) {
-            if ($principal->where->reachesBoard($board) && $this->ownsTenant($principal->user, $tenantKey) && $this->access->canViewBoard($principal->user, $board)) {
+            if ($principal->where->reachesBoardOf($board->getId(), $board->getTenantKey()) && $this->ownsTenant($principal->user, $tenantKey) && $this->access->canViewBoard($principal->user, $board)) {
                 $visible[] = $board;
             }
         }

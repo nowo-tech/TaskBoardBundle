@@ -76,14 +76,6 @@ final class BoardAccessCheckEvent extends Event
         return $this->subject;
     }
 
-    /**
-     * @deprecated since 2.15.0, use {@see self::getBoardId()}, {@see self::getTenantKey()} or {@see self::getBoardSnapshot()}; removed in 3.0
-     */
-    public function getBoard(): TaskBoard
-    {
-        return $this->board;
-    }
-
     public function isDefaultGranted(): bool
     {
         return $this->defaultGranted;

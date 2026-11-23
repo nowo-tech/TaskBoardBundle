@@ -13,7 +13,6 @@ use Nowo\TaskBoardBundle\Api\Hook\DenyingTaskApiRateLimiter;
 use Nowo\TaskBoardBundle\Api\Hook\DenyingTaskApiTimeEntries;
 use Nowo\TaskBoardBundle\Api\Hook\EmptyTaskApiUsers;
 use Nowo\TaskBoardBundle\Api\Hook\EmptyTaskApiWorkspace;
-use Nowo\TaskBoardBundle\Api\Hook\TaskApiTimeEntriesInterface;
 use Nowo\TaskBoardBundle\Api\Security\TaskApiRequestListener;
 use Nowo\TaskBoardBundle\Api\TaskApiCapability;
 use Nowo\TaskBoardBundle\Api\TaskApiCredential;
@@ -32,6 +31,7 @@ use Nowo\TaskBoardBundle\Api\Value\TaskApiTimeQuery;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Event\TaskApiWriteEvent;
+use Nowo\TaskBoardBundle\Port\Internal\TaskApiTimeEntriesInterface;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
@@ -74,9 +74,9 @@ final class TaskApiValuesTest extends TestCase
     {
         $where = TaskApiWhere::everything(['forbidden']);
 
-        self::assertTrue($where->reachesBoard($this->board('open')));
-        self::assertTrue($where->reachesBoard($this->board(null)));
-        self::assertFalse($where->reachesBoard($this->board('forbidden')));
+        self::assertTrue($where->reachesBoardOf($this->board('open')->getId(), $this->board('open')->getTenantKey()));
+        self::assertTrue($where->reachesBoardOf($this->board(null)->getId(), $this->board(null)->getTenantKey()));
+        self::assertFalse($where->reachesBoardOf($this->board('forbidden')->getId(), $this->board('forbidden')->getTenantKey()));
         self::assertTrue($where->reachesTenant(null));
         self::assertFalse($where->reachesTenant('forbidden'));
         self::assertTrue($where->touchesTenant('open', []));
@@ -88,17 +88,17 @@ final class TaskApiValuesTest extends TestCase
         $named = $this->board('other');
         $where = TaskApiWhere::limitedTo(['tenant'], [$named->getId()]);
 
-        self::assertTrue($where->reachesBoard($this->board('tenant')));
-        self::assertTrue($where->reachesBoard($named));
-        self::assertFalse($where->reachesBoard($this->board('other')));
-        self::assertFalse($where->reachesBoard($this->board(null)));
+        self::assertTrue($where->reachesBoardOf($this->board('tenant')->getId(), $this->board('tenant')->getTenantKey()));
+        self::assertTrue($where->reachesBoardOf($named->getId(), $named->getTenantKey()));
+        self::assertFalse($where->reachesBoardOf($this->board('other')->getId(), $this->board('other')->getTenantKey()));
+        self::assertFalse($where->reachesBoardOf($this->board(null)->getId(), $this->board(null)->getTenantKey()));
         self::assertTrue($where->reachesTenant('tenant'));
         self::assertFalse($where->reachesTenant('other'), 'one board of it does not reach the whole tenant');
         self::assertFalse($where->reachesTenant(null));
         self::assertTrue($where->touchesTenant('tenant', []));
         self::assertTrue($where->touchesTenant('other', ['unrelated', $named->getId()]));
         self::assertFalse($where->touchesTenant('other', ['unrelated']));
-        self::assertFalse(TaskApiWhere::limitedTo([], [])->reachesBoard($named));
+        self::assertFalse(TaskApiWhere::limitedTo([], [])->reachesBoardOf($named->getId(), $named->getTenantKey()));
     }
 
     public function testTheCredentialIsTheHeaderAndNothingElse(): void

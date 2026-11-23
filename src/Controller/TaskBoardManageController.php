@@ -24,7 +24,6 @@ use Nowo\TaskBoardBundle\Calendar\CalendarEventRescheduleStatus;
 use Nowo\TaskBoardBundle\Calendar\CalendarEventShown;
 use Nowo\TaskBoardBundle\Calendar\CalendarViewer;
 use Nowo\TaskBoardBundle\Comment\MentionCandidate;
-use Nowo\TaskBoardBundle\Comment\TaskMentionCandidatesResolverInterface;
 use Nowo\TaskBoardBundle\DependencyInjection\Configuration;
 use Nowo\TaskBoardBundle\Doctrine\LockConflictChain;
 use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
@@ -91,6 +90,10 @@ use Nowo\TaskBoardBundle\Import\TaskImportSource;
 use Nowo\TaskBoardBundle\Member\MemberBadges;
 use Nowo\TaskBoardBundle\Number\TaskNumberLedger;
 use Nowo\TaskBoardBundle\Number\TaskNumberScope;
+use Nowo\TaskBoardBundle\Port\Internal\FirstBoardProvisionerInterface;
+use Nowo\TaskBoardBundle\Port\Internal\SyncLimitCheckerInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TaskBoardDefaultViewResolverInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TaskMentionCandidatesResolverInterface;
 use Nowo\TaskBoardBundle\Question\TaskQuestionView;
 use Nowo\TaskBoardBundle\Repository\ArchiveAwareTaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\BoundedTaskRepositoryInterface;
@@ -124,16 +127,13 @@ use Nowo\TaskBoardBundle\Support\TaskNavigator;
 use Nowo\TaskBoardBundle\Support\TaskTree;
 use Nowo\TaskBoardBundle\Support\UserIdResolver;
 use Nowo\TaskBoardBundle\Support\UserLabel;
-use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
 use Nowo\TaskBoardBundle\Template\Entity\TaskTemplate;
 use Nowo\TaskBoardBundle\Template\TaskTemplateManager;
-use Nowo\TaskBoardBundle\Tenancy\FirstBoardProvisionerInterface;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenant;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext;
 use Nowo\TaskBoardBundle\Tree\TaskTreeRefusedException;
 use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
 use Nowo\TaskBoardBundle\Ui\TaskBoardPages;
-use Nowo\TaskBoardBundle\View\TaskBoardDefaultViewResolverInterface;
 use Nowo\TransactionDoctrine\Symfony\Conflict\ConflictResponsePolicy;
 use Nowo\UiKitBundle\Dialog\RemoteDialogResponder;
 use Nowo\UiKitBundle\Dialog\RemoteDialogTarget;
@@ -1029,8 +1029,6 @@ final class TaskBoardManageController extends AbstractController
             // Since 1.23: the archived tasks of the board (most recent first) and their Restore form.
             'archivedTasks' => $archived,
             'restoreForm'   => $canEditBoard && $archived !== [] ? $this->csrfActionForm('task_board_task_restore')->createView() : null,
-            // Deprecated since 2.31.0 (always empty; removed in 3.0): use restoreForm.
-            'restoreForms' => [],
             // Since 2.19.0 (FR-028).
             'customFields'      => $custom['customFields'],
             'customValues'      => $custom['customValues'],
@@ -3033,8 +3031,6 @@ final class TaskBoardManageController extends AbstractController
             ])->createView(),
             'columnSetDeletable'  => $deletable,
             'columnSetDeleteForm' => $deletable === [] ? null : $this->csrfActionForm('task_board_column_set_delete')->createView(),
-            // Deprecated since 2.31.0 (always empty; removed in 3.0): columnSetDeletable + columnSetDeleteForm.
-            'columnSetDeleteForms' => [],
         ];
     }
 

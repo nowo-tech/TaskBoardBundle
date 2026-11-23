@@ -170,10 +170,6 @@
                             <span class="{{ nowo_ui_class('badge_neutral', 'NowoTaskBoardBundle') }}">{{ ('task_board.task.archive_reason.' ~ (task.archiveReason ?? 'user'))|trans({}, 'NowoTaskBoardBundle') }}</span>
                             {% if restoreForm|default(null) %}
                                 <button type="submit" form="nowo-task-restore-form" formaction="{{ path(nowo_task_board_route('task_restore'), {taskId: task.id}) }}" class="{{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-testid="nowo-task-restore">{{ 'task_board.task.restore'|trans({}, 'NowoTaskBoardBundle') }}<span class="visually-hidden"> {{ task.title }}</span></button>
-                            {% elseif restoreForms[task.id] is defined %}
-                                {{ form_start(restoreForms[task.id], {action: path(nowo_task_board_route('task_restore'), {taskId: task.id}), method: 'POST', attr: {class: 'd-inline'}}) }}
-                                    <button type="submit" class="{{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}">{{ 'task_board.task.restore'|trans({}, 'NowoTaskBoardBundle') }}<span class="visually-hidden"> {{ task.title }}</span></button>
-                                {{ form_end(restoreForms[task.id]) }}
                             {% endif %}
                         </li>
                     {% endfor %}

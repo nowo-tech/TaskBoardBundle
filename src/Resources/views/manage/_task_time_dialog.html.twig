@@ -1,7 +1,6 @@
 {#
     Since 2.31.0: the "Log time" dialog of a task (was inline in _task_time_section.html.twig). Loaded on demand from the
-    GET of task_time (dialog_fragment: body and actions only); a host that passes timeEntryForm to the section still gets
-    it inline (deprecated, removed in 3.0). Variables: task, timeEntryForm.
+    GET of task_time (dialog_fragment: body and actions only) (since 3.0.0 only there: the inline dialog of 2.30 is gone). Variables: task, timeEntryForm.
 #}
         {% set _body %}
             {# Since 1.26 (dialog rule v2): the actions in the footer, outside the scrolling form. #}

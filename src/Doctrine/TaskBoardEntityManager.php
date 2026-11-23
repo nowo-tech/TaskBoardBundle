@@ -38,13 +38,12 @@ use function spl_object_id;
 use function sprintf;
 
 /**
- * TaskBoard's private entity manager (2.15.0, REQ-ARCH-001 rule 6; opt-in with
- * `nowo_task_board.database.private_entity_manager: true` until 3.0). Adapted from AuthKitBundle 1.46.0 (audits NV,
- * NJ-2, NJV-1, NF-2, NF2-2, NF3-2, NF-7) with audit NZ's repository factory.
+ * TaskBoard's private entity manager (2.15.0, REQ-ARCH-001 rule 6; opt-in in 2.x, the only mode since 3.0.0). Adapted
+ * from AuthKitBundle 1.46.0 (audits NV, NJ-2, NJV-1, NF-2, NF2-2, NF3-2, NF-7) with audit NZ's repository factory.
  *
  * Up to 2.14 the bundle wrote its rows through `database.entity_manager` (the application's `default` manager unless
  * configured): every TaskBoard save flushed whatever the application had left pending in that unit of work, and a failed
- * TaskBoard write closed the application's manager. With the option on, every TaskBoard service writes and reads through
+ * TaskBoard write closed the application's manager. Every TaskBoard service writes and reads through
  * this **private** manager, created on the connection, mapping, caches, proxies and event manager of the source manager
  * (`database.entity_manager`): the tables do not move, the bundle's Doctrine listeners (table prefix, task numbers) and
  * the host's listeners still run, and a TaskBoard flush never commits an application change. The connection is shared,
@@ -287,10 +286,34 @@ final class TaskBoardEntityManager extends EntityManagerDecorator implements Res
     }
 
     /**
+     * Since 3.0.0 (audit lessons XS, W1-2): a TaskBoard row the application's manager holds (loaded through the
+     * application's own manager or repository) is refused with a clear error instead of being inserted again as a new
+     * row: TaskBoard rows are read and written through TaskBoard's services and repositories (or
+     * `nowo_task_board.entity_manager`). Everything else is persisted by the private manager as before.
+     *
+     * @throws LogicException when the object is a TaskBoard row the application's manager holds
+     */
+    public function persist(object $object): void
+    {
+        $live = $this->live();
+        if (!$live->contains($object) && TaskBoardManagerRegistry::isBundleEntity($object::class) && $this->heldByApplication($object)) {
+            throw new LogicException(sprintf('TaskBoard: the %s handed to TaskBoard was loaded through the application\'s entity manager "%s", which TaskBoard no longer writes (3.0: the private entity manager is the only mode). Load it through TaskBoard\'s services or repositories, or reference it by id (see UPGRADING.md "To 3.0.0", "Private manager only").', TaskBoardManagerRegistry::realClass($object::class), $this->sourceManagerName));
+        }
+        $live->persist($object);
+    }
+
+    /**
      * Host objects on TaskBoard rows that the private manager does not hold (the security user, a user the application
-     * loaded) become the private manager's reference to the same id, so Doctrine never takes them for new entities. Only
-     * to-one associations of TaskBoard entities to classes outside the bundle are looked at; an object without an
-     * identifier (not saved yet) is left alone, so Doctrine reports it exactly as before.
+     * loaded) become the private manager's reference to the same id, so Doctrine never takes them for new entities. Since
+     * 3.0.0 a TaskBoard row the application's manager holds, on a to-one of a TaskBoard row, is re-resolved the same way
+     * (by its id, never inserted again). Only to-one associations of TaskBoard entities are looked at.
+     *
+     * Since 3.0.0 (audit lessons XS-I1 / XS-I2) an object that cannot be referenced fails before anything is written,
+     * with a message that says what to do: an application entity not saved yet (scheduled for insert in the
+     * application's manager, or without an identifier: flush it first), an object that is not of the association's class,
+     * or a reference that cannot be found (a row of an inheritance hierarchy that no longer exists).
+     *
+     * @throws LogicException when a to-one value of a TaskBoard row cannot be referenced in the private manager
      */
     private function adoptForeignReferences(EntityManagerInterface $manager): void
     {
@@ -313,12 +336,9 @@ final class TaskBoardEntityManager extends EntityManagerDecorator implements Res
             $metadata   = $manager->getClassMetadata($entity::class);
             foreach ($metadata->associationMappings as $field => $mapping) {
                 $value = $metadata->getFieldValue($entity, $field);
-                if ($mapping->isToOne() && is_object($value) && !TaskBoardManagerRegistry::isBundleEntity($mapping->targetEntity) && !$manager->contains($value)) {
-                    $target = $manager->getClassMetadata($value::class);
-                    $id     = $target->getIdentifierValues($value);
-                    if ($id !== [] && !in_array(null, $id, true)) {
-                        $metadata->setFieldValue($entity, $field, $manager->getReference($target->getName(), $id));
-                    }
+                if ($mapping->isToOne() && is_object($value) && !$manager->contains($value)
+                    && (!TaskBoardManagerRegistry::isBundleEntity($mapping->targetEntity) || $this->heldByApplication($value))) {
+                    $metadata->setFieldValue($entity, $field, $this->referenceOf($manager, $value, $mapping->targetEntity, $entity::class . '::$' . $field));
 
                     continue;
                 }
@@ -335,6 +355,44 @@ final class TaskBoardEntityManager extends EntityManagerDecorator implements Res
                 }
             }
         }
+    }
+
+    /**
+     * The private manager's reference to the row `$value` stands for (`$value` itself is never written).
+     *
+     * @param class-string $target the association's target class
+     * @param string $where the TaskBoard field, for the message
+     *
+     * @throws LogicException when `$value` cannot be referenced
+     */
+    private function referenceOf(EntityManagerInterface $manager, object $value, string $target, string $where): object
+    {
+        if (!$value instanceof $target) {
+            throw new LogicException(sprintf('TaskBoard: %s expects a %s, got a %s.', $where, $target, TaskBoardManagerRegistry::realClass($value::class)));
+        }
+        $source  = $this->source();
+        $hostUow = $source->getUnitOfWork();
+        if ($hostUow->isScheduledForInsert($value)) {
+            throw new LogicException(sprintf('TaskBoard: the %s on %s is not saved yet (it is waiting for a flush of your entity manager "%s"). Flush it first, then call TaskBoard: TaskBoard writes through its own entity manager and references the row by id.', TaskBoardManagerRegistry::realClass($value::class), $where, $this->sourceManagerName));
+        }
+        $class = $manager->getClassMetadata($value::class);
+        $id    = $source->contains($value) ? $hostUow->getEntityIdentifier($value) : $class->getIdentifierValues($value);
+        if ($id === [] || in_array(null, $id, true)) {
+            throw new LogicException(sprintf('TaskBoard: the %s on %s has no identifier: save it (persist and flush it with your entity manager) before you hand it to TaskBoard.', TaskBoardManagerRegistry::realClass($value::class), $where));
+        }
+
+        // A class with subclasses is looked up (Doctrine needs its discriminator): a row that no longer exists is null.
+        return $manager->getReference($class->getName(), $id) ?? throw new LogicException(sprintf('TaskBoard: the %s on %s no longer exists.', TaskBoardManagerRegistry::realClass($value::class), $where));
+    }
+
+    /**
+     * Whether the application's manager holds `$object` (a TaskBoard row it loaded itself), without loading anything.
+     */
+    private function heldByApplication(object $object): bool
+    {
+        $source = $this->source();
+
+        return $source->getUnitOfWork() !== $this->current?->getUnitOfWork() && $source->contains($object);
     }
 
     /**
@@ -405,7 +463,7 @@ final class TaskBoardEntityManager extends EntityManagerDecorator implements Res
     {
         $source = $this->registry->getManager($this->sourceManagerName);
         if (!$source instanceof EntityManagerInterface || $source->getMetadataFactory()->isTransient(Task::class)) {
-            throw new LogicException(sprintf('The Doctrine entity manager "%s" (nowo_task_board.database.entity_manager, the source of database.private_entity_manager) does not map %s.', $this->sourceManagerName, Task::class));
+            throw new LogicException(sprintf('The Doctrine entity manager "%s" (nowo_task_board.database.entity_manager, the source of the private entity manager) does not map %s.', $this->sourceManagerName, Task::class));
         }
 
         return $source;

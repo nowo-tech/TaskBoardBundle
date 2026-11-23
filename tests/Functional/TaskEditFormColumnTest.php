@@ -110,7 +110,10 @@ final class TaskEditFormColumnTest extends SyncFunctionalTestCase
         $crawler = $this->client->request('GET', self::BASE . 'task/' . $task->getId());
         self::assertSame($this->column($board, 'To do')->getId(), $crawler->filter('input[name="task_form[columnIdShown]"]')->attr('value'));
 
-        $task->setColumn($this->column($board, 'Doing'));
+        // Since 3.0.0 the private manager was dropped at the request's end: change the row as read again.
+        $moved = $this->em->find(Task::class, $task->getId());
+        self::assertInstanceOf(Task::class, $moved);
+        $moved->setColumn($this->column($moved->getBoard(), 'Doing'));
         $this->em->flush();
         $form                     = $crawler->filter('form[name="task_form"]')->form();
         $form['task_form[title]'] = 'Renamed';

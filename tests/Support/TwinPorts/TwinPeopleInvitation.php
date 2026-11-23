@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Tests\Support\TwinPorts;
 
+use Nowo\TaskBoardBundle\Port\Internal\PeopleInviterInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\PeopleInvitationInterface;
-use Nowo\TaskBoardBundle\Sync\Hook\PeopleInviterInterface;
 use Nowo\TaskBoardBundle\ValueObject\TaskBoardSnapshot;
 
 final readonly class TwinPeopleInvitation implements PeopleInvitationInterface

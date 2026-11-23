@@ -14,10 +14,7 @@ services:
             - '../../Bridge/TimeTrack/TimeTrackTaskTimePeriodLock.php'
             # Since 2.22.0: registered by the extension (TimeTrack's TimerService, when it exists).
             - '../../Bridge/TimeTrack/TimeTrackTaskTimerStarter.php'
-            # Since 2.28.0: the deprecated 1.x port implementations, registered by the extension while TimeTrack has their
-            # interfaces; the scope helper is no service.
-            - '../../Bridge/TimeTrack/TaskBoardTaskProvider.php'
-            - '../../Bridge/TimeTrack/TaskBoardTeamContextProvider.php'
+            # Since 2.28.0: the scope helper is no service.
             - '../../Bridge/TimeTrack/TimeTrackScopeKeys.php'
 
     Nowo\TaskBoardBundle\EventListener\TimeSpentAggregatorListener: ~

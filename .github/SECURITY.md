@@ -2,9 +2,11 @@
 
 ## Supported Versions
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 1.x     | :white_check_mark: |
+| Version | Supported                                          |
+| ------- | -------------------------------------------------- |
+| 3.x     | :white_check_mark:                                 |
+| 2.x     | security fixes (Moderate+) until 6 months after 3.0.0 |
+| 1.x     | :x:                                                |
 
 ## Reporting a Vulnerability
 

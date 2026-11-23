@@ -24,14 +24,6 @@ final class TaskCommentEvent extends AbstractTaskEvent
         parent::__construct($comment->getTask(), $actor);
     }
 
-    /**
-     * @deprecated since 2.15.0, use {@see self::getCommentId()} or {@see self::getCommentSnapshot()}; removed in 3.0
-     */
-    public function getComment(): TaskComment
-    {
-        return $this->comment;
-    }
-
     /** Since 2.10.0 (DDD audit G2). */
     public function getCommentId(): string
     {

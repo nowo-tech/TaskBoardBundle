@@ -8,11 +8,10 @@ use Nowo\TaskBoardBundle\Sync\Provider\ProviderCredential;
 use Nowo\TaskBoardBundle\ValueObject\TaskBoardSnapshot;
 
 /**
- * Since 2.15.0 (REQ-ARCH-001 rule 1): the framework-free twin of {@see ProviderCredentialResolverInterface}, given the
+ * Since 2.15.0 (REQ-ARCH-001 rule 1): the framework-free twin of `ProviderCredentialResolverInterface` (the 2.14 interface, removed in 3.0), given the
  * board as a {@see TaskBoardSnapshot}. The host keeps the provider tokens; the bundle only knows their opaque reference.
  *
- * Set `sync.credential_resolver` to a service implementing it. A service that also implements the deprecated interface is
- * asked through that one until 3.0.
+ * Set `sync.credential_resolver` to a service implementing it.
  */
 interface ProviderCredentialSourceInterface
 {

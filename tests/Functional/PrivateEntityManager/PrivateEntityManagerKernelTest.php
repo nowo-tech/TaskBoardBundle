@@ -35,7 +35,7 @@ final class PrivateEntityManagerKernelTest extends FunctionalTestCase
 
     protected function setUp(): void
     {
-        self::$taskBoardConfig = ['database' => ['private_entity_manager' => true]];
+        self::$taskBoardConfig = [];
         parent::setUp();
         $host = self::getContainer()->get('doctrine.orm.entity_manager');
         self::assertInstanceOf(EntityManagerInterface::class, $host);

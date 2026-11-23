@@ -14,8 +14,7 @@ use Symfony\Contracts\EventDispatcher\Event;
 final class TaskRemoteRestoredEvent extends Event
 {
     public function __construct(
-        /** @deprecated since 2.15.0, use getTaskId(), getBoardId() or getTaskSnapshot(); removed in 3.0 */
-        public readonly Task $task,
+        private readonly Task $task,
         public readonly string $provider,
         public readonly string $externalId,
         public readonly string $runId,

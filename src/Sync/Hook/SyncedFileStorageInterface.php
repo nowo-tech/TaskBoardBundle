@@ -8,12 +8,11 @@ use Nowo\TaskBoardBundle\Sync\Provider\RemoteAttachment;
 use Nowo\TaskBoardBundle\ValueObject\TaskSnapshot;
 
 /**
- * Since 2.15.0 (REQ-ARCH-001 rule 1): the framework-free twin of {@see TaskAttachmentStorageInterface}: where synced files
+ * Since 2.15.0 (REQ-ARCH-001 rule 1): the framework-free twin of `TaskAttachmentStorageInterface` (the 2.14 interface, removed in 3.0): where synced files
  * go, with the task as a {@see TaskSnapshot}. `$download()` returns a read-only stream of a temporary file the bundle
  * already downloaded and checked.
  *
- * Set `sync.attachment_storage` to a service implementing it. A service that also implements the deprecated interface is
- * asked through that one until 3.0.
+ * Set `sync.attachment_storage` to a service implementing it.
  */
 interface SyncedFileStorageInterface
 {

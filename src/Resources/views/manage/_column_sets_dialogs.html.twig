@@ -1,6 +1,6 @@
 {#
     Column sets (since 1.11), for board editors: "Save columns as set" (columnSetForm) and "Add columns from set"
-    (columnSetApplyForm, the list of columnSets with their delete forms in columnSetDeleteForms). Kit dialogs
+    (columnSetApplyForm, the list of columnSets, columnSetDeletable and the shared columnSetDeleteForm). Kit dialogs
     (Escape closes them, focus returns to the button). Since 1.26 (dialog rule v2) each footer sits outside the scrolling body, its primary bound with form="…"
     (nowo-task-column-set-save-form, nowo-task-column-set-apply-form); without sets, Add columns has Close only.
     Since 2.0.0 (TB-10) with board.toolbar: false the buttons go and a host's button opens the dialogs with
@@ -68,19 +68,6 @@
                                 <button type="submit" form="nowo-task-column-set-delete-form" formaction="{{ path(nowo_task_board_route('column_set_delete'), {boardId: board.id, setId: set.id}) }}" data-confirm="{{ 'task_board.column_set.delete_confirm'|trans({'%name%': set.name}, 'NowoTaskBoardBundle') }}" class="{{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_danger', 'NowoTaskBoardBundle') }}" aria-label="{{ 'task_board.column_set.delete_named'|trans({'%name%': set.name}, 'NowoTaskBoardBundle') }}">
                                     {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'trash'}) }}
                                 </button>
-                            {% elseif columnSetDeleteForms[set.id] is defined %}
-                                {#- A host passing the 2.30 per-set forms (deprecated, removed in 3.0). -#}
-                                {% set deleteForm = columnSetDeleteForms[set.id] %}
-                                {{ form_start(deleteForm, {attr: {class: 'nowo-task-column-sets__delete', 'data-confirm': 'task_board.column_set.delete_confirm'|trans({'%name%': set.name}, 'NowoTaskBoardBundle')}}) }}
-                                    {% for child in deleteForm %}
-                                        {% if not child.rendered %}
-                                            {{ form_row(child) }}
-                                        {% endif %}
-                                    {% endfor %}
-                                    <button type="submit" class="{{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_danger', 'NowoTaskBoardBundle') }}" aria-label="{{ 'task_board.column_set.delete_named'|trans({'%name%': set.name}, 'NowoTaskBoardBundle') }}">
-                                        {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'trash'}) }}
-                                    </button>
-                                {{ form_end(deleteForm) }}
                             {% endif %}
                         </li>
                     {% endfor %}

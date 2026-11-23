@@ -13,12 +13,11 @@ use Nowo\TaskBoardBundle\Api\Value\TaskApiTimeQuery;
 use Nowo\TaskBoardBundle\ValueObject\TaskSnapshot;
 
 /**
- * Since 2.15.0 (REQ-ARCH-001 rule 1): the framework-free twin of {@see TaskApiTimeEntriesInterface}; `log()` gets the task
+ * Since 2.15.0 (REQ-ARCH-001 rule 1): the framework-free twin of `TaskApiTimeEntriesInterface` (the 2.14 interface, removed in 3.0); `log()` gets the task
  * as a {@see TaskSnapshot}. There is still no delete: tracked time is never removed through the API (owner rule).
  * Implement {@see TaskApiTimeEntryBillableInterface} too for `PUT .../time_entries/{timer_id}`.
  *
- * Set `api.hooks.time_entries` to a service implementing it. A service that also implements the deprecated interface is
- * asked through that one until 3.0.
+ * Set `api.hooks.time_entries` to a service implementing it.
  */
 interface TaskApiTimeStoreInterface
 {

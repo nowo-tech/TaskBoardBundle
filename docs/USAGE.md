@@ -176,7 +176,7 @@ nowo_ui_kit:
 
 ### Move and duplicate (since 2.3)
 
-`move.enabled: true` adds *Move to another board* and *Duplicate* to the task panel, for who may edit the task and its board. Each page chooses with a GET form and shows the preview under it, what is lost first; the confirmation posts the preview's fingerprint, so a preview out of date moves nothing and is shown again. The target boards come from `move.targets` (`TaskBoardTargetsInterface`); any other answers 404.
+`move.enabled: true` adds *Move to another board* and *Duplicate* to the task panel, for who may edit the task and its board. Each page chooses with a GET form and shows the preview under it, what is lost first; the confirmation posts the preview's fingerprint, so a preview out of date moves nothing and is shown again. The target boards come from `move.targets` (`TaskBoardTargetIdsInterface`); any other answers 404.
 
 From code, with no request: `TaskCopier::copy($task, new TaskCopyOptions(...), $actor)` (and `preview()`), `TaskMovePlanner::plan($task, $target, $columnMap)` then `TaskMover::move($task, $target, $columnMap, $plan->fingerprint, $actor)`. Check access first. Refusals are `TaskCopyRefusedException` with a `reason`, nothing written.
 
@@ -245,7 +245,7 @@ $context->run('rule:' . $rule->getId(), fn () => $taskManager->moveToColumn($tas
 
 Every history row written inside keeps the cause (`TaskChangeHistory::getCause()`); the listeners of the events dispatched inside read `TaskChangeContext::current()`. The history shows it only through `history.cause_labeler`, whose text is escaped. `TaskUpdatedEvent::getPreviousValue('priority')`, `getAddedTags()` and `getRemovedTags()` give the values before the write.
 
-Since 2.10, a comment added inside keeps the cause too (`TaskComment::getCause()`), shown next to its author through `comments.cause_labeler` (a `TaskCommentCauseLabelerInterface`; one class may label both). The id-only events below carry it as `cause`.
+Since 2.10, a comment added inside keeps the cause too (`TaskComment::getCause()`), shown next to its author through `comments.cause_labeler` (a `TaskCommentCauseTextInterface`; one class may label both). The id-only events below carry it as `cause`.
 
 **Cause format.** A free string of 1 to 191 characters the bundle never parses. Use `<kind>:<id>`, as Beacon does (`rule:42` for an automation rule); the bundle's own writes use none, and `recurring` is the context of a recurring task's *created* history row, not a cause.
 
@@ -486,7 +486,7 @@ nowo_task_board:
         tenant_paths:                      # since 2.6.0 an entry may set its own open_single_board (wins over the global one)
             - { path: '/tasks/{tenantSlug}', name_prefix: 'general_', slug_prefix: 'user-', open_single_board: false }
             - { path: '/projects/{tenantSlug}/tasks', name_prefix: 'app_project_', open_single_board: true }
-        first_board_provisioner: App\Tasks\FirstBoard   # FirstBoardProvisionerInterface, called on an empty tenant index
+        first_board_provisioner: App\Tasks\FirstBoard   # FirstBoardProvisioningInterface, called on an empty tenant index
     import:
         help_link:
             route: app_manual              # or url
@@ -512,7 +512,7 @@ nowo_task_board:
 | Duplicate (page, or `TaskCopier` called by host code), since 2.3 | `task_create`, with every task the copy creates, before anything is written | The reason on the page; `TaskCopyRefusedException` (`quota`) from code |
 | Recurring occurrence (`TaskRecurrenceManager::createOccurrence()`), since 2.3 | `task_create`, with every task it creates, before anything is written | `TaskCopyRefusedException` (`quota`); the host calls `block()` |
 | Move to another board (page, or `TaskMover`), since 2.3 | `task_move`, with the open tasks that arrive (none: not asked) | The reason on the page; `TaskCopyRefusedException` (`quota`) from code |
-| Provider sync, restoring or reopening a task | No: `SyncLimitCheckerInterface` | See [sync](sync.md) |
+| Provider sync, restoring or reopening a task | No: `SyncQuotaPolicyInterface` | See [sync](sync.md) |
 | `TaskManager::create()` called by host code | No: the host asks | |
 
 **Tenant list check.** A `TenantAwareTaskBoardAccessCheckerInterface` answers `canListBoards($user, $tenantKey)`. With a tenant, a refusal is a 404 on its index and create route.
@@ -631,7 +631,7 @@ label, link and badge; Twig has `nowo_task_board_link_label(link)`, `nowo_task_b
 
 ### Who may be assigned
 
-`assignee_provider: App\Task\ProjectMemberAssigneeProvider` (a `Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface`)
+`assignee_provider: App\Task\ProjectMemberAssigneeProvider` (a `Nowo\TaskBoardBundle\Assignee\TaskAssigneePolicyInterface`)
 limits the member picker to `assignableUsers(TaskBoard $board)` and makes `TaskMemberAssigner::assign()` throw
 `UnassignableUserException` (flash `task_board.flash.member_not_assignable`) for a user `canBeAssigned()` refuses.
 
@@ -714,11 +714,11 @@ TaskBoard never needs your domain classes.
 or an `UploadedFile` has a framework-free twin that takes value objects (snapshots with ids, a request context, an
 upload): implement the twin in a DDD host; see [ARCHITECTURE](ARCHITECTURE.md#host-ports) for the full table.
 
-| Concern | Interface (2.15 twin in a DDD host) |
+| Concern | Interface |
 |---|---|
-| Who may be assigned | `Assignee\TaskAssigneePolicyInterface` (deprecated: `TaskAssigneeProviderInterface`) |
+| Who may be assigned | `Assignee\TaskAssigneePolicyInterface` |
 | Access | `Security\TaskBoardAccessCheckerInterface`, `TenantAwareTaskBoardAccessCheckerInterface`, `TaskBoardTeamMembershipResolverInterface` |
-| Tenancy | `Tenancy\TaskBoardTenantResolverInterface`, `FirstBoardProvisioningInterface` (deprecated: `FirstBoardProvisionerInterface`), `Board\BoardScopeProviderInterface` |
+| Tenancy | `Tenancy\TaskBoardTenantResolverInterface`, `FirstBoardProvisioningInterface`, `Board\BoardScopeProviderInterface` |
 | Links to your objects | `Link\TaskObjectLinkResolverInterface` |
 | Boards of the multi-board list (since 2.13) | `MultiBoard\MultiBoardScopeProviderInterface` (values only) |
 | API | `Api\Hook\TaskApiRequestAuthenticatorInterface`, `TaskApiAttachmentStoreInterface`, `TaskApiTimeStoreInterface` (twins), users, workspace, plan gate, rate limiter, ... |
@@ -773,7 +773,7 @@ to the current tenant and its plan has the module, comment rights (`comments.rea
 `TaskCommentManager::isAuthor()`), and `TaskManagerInterface::activeTaskRefusal()` before a `create()` or `restore()`.
 Otherwise any signed-in user could change another tenant's tasks. `TaskMoverInterface` is no exception: check
 `canViewTask()` / `canEditTask()` on the task, `canEditBoard()` on both boards, that the target is one of
-`TaskBoardTargetsInterface::targets()` and the tenant, as `TaskCopyController` does.
+`TaskBoardTargetIdsInterface::targets()` and the tenant, as `TaskCopyController` does.
 
 **The eraser's port is the exception: it checks access itself.** `TaskBoardEraserInterface::emptyBoard()`,
 `deleteBoard()` and `eraseTask()` refuse with `AccessDeniedException` unless `canManageBoard($actor, $board)` allows it,
@@ -785,15 +785,13 @@ them. You still check the tenant, the plan and CSRF, as the API does.
 
 - Since 2.15 users need not be a Doctrine entity: with `database.user_reference: id` the rows keep the user's id and
   `user_directory` finds the user again (see [ARCHITECTURE](ARCHITECTURE.md#mapping-and-user-references)); the default
-  is still the relation to a Doctrine `user_class`. `database.mapping_type: xml` and `database.private_entity_manager`
-  complete the DDD path.
-- The older write events still carry the entities and the user object beside their scalar getters (deprecated since
-  2.15, removed in 3.0); use the id getters and the `get*Snapshot()` accessors and do not keep the entities.
+  is still the relation to a Doctrine `user_class`. `database.mapping_type: xml` and the private entity manager (the only
+  mode since 3.0) complete the DDD path.
+- The events carry ids, the actor object and `get*Snapshot()` accessors; since 3.0 no entity getter or public entity
+  property (deprecated since 2.15, removed in 3.0).
 - The remaining services (`TaskLinkAttacher`, `TaskDependencyManager`, `TaskMemberAssigner`, `TaskCopier`, ...) are
   `final` without a port and take the bundle's entities. Since 2.29 the id-based ports below cover the writes a host
   needs (create, update, move, complete, members, comments, links, dependencies, documents, time, columns).
-- `BOARD_LIST_RESULT`, `TASK_LIST_QUERY`, `TASK_LIST_RESULT`, `TASK_READ_ONLY_RESOLVE` and `MEMBER_LIST_QUERY` are
-  declared but never dispatched (deprecated since 2.10; removed in 3.0).
 
 ### Host ports by id (since 2.29)
 
@@ -899,13 +897,13 @@ tenant and day), `completedSamples(...)` (created and completed dates of the tas
 and `firstEntries(tenantKeys, columnName, from, to)` (the first time each task entered a column, from the task history).
 Windows are `[from, to)`, at most 400 days; at most 5,000 samples per call.
 
-**Events after your commit.** With `database.private_entity_manager: true`, `events.after_host_commit: true` (opt-in)
+**Events after your commit.** With `events.after_host_commit: true` (opt-in)
 and doctrine/dbal 4, a TaskBoard write you wrap in your own transaction dispatches its change events after **your**
 commit, and never when you roll back ([CONFIGURATION](CONFIGURATION.md#database)). The three hook events that carried
 objects only also have ids now: `BoardListQueryEvent::getSubjectId()`, `ColumnDeleteCheckEvent::getUserId()`,
-`AbstractColumnEvent::getActorId()`, each with `getOccurredAt()`; the object accessors are deprecated (removed in 3.0).
+`AbstractColumnEvent::getActorId()`, each with `getOccurredAt()`; the object accessors were removed in 3.0.
 
-**Your entities that point at TaskBoard rows.** With the private entity manager, TaskBoard rows live in TaskBoard's own
+**Your entities that point at TaskBoard rows.** TaskBoard rows live in TaskBoard's own
 unit of work. An entity of yours with a `ManyToOne` to `Task`, `TaskComment`, `TaskBoard`, ... gets the row as a
 **reference by id**, and never cascades persist to it:
 
@@ -952,7 +950,7 @@ takes the same icons and `back_testid` / `step_testid_prefix`.
 with `fetch`) — only `_board_create_form.html.twig`, with `Vary` on that header. A POST without the form still goes
 back to the index. `?new=1` opens the dialog on load.
 
-**Default view.** `board.default_view_resolver` names a `TaskBoardDefaultViewResolverInterface` service:
+**Default view.** `board.default_view_resolver` names a `TaskBoardDefaultViewPolicyInterface` service:
 `defaultView($user, $board)` answers `board`, `list` or `gantt` (null = board). A main GET of the plain board route
 then redirects to the board's list or Gantt route (the query string is kept, without route variables or `_` keys), except with `?view=board`, an XHR
 request, or a same-origin `Referer` under the board's own path (the user chose the board view from another page of
@@ -1222,7 +1220,7 @@ sets no size of its own: a host sets the tokens once on `:root` for every kit.
 
 The footer buttons read the UiKit theme slots `btn_secondary` (Cancel / Close), `btn_primary`, `btn_danger`
 (secondary destructive) and `btn_danger_solid` of the theme bundle `NowoTaskBoardBundle` through the Twig function
-`nowo_task_board_btn_class(slot)`, so a host restyles them in `nowo_ui_kit.theme.bundles.NowoTaskBoardBundle.classes`;
+`nowo_ui_class(slot, 'NowoTaskBoardBundle')` (`nowo_task_board_btn_class(slot)` until 2.x, removed in 3.0), so a host restyles them in `nowo_ui_kit.theme.bundles.NowoTaskBoardBundle.classes`;
 without UiKit's theme extension (UiKit 1.x) they keep the Bootstrap classes of 1.25 (`btn btn-outline-secondary`,
 `btn btn-primary`, `btn btn-outline-danger`, `btn btn-danger`).
 
@@ -1239,22 +1237,22 @@ who may edit it). The write routes check CSRF and `TASK_ACCESS_CHECK` like every
 **@mentions.** Typing `@` in the box lists the people who can read the task; ↑ ↓ move, Enter or Tab pick, Escape
 closes (a combobox: `aria-expanded`, `aria-activedescendant`). The server keeps a mention only for a candidate whose
 "@Name" is still in the text; the rest stays plain text. Mentions show as chips and a comment that mentions the viewer
-is highlighted. The candidates come from your `TaskMentionCandidatesResolverInterface`:
+is highlighted. The candidates come from your `TaskMentionCandidatesProviderInterface`:
 
 ```php
-final readonly class ProjectMentionCandidates implements TaskMentionCandidatesResolverInterface
+final readonly class ProjectMentionCandidates implements TaskMentionCandidatesProviderInterface
 {
-    public function candidates(Task $task): array
+    public function candidates(TaskSnapshot $task): array
     {
         return array_map(
             static fn (User $user): MentionCandidate => new MentionCandidate((string) $user->getId(), $user->getDisplayName(), $user),
-            $this->readersOf($task->getBoard()),
+            $this->readersOfBoard($task->boardId),
         );
     }
 }
 ```
 
-**Events** (after flush): `TaskBoardEvents::TASK_COMMENT` (`TaskCommentEvent`: `getComment()`, `getAction()` created
+**Events** (after flush): `TaskBoardEvents::TASK_COMMENT` (`TaskCommentEvent`: `getCommentId()`, `getCommentSnapshot()`, `getAction()` created
 / edited) and `TaskBoardEvents::TASK_MENTION` (`TaskMentionEvent::getMentionedUsers()`: the people mentioned — on an
 edit only the ones it adds, never the author). The bundle sends no notification: notify from these events.
 
@@ -2121,7 +2119,7 @@ The three ports take and return only values (`TaskSnapshot`, `TaskBoardSnapshot`
 `TaskQuestionAnswerSnapshot`, `TaskQuestionRecipientCandidate`, `TaskQuestionPublication`) and your own user object, so
 the adapters live in your infrastructure layer. With `database.mapping_type: xml` the tables come from
 `Resources/config/doctrine-xml/question/`; with `database.user_reference: id` the asker, answerer and withdrawer are
-user ids. With `database.private_entity_manager: true` every question write goes through the bundle's private manager.
+user ids. Every question write goes through the bundle's private manager (the only mode since 3.0).
 
 ## Header search (since 2.25)
 

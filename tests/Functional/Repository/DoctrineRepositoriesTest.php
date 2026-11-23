@@ -67,7 +67,8 @@ final class DoctrineRepositoriesTest extends KernelTestCase
     protected function setUp(): void
     {
         self::bootKernel();
-        $em = self::getContainer()->get('doctrine.orm.entity_manager');
+        // Since 3.0.0 (the private entity manager is the only mode) the fixtures go through the repositories' manager.
+        $em = self::getContainer()->get('app.task_board_em');
         self::assertInstanceOf(EntityManagerInterface::class, $em);
         $this->em = $em;
         $tool     = new SchemaTool($this->em);

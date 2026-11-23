@@ -6,11 +6,11 @@ namespace Nowo\TaskBoardBundle\Tests\Functional\Sync;
 
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskMember;
+use Nowo\TaskBoardBundle\Port\Internal\SyncPersonResolverInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncDirectory;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPersonMapping;
-use Nowo\TaskBoardBundle\Sync\Hook\SyncPersonResolverInterface;
 use Nowo\TaskBoardBundle\Sync\People\PeopleMappingDeniedException;
 use Nowo\TaskBoardBundle\Sync\People\PeopleMappingRow;
 use Nowo\TaskBoardBundle\Sync\People\PeopleMappingService;

@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Comment;
 
-use Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface;
 use Nowo\TaskBoardBundle\Entity\Task;
+use Nowo\TaskBoardBundle\Port\Internal\TaskAssigneeProviderInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TaskMentionCandidatesResolverInterface;
 use Nowo\TaskBoardBundle\Support\UserLabel;
 
 use function is_scalar;

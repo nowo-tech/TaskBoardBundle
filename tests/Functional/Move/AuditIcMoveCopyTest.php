@@ -231,7 +231,7 @@ final class AuditIcMoveCopyTest extends CopyTestCase
         $dispatcher = self::getContainer()->get('event_dispatcher');
         self::assertInstanceOf(EventDispatcherInterface::class, $dispatcher);
         $dispatcher->addListener(TaskBoardEvents::TASK_ACCESS_CHECK, static function (TaskAccessCheckEvent $event) use ($taskId, $deny): void {
-            if ($event->getTask()->getId() === $taskId) {
+            if ($event->getTaskId() === $taskId) {
                 $deny ? $event->deny() : $event->markReadOnly();
             }
         });

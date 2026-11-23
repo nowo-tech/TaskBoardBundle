@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Import;
 use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskLink;
+use Nowo\TaskBoardBundle\Port\Internal\TaskImportLinkLookupInterface;
 use Nowo\TaskBoardBundle\Support\ExactKey;
 
 use function array_chunk;

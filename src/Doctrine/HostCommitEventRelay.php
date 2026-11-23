@@ -37,7 +37,7 @@ use function in_array;
  * Without an open transaction an event is dispatched at once, as before. A listener that throws for a released event is
  * logged (event name and exception class) and the others still run: the data is committed.
  *
- * Registered only with `database.private_entity_manager: true` and doctrine/dbal 4 (the commit is seen through the
+ * Registered only with `events.after_host_commit: true` and doctrine/dbal 4 (the commit is seen through the
  * bundle's DBAL middleware on that connection); otherwise every event is dispatched at once (2.28 behaviour).
  *
  * FrankenPHP worker mode without kernel reset: held events are request state. Every boundary dispatches what was

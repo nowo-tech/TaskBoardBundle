@@ -19,7 +19,6 @@ use Nowo\TaskBoardBundle\Dto\TaskCommentFormData;
 use Nowo\TaskBoardBundle\Dto\TaskDependencyFormData;
 use Nowo\TaskBoardBundle\Dto\TaskFormData;
 use Nowo\TaskBoardBundle\Dto\TaskImportFormData;
-use Nowo\TaskBoardBundle\Dto\TaskLinkFormData;
 use Nowo\TaskBoardBundle\Dto\TaskTimeEntryFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\ColumnSet;
@@ -87,6 +86,7 @@ use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\Extension\Core\Type\EnumType;
 use Symfony\Component\Form\Extension\Core\Type\FormType;
+use Symfony\Component\Form\Extension\Core\Type\HiddenType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\Extension\Validator\ValidatorExtension;
 use Symfony\Component\Form\FormFactoryInterface;
@@ -175,8 +175,6 @@ final class ManageTemplatesRenderingTest extends TestCase
         $html = $this->twig()->render('@NowoTaskBoardBundle/manage/task.html.twig', [
             'task'             => $task,
             'taskForm'         => $this->taskForm(TaskFormData::class, false)->createView(),
-            'linkForm'         => $this->factory()->create(TaskLinkFormType::class, new TaskLinkFormData())->createView(),
-            'memberForm'       => $this->memberForm(),
             'subtaskForm'      => $this->taskForm(TaskFormData::class, true)->createView(),
             'columnNavigation' => (new TaskManager($this->createMock(TaskRepositoryInterface::class), new TaskChangeRecorder()))->getColumnNavigation($task),
             'subtaskTotal'     => 1,
@@ -192,10 +190,9 @@ final class ManageTemplatesRenderingTest extends TestCase
         }
         // REQ-TWIG-005: CSRF-only actions and the priority modal render from Form views.
         self::assertStringContainsString('id="nowo-task-advance-form"', $html);
-        self::assertStringContainsString('id="nowo-task-link-delete-form"', $html);
-        self::assertStringContainsString('data-nowo-task-board-task-links-modal-target="deleteForm"', $html);
-        self::assertMatchesRegularExpression('/name="priority"[^>]*value="high" checked="checked"/', $html);
-        self::assertStringContainsString('data-nowo-task-board-task-priority-modal-target="firstOption"', $html);
+        // Since 3.0.0 the People, Priority and Links dialogs load on demand only (the 2.30 inline dialogs are gone).
+        self::assertStringContainsString('data-testid="nowo-task-dialog"', $html);
+        self::assertStringNotContainsString('data-nowo-task-board-task-priority-modal-target="firstOption"', $html);
         self::assertStringContainsString('Ship it', $html);
         self::assertStringContainsString('Write docs', $html);
         self::assertStringContainsString('Proofread', $html);
@@ -216,8 +213,6 @@ final class ManageTemplatesRenderingTest extends TestCase
         $html = $this->twig()->render('@NowoTaskBoardBundle/manage/task.html.twig', [
             'task'             => $task,
             'taskForm'         => $this->taskForm(TaskFormData::class, false)->createView(),
-            'linkForm'         => $this->factory()->create(TaskLinkFormType::class, new TaskLinkFormData())->createView(),
-            'memberForm'       => $this->memberForm(),
             'subtaskForm'      => $this->taskForm(TaskFormData::class, true)->createView(),
             'columnNavigation' => (new TaskManager($this->createMock(TaskRepositoryInterface::class), new TaskChangeRecorder()))->getColumnNavigation($task),
             'priorities'       => TaskPriority::cases(),
@@ -232,20 +227,15 @@ final class ManageTemplatesRenderingTest extends TestCase
         // The activity shows the colours as swatches, and "No colour" when it was removed.
         self::assertStringContainsString('<span class="nowo-task-activity__swatch" data-nowo-task-vars="{&quot;--nowo-task-swatch&quot;:&quot;#3b82f6&quot;}" aria-hidden="true"></span>#3b82f6', $html);
         self::assertStringContainsString('<span>task_board.form.task.no_color</span>', $html);
-        // People, priority and links are native dialogs (no Bootstrap modal markup).
-        self::assertSame(3, substr_count($html, '<dialog'));
-        self::assertStringContainsString('data-nowo-task-board-task-members-modal-target="modal"', $html);
-        self::assertStringContainsString('class="nowo-task-members__item"', $html);
-        self::assertStringContainsString('class="nowo-task-members__role nowo-task-members__role--assignee"', $html);
-        self::assertMatchesRegularExpression('/<form[^>]*class="nowo-task-members__add"[^>]*id="nowo-task-members-add-[^"]+"|<form[^>]*id="nowo-task-members-add-[^"]+"[^>]*class="nowo-task-members__add"/', $html);
-        // 1.16.1: Close and Add member share the dialog footer; the submit button names the add form (1.26: the footer
-        // is outside the scrolling body).
-        self::assertMatchesRegularExpression('/<footer class="[^"]*nowo-task-dialog__footer nowo-task-dialog__actions"[^>]*>\s*<button type="button" class="[^"]*" data-nowo-ui-dialog-close>[^<]*<\/button>\s*<button type="submit" form="nowo-task-members-add-[^"]+" class="[^"]*nowo-task-members__add-button">/', $html);
-        self::assertStringContainsString('data-action="change-&gt;nowo-task-board-task-priority-modal#select"', $html);
+        // Since 3.0.0 People, priority and links are never on the page: they load on demand (the 2.30 inline dialogs are
+        // gone); the page carries the empty remote dialog only, and no Bootstrap modal markup.
+        self::assertStringNotContainsString('data-nowo-task-board-task-members-modal-target="modal"', $html);
+        self::assertStringNotContainsString('nowo-task-board-task-priority-modal#select', $html);
+        self::assertStringContainsString('data-testid="nowo-task-members-open"', $html);
         self::assertStringNotContainsString('class="modal', $html);
         self::assertStringNotContainsString('modal-backdrop', $html);
         self::assertStringNotContainsString(' style="', $html);
-        $this->assertDialogAnatomy($html, 3);
+        $this->assertDialogAnatomy($html, 0);
     }
 
     public function testBoardCardAndGanttBarUseTheTaskColour(): void
@@ -311,8 +301,6 @@ final class ManageTemplatesRenderingTest extends TestCase
         $html = $this->twig(new TaskObjectLinkResolver([$resolver]))->render('@NowoTaskBoardBundle/manage/task.html.twig', [
             'task'             => $task,
             'taskForm'         => $this->taskForm(TaskFormData::class, false)->createView(),
-            'linkForm'         => $this->factory()->create(TaskLinkFormType::class, new TaskLinkFormData())->createView(),
-            'memberForm'       => $this->memberForm(),
             'subtaskForm'      => $this->taskForm(TaskFormData::class, true)->createView(),
             'columnNavigation' => (new TaskManager($this->createMock(TaskRepositoryInterface::class), new TaskChangeRecorder()))->getColumnNavigation($task),
             'subtaskTotal'     => $tree->progress($task)->total,
@@ -386,8 +374,6 @@ final class ManageTemplatesRenderingTest extends TestCase
         $html = $this->twig()->render('@NowoTaskBoardBundle/manage/task.html.twig', [
             'task'             => $this->task,
             'taskForm'         => $this->taskForm(TaskFormData::class, false)->createView(),
-            'linkForm'         => $this->factory()->create(TaskLinkFormType::class, new TaskLinkFormData())->createView(),
-            'memberForm'       => $this->memberForm(),
             'subtaskForm'      => $this->taskForm(TaskFormData::class, true)->createView(),
             'columnNavigation' => (new TaskManager($this->createMock(TaskRepositoryInterface::class), new TaskChangeRecorder()))->getColumnNavigation($this->task),
             'priorities'       => TaskPriority::cases(),
@@ -400,7 +386,7 @@ final class ManageTemplatesRenderingTest extends TestCase
     public function testIndexPageRenders(): void
     {
         $html = $this->twig()->render('@NowoTaskBoardBundle/manage/index.html.twig', [
-            'page'           => new ListPage(new PageHeader('task_board.index.title'), [new Column('name'), new Column('views')], [$this->board], bundle: TaskBoardPages::BUNDLE, layout: TaskBoardPages::LEGACY_ADMIN_BRIDGE),
+            'page'           => new ListPage(new PageHeader('task_board.index.title'), [new Column('name'), new Column('views')], [$this->board], bundle: TaskBoardPages::BUNDLE, layout: 'layout.html.twig'),
             'canCreateBoard' => true,
             'boards'         => [$this->board],
             'boardForm'      => $this->factory()->create(TaskBoardFormType::class, new TaskBoardFormData())->createView(),
@@ -528,33 +514,31 @@ final class ManageTemplatesRenderingTest extends TestCase
         self::assertStringNotContainsString('nowo-task-detail__description-view', $empty);
     }
 
+    /** Since 3.0.0 the page offers the on-demand opener only; the dialog route renders the form (dialog_fragment). */
     public function testATaskOffersImportSubtasksWithItsHelpToEditorsOnly(): void
     {
         $form = $this->factory()->create(TaskImportFormType::class, new TaskImportFormData(TaskImportSource::TaskBoardCsv), ['action' => '/task/import'])->createView();
-        $html = $this->twig()->render('@NowoTaskBoardBundle/manage/task_panel.html.twig', $this->taskContext($this->task) + ['subtaskImportForm' => $form, 'panel' => true]);
+        $html = $this->twig()->render('@NowoTaskBoardBundle/manage/task_panel.html.twig', $this->taskContext($this->task) + ['canImportIntoTask' => true, 'panel' => true]);
+        self::assertStringContainsString('nowo-task-subtask-import__open', $html);
+        self::assertStringNotContainsString('data-dialog="subtask-import"', $html);
 
-        self::assertStringContainsString('nowo-task-subtask-import', $html);
-        self::assertStringContainsString('data-dialog="subtask-import"', $html);
-        self::assertStringContainsString('action="/task/import"', $html);
-        self::assertStringContainsString('enctype="multipart/form-data"', $html);
-        self::assertStringContainsString('task_board.import.help.intro_task', $html);
-        self::assertMatchesRegularExpression('/<option value="taskboard_csv" selected/', $html);
-        // Since 1.26: Help on the left, Cancel and Import (bound to the form) on the right, outside the body.
-        self::assertSame('nowo-task-subtask-import-form-' . $this->task->getId(), (new Crawler($html))->filter('dialog[data-dialog="subtask-import"] .nowo-task-dialog__footer .btn-primary')->attr('form'));
-        $this->assertDialogAnatomy($html, 5);
+        $fragment = $this->twig()->render('@NowoTaskBoardBundle/manage/_task_subtask_import.html.twig', ['task' => $this->task, 'subtaskImportForm' => $form, 'dialog_fragment' => true]);
+        self::assertStringContainsString('action="/task/import"', $fragment);
+        self::assertStringContainsString('enctype="multipart/form-data"', $fragment);
+        self::assertStringContainsString('task_board.import.help.intro_task', $fragment);
+        self::assertMatchesRegularExpression('/<option value="taskboard_csv" selected/', $fragment);
+        // Help on the left, Cancel and Import (bound to the form) on the right, in the dialog's actions.
+        self::assertSame('nowo-task-subtask-import-form-' . $this->task->getId(), (new Crawler($fragment))->filter('[data-nowo-ui-dialog-actions] .btn-primary')->attr('form'));
 
-        $readOnly = $this->twig()->render('@NowoTaskBoardBundle/manage/task_panel.html.twig', $this->taskContext($this->task) + ['subtaskImportForm' => null, 'panel' => true]);
-        self::assertStringNotContainsString('nowo-task-subtask-import', $readOnly);
+        // A 2.30 form passed to the page is ignored (no inline dialog).
+        $legacy = $this->twig()->render('@NowoTaskBoardBundle/manage/task_panel.html.twig', $this->taskContext($this->task) + ['subtaskImportForm' => $form, 'panel' => true]);
+        self::assertStringNotContainsString('data-dialog="subtask-import"', $legacy);
+        self::assertStringNotContainsString('action="/task/import"', $legacy);
 
-        // Since 1.26.2: an editor without the import permission (no form) keeps the add-subtask form but no dialog.
-        $editorNoImport = $this->twig()->render('@NowoTaskBoardBundle/manage/task_panel.html.twig', $this->taskContext($this->task) + ['subtaskImportForm' => null, 'canEditTask' => true, 'panel' => true]);
+        // An editor without the import permission keeps the add-subtask form but no opener.
+        $editorNoImport = $this->twig()->render('@NowoTaskBoardBundle/manage/task_panel.html.twig', $this->taskContext($this->task) + ['canEditTask' => true, 'panel' => true]);
         self::assertStringContainsString('nowo-task-detail__inline-add', $editorNoImport);
         self::assertStringNotContainsString('nowo-task-subtask-import', $editorNoImport);
-        self::assertStringNotContainsString('data-dialog="subtask-import"', $editorNoImport);
-
-        // A form without edit rights (never built by the controller) still shows no dialog.
-        $viewerWithForm = $this->twig()->render('@NowoTaskBoardBundle/manage/task_panel.html.twig', $this->taskContext($this->task) + ['subtaskImportForm' => $form, 'canEditTask' => false, 'panel' => true]);
-        self::assertStringNotContainsString('data-dialog="subtask-import"', $viewerWithForm);
     }
 
     public function testBoardPageRenders(): void
@@ -596,8 +580,6 @@ final class ManageTemplatesRenderingTest extends TestCase
                 'rich_description' => false,
                 'tag_input'        => false,
             ])->createView(),
-            'linkForm'         => $this->factory()->create(TaskLinkFormType::class, new TaskLinkFormData())->createView(),
-            'memberForm'       => $this->memberForm(),
             'subtaskForm'      => $this->taskForm(TaskFormData::class, true)->createView(),
             'columnNavigation' => (new TaskManager($this->createMock(TaskRepositoryInterface::class), new TaskChangeRecorder()))->getColumnNavigation($this->task),
             'subtaskTotal'     => 0,
@@ -616,15 +598,18 @@ final class ManageTemplatesRenderingTest extends TestCase
         $icons = ['tabler:inbox', 'tabler:bug'];
 
         $html = $this->twig()->render('@NowoTaskBoardBundle/manage/board.html.twig', $this->boardContext([
-            'columnForm'           => $this->factory()->create(BoardColumnFormType::class, new BoardColumnFormData(), ['icon_choices' => $icons])->createView(),
-            'editColumnForm'       => $this->factory()->create(BoardColumnFormType::class, new BoardColumnFormData(), ['icon_choices' => $icons])->createView(),
-            'columnIcons'          => $icons,
-            'columnDeleteForm'     => $this->factory()->createNamed('', CsrfActionType::class, null, ['csrf_token_id' => 'd'])->createView(),
-            'panelTargetPath'      => '/tools/task-board/board/' . $this->board->getId(),
-            'columnSets'           => [$set, $other],
-            'columnSetForm'        => $this->factory()->create(ColumnSetFormType::class, new ColumnSetFormData())->createView(),
-            'columnSetApplyForm'   => $this->factory()->create(ColumnSetApplyFormType::class, new ColumnSetApplyFormData(), ['column_set_choices' => ['Kanban' => $set->getId(), 'Shared' => $other->getId()]])->createView(),
-            'columnSetDeleteForms' => [$set->getId() => $this->factory()->createNamed('', CsrfActionType::class, null, ['csrf_token_id' => 's', 'action' => '/delete-set'])->createView()],
+            'columnForm'         => $this->factory()->create(BoardColumnFormType::class, new BoardColumnFormData(), ['icon_choices' => $icons])->createView(),
+            'editColumnForm'     => $this->factory()->create(BoardColumnFormType::class, new BoardColumnFormData(), ['icon_choices' => $icons])->createView(),
+            'columnIcons'        => $icons,
+            'columnDeleteForm'   => $this->factory()->createNamed('', CsrfActionType::class, null, ['csrf_token_id' => 'd'])->createView(),
+            'panelTargetPath'    => '/tools/task-board/board/' . $this->board->getId(),
+            'columnSets'         => [$set, $other],
+            'columnSetForm'      => $this->factory()->create(ColumnSetFormType::class, new ColumnSetFormData())->createView(),
+            'columnSetApplyForm' => $this->factory()->create(ColumnSetApplyFormType::class, new ColumnSetApplyFormData(), ['column_set_choices' => ['Kanban' => $set->getId(), 'Shared' => $other->getId()]])->createView(),
+            // Since 2.31.0 (the per-set forms of 2.30, removed in 3.0.0): one shared CSRF form, each button its formaction.
+            'columnSetDeletable' => [$set->getId() => true],
+            // A CSRF-only form (the test factory has no CSRF extension: a hidden token field stands for it).
+            'columnSetDeleteForm' => $this->factory()->createNamedBuilder('', FormType::class)->add('_token', HiddenType::class, ['data' => 's'])->getForm()->createView(),
         ]));
 
         self::assertStringNotContainsString(' style="', $html);
@@ -638,8 +623,8 @@ final class ManageTemplatesRenderingTest extends TestCase
         self::assertStringContainsString('COLUMN_ID&#x2F;delete', $html);
         self::assertStringContainsString('nowo-task-dialog nowo-task-dialog--native', $html);
         self::assertStringContainsString('/column-sets/apply', $html);
-        self::assertStringContainsString('action="/delete-set"', $html);
-        self::assertSame(1, substr_count($html, 'nowo-task-column-sets__delete'));
+        self::assertStringContainsString('id="nowo-task-column-set-delete-form"', $html);
+        self::assertSame(1, substr_count($html, 'form="nowo-task-column-set-delete-form"'));
         self::assertStringContainsString('Todo, Done', $html);
         // Since 1.26 (dialog rule v2): add task, add / edit column, save set, add from set — header, body, footer.
         $this->assertDialogAnatomy($html, 5);
@@ -772,8 +757,6 @@ final class ManageTemplatesRenderingTest extends TestCase
         $html = $this->twig()->render('@NowoTaskBoardBundle/manage/task_panel.html.twig', [
             'task'             => $this->task,
             'taskForm'         => $this->taskForm(TaskFormData::class, false)->createView(),
-            'linkForm'         => $this->factory()->create(TaskLinkFormType::class, new TaskLinkFormData())->createView(),
-            'memberForm'       => $this->memberForm(),
             'subtaskForm'      => $this->taskForm(TaskFormData::class, true)->createView(),
             'columnNavigation' => (new TaskManager($this->createMock(TaskRepositoryInterface::class), new TaskChangeRecorder()))->getColumnNavigation($this->task),
             'subtaskTotal'     => 2,
@@ -843,10 +826,13 @@ final class ManageTemplatesRenderingTest extends TestCase
         $task->addChangeHistory(new TaskChangeHistory($task, $this->user, TaskChangeType::TimeBillable, null, 'true', '2026-10-27'));
         $task->addChangeHistory(new TaskChangeHistory($task, $this->user, TaskChangeType::TimeRemoved, '95', null, '2026-10-26'));
 
-        $html = $this->twig()->render('@NowoTaskBoardBundle/manage/task.html.twig', $this->taskContext($task) + [
-            'dependencyForm'       => $this->factory()->create(TaskDependencyFormType::class, new TaskDependencyFormData(), ['task_choices' => ['Design' => $blocker->getId()]])->createView(),
+        $dependencyForm = $this->factory()->create(TaskDependencyFormType::class, new TaskDependencyFormData(), ['task_choices' => ['Design' => $blocker->getId()]])->createView();
+        $timeEntryForm  = $this->factory()->create(TaskTimeEntryFormType::class, new TaskTimeEntryFormData(loggedAt: new DateTimeImmutable('2026-10-28'), billable: true))->createView();
+        $html           = $this->twig()->render('@NowoTaskBoardBundle/manage/task.html.twig', $this->taskContext($task) + [
+            // Since 2.31.0 (3.0.0: the only way) the dialogs load on demand: the page knows the services are wired.
+            'dependencies'         => true,
+            'timeLogging'          => true,
             'dependencyRemoveForm' => $this->factory()->createNamed('', CsrfActionType::class, null, ['csrf_token_id' => 'd'])->createView(),
-            'timeEntryForm'        => $this->factory()->create(TaskTimeEntryFormType::class, new TaskTimeEntryFormData(loggedAt: new DateTimeImmutable('2026-10-28'), billable: true))->createView(),
             'timeEntryRemoveForm'  => $this->factory()->createNamed('', CsrfActionType::class, null, ['csrf_token_id' => 't'])->createView(),
             // Since 2.12.0: the billable switch of each entry.
             'billableTimeEntryIds'  => [$pairing->getId()],
@@ -855,17 +841,19 @@ final class ManageTemplatesRenderingTest extends TestCase
             'subtaskDeviation'      => TaskDeviation::sum([$blocked]),
         ]);
 
-        // Dependencies: the add dialog with its searchable picker, one remove button per row, both directions.
-        self::assertStringContainsString('data-dialog="dependency"', $html);
-        self::assertStringContainsString('data-controller="nowo-task-board-option-filter"', $html);
-        self::assertStringContainsString('data-nowo-task-board-option-filter-target="select"', $html);
+        // Dependencies: the add dialog's opener (its searchable picker loads on demand), one remove button per row, both
+        // directions.
+        self::assertStringContainsString('data-testid="nowo-task-dependency-open"', $html);
+        $dependencyDialog = $this->twig()->render('@NowoTaskBoardBundle/manage/_task_dependency_dialog.html.twig', ['task' => $task, 'dependencyForm' => $dependencyForm, 'dialog_fragment' => true]);
+        self::assertStringContainsString('data-controller="nowo-task-board-option-filter"', $dependencyDialog);
+        self::assertStringContainsString('data-nowo-task-board-option-filter-target="select"', $dependencyDialog);
         self::assertStringContainsString('id="nowo-task-dependency-remove-form"', $html);
         self::assertStringContainsString('task_board.dependency.relation.blocks', $html);
         self::assertStringContainsString('task_board.dependency.relation.duplicated_by', $html);
         self::assertStringContainsString('formaction="/tools/task-board/task/' . $task->getId() . '/dependency/', $html);
         self::assertStringContainsString('nowo-task-dependencies__task is-done', $html);
-        // Since 1.26: people, priority, links, dependency and time dialogs, each with its footer outside the body.
-        $this->assertDialogAnatomy($html, 5);
+        // Since 3.0.0 no inline dialog on the page (people, priority, links, dependency and time load on demand).
+        $this->assertDialogAnatomy($html, 0);
         // Time: estimate 1 h 30 min, 2 h spent, +30 min (+33 %), over; the subtasks' row; the entries and the dialog.
         self::assertStringContainsString('nowo-task-deviation--over', $html);
         self::assertStringContainsString('<dd>1 h 30 min</dd>', $html);
@@ -873,11 +861,12 @@ final class ManageTemplatesRenderingTest extends TestCase
         self::assertStringContainsString('(+33 %)', $html);
         self::assertStringContainsString('task_board.time.subtasks_sum', $html);
         self::assertStringContainsString('Pairing', $html);
-        self::assertStringContainsString('data-dialog="time"', $html);
-        self::assertStringContainsString('name="task_time_entry[minutes]"', $html);
+        self::assertStringContainsString('data-testid="nowo-task-time-open"', $html);
+        $timeDialog = $this->twig()->render('@NowoTaskBoardBundle/manage/_task_time_dialog.html.twig', ['task' => $task, 'timeEntryForm' => $timeEntryForm, 'dialog_fragment' => true]);
+        self::assertStringContainsString('name="task_time_entry[minutes]"', $timeDialog);
         self::assertStringContainsString('id="nowo-task-time-remove-form"', $html);
         // Since 2.12.0: the Billable switch (checked: the host default), the entry's badge and its switch button, the history row.
-        self::assertMatchesRegularExpression('~<input type="checkbox" id="task_time_entry_billable" name="task_time_entry\[billable\]"[^>]*checked~', $html);
+        self::assertMatchesRegularExpression('~<input type="checkbox" id="task_time_entry_billable" name="task_time_entry\[billable\]"[^>]*checked~', $timeDialog);
         self::assertStringContainsString('data-billable="1"', $html);
         self::assertStringContainsString('id="nowo-task-time-billable-form"', $html);
         self::assertStringContainsString('formaction="/tools/task-board/task/' . $task->getId() . '/time/' . $pairing->getId() . '/billable"', $html);
@@ -902,15 +891,16 @@ final class ManageTemplatesRenderingTest extends TestCase
 
         $html = $this->twig()->render('@NowoTaskBoardBundle/manage/task.html.twig', $this->taskContext($this->task) + [
             'canEditTask'          => false,
-            'dependencyForm'       => $this->factory()->create(TaskDependencyFormType::class, new TaskDependencyFormData())->createView(),
+            'dependencies'         => true,
+            'timeLogging'          => true,
             'dependencyRemoveForm' => $this->factory()->createNamed('', CsrfActionType::class, null, ['csrf_token_id' => 'd'])->createView(),
         ]);
 
         self::assertStringContainsString('task_board.dependency.relation.blocked_by', $html);
         self::assertStringContainsString('task_board.time.status.on_track', $html);
         self::assertStringNotContainsString('id="nowo-task-dependency-remove-form"', $html);
-        self::assertStringNotContainsString('data-dialog="dependency"', $html);
-        self::assertStringNotContainsString('data-dialog="time"', $html);
+        self::assertStringNotContainsString('data-testid="nowo-task-dependency-open"', $html);
+        self::assertStringNotContainsString('data-testid="nowo-task-time-open"', $html);
     }
 
     public function testListFoldsItsFiltersAndShowsTheTimeColumns(): void
@@ -1173,8 +1163,6 @@ final class ManageTemplatesRenderingTest extends TestCase
         return [
             'task'             => $task,
             'taskForm'         => $this->taskForm(TaskFormData::class, false)->createView(),
-            'linkForm'         => $this->factory()->create(TaskLinkFormType::class, new TaskLinkFormData())->createView(),
-            'memberForm'       => $this->memberForm(),
             'subtaskForm'      => $this->taskForm(TaskFormData::class, true)->createView(),
             'columnNavigation' => (new TaskManager($this->createMock(TaskRepositoryInterface::class), new TaskChangeRecorder()))->getColumnNavigation($task),
             'priorities'       => TaskPriority::cases(),
@@ -1186,7 +1174,7 @@ final class ManageTemplatesRenderingTest extends TestCase
     {
         $set  = new ColumnSet('Kanban');
         $html = $this->twig()->render('@NowoTaskBoardBundle/manage/index.html.twig', [
-            'page'           => new ListPage(new PageHeader('task_board.index.title'), [new Column('name')], [], empty: new EmptyState('task_board.index.no_boards'), bundle: TaskBoardPages::BUNDLE, layout: TaskBoardPages::LEGACY_ADMIN_BRIDGE),
+            'page'           => new ListPage(new PageHeader('task_board.index.title'), [new Column('name')], [], empty: new EmptyState('task_board.index.no_boards'), bundle: TaskBoardPages::BUNDLE, layout: 'layout.html.twig'),
             'canCreateBoard' => true,
             'boards'         => [],
             'boardForm'      => $this->factory()->create(TaskBoardFormType::class, new TaskBoardFormData(), ['column_set_choices' => ['Kanban' => $set->getId()]])->createView(),
@@ -1223,7 +1211,7 @@ final class ManageTemplatesRenderingTest extends TestCase
     {
         $importForm = $this->factory()->create(TaskImportFormType::class, new TaskImportFormData())->createView();
         $html       = $this->twig()->render('@NowoTaskBoardBundle/manage/import.html.twig', [
-            'page'           => new FormPage(new PageHeader('Roadmap'), $importForm, bundle: TaskBoardPages::BUNDLE, layout: TaskBoardPages::LEGACY_ADMIN_BRIDGE),
+            'page'           => new FormPage(new PageHeader('Roadmap'), $importForm, bundle: TaskBoardPages::BUNDLE, layout: 'layout.html.twig'),
             'board'          => $this->board,
             'importForm'     => $importForm,
             'dashboardRoute' => null,
@@ -1374,7 +1362,11 @@ final class ManageTemplatesRenderingTest extends TestCase
         $loader = new ChainLoader([
             new ArrayLoader([
                 'host/_filters_collapse.html.twig' => '<div class="host-fold" data-key="{{ key }}" data-fold-key="{{ fold_key }}" data-fields="{{ form|length }}"></div>',
-                'layout.html.twig'                 => '<title>{% block title %}{% endblock %}</title>{% block stylesheets %}{% endblock %}{% block javascripts %}{% endblock %}<main class="{% block container_class %}{% endblock %}">{% block body %}{% endblock %}</main>',
+                // Since 3.0.0: a host layout that renders the UiKit canonical blocks (the 2.x bridge for older layouts is gone).
+                'layout.html.twig' => '<title>{% block nowo_ui_document_title %}{% endblock %}</title>{% block nowo_ui_styles %}<link rel="stylesheet" href="{{ asset(\'css/nowo-ui.css\', \'nowo_ui_kit\') }}">{{ nowo_ui_tokens() }}{% endblock %}{% block nowo_ui_head %}{% endblock %}'
+                    . '<main class="{% block container_class %}{% endblock %}"><div class="{{ nowo_ui_class(\'content\', nowo_ui_bundle|default(null)) }}"{% if nowo_ui_bundle|default(null) %} data-nowo-ui-bundle="{{ nowo_ui_bundle }}"{% endif %}>'
+                    . '{% block nowo_ui_page_header %}{% endblock %}{% block nowo_ui_flashes %}{{ include(nowo_ui_partial(\'flashes\', nowo_ui_bundle|default(null)), {bundle: nowo_ui_bundle|default(null)}) }}{% endblock %}{% block nowo_ui_content %}{% endblock %}</div>'
+                    . '{% block nowo_ui_modals %}{% endblock %}</main>{% block nowo_ui_scripts %}{{ include(nowo_ui_partial(\'scripts\', nowo_ui_bundle|default(null))) }}{% endblock %}',
             ]),
             $filesystem,
         ]);
@@ -1390,7 +1382,7 @@ final class ManageTemplatesRenderingTest extends TestCase
         // Since 2.22.0: the task menus (no user here: the pages print none).
         $twig->addExtension(new TaskMenuTwigExtension());
         // The task page's scaffold reads it; the pages with a model of their own pass theirs.
-        $twig->addGlobal('page', new ShowPage(new PageHeader('Task'), bundle: TaskBoardPages::BUNDLE, layout: TaskBoardPages::LEGACY_ADMIN_BRIDGE));
+        $twig->addGlobal('page', new ShowPage(new PageHeader('Task'), bundle: TaskBoardPages::BUNDLE, layout: 'layout.html.twig'));
         $twig->addExtension(new RoutingExtension(new UrlGenerator($collection, new RequestContext())));
         $twig->addExtension(new TranslationExtension(new IdentityTranslator()));
         $twig->addFunction(new TwigFunction('asset', static fn (string $path, ?string $package = null): string => '/assets/' . $path));

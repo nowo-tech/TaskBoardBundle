@@ -54,7 +54,7 @@ final class PrivateEntityManagerPartsTest extends KernelTestCase
      */
     protected static function createKernel(array $options = []): KernelInterface
     {
-        return new FunctionalKernel(['database' => ['private_entity_manager' => true]]);
+        return new FunctionalKernel([]);
     }
 
     #[Test]

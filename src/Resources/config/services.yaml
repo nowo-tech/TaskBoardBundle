@@ -373,7 +373,7 @@ services:
             $maxRows: '%nowo_task_board.import.max_rows%'
 
     # Since 1.22: source ids already imported into another board of the tenant (cross-board rule of the import).
-    Nowo\TaskBoardBundle\Import\TaskImportLinkLookupInterface:
+    Nowo\TaskBoardBundle\Port\Internal\TaskImportLinkLookupInterface:
         alias: Nowo\TaskBoardBundle\Import\DoctrineTaskImportLinkLookup
 
     Nowo\TaskBoardBundle\Command\TaskBoardImportCommand: ~
@@ -386,7 +386,7 @@ services:
 
     Nowo\TaskBoardBundle\Command\TaskBoardApplyDefaultColumnIconsCommand: ~
 
-    # REQ-UI-001: Twig globals from templates.layout / templates.css_framework.
+    # REQ-UI-001: the Twig functions and globals of the pages.
     Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension:
         arguments:
             $routes: '%nowo_task_board.routes%'
@@ -402,7 +402,7 @@ services:
             $boardToolbar: '%nowo_task_board.board.toolbar%'
             $panelToolbar: '%nowo_task_board.task_panel.toolbar%'
 
-    # Since 2.0.0: the layout of the pages (web_ui.layout_template, or the deprecated templates.layout).
+    # Since 2.0.0: the layout of the pages (web_ui.layout_template).
     Nowo\TaskBoardBundle\Ui\TaskBoardPages:
         arguments:
             $layoutTemplate: '%nowo_task_board.web_ui.layout_template%'

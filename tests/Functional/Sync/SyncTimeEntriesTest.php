@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\Tests\Functional\Sync;
 
 use DateInterval;
 use DateTimeImmutable;
+use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncCursor;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncError;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncMode;
@@ -13,6 +14,7 @@ use Nowo\TaskBoardBundle\Sync\Dto\SyncOptions;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncPhase;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncStatus;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
+use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPerson;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPersonMapping;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncRun;
 use Nowo\TaskBoardBundle\Sync\Exception\RateLimitedException;
@@ -28,6 +30,7 @@ use Nowo\TaskBoardBundle\Sync\SyncRunContext;
 use Nowo\TaskBoardBundle\Sync\Testing\InMemoryTaskProvider;
 use Nowo\TaskBoardBundle\Sync\Time\ImportedTimeEntryCandidate;
 use Nowo\TaskBoardBundle\Sync\Time\TimeEntryPhase;
+use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\AppUser;
 use Nowo\TaskBoardBundle\Tests\Functional\App\RecordingTimeSink;
 use Nowo\TaskBoardBundle\Tests\Functional\App\TestCredentialResolver;
 
@@ -74,14 +77,18 @@ final class SyncTimeEntriesTest extends SyncPeopleFunctionalTestCase
 
         $delivered = array_merge(...array_map(static fn (array $c): array => $c['entries'], RecordingTimeSink::$calls));
         self::assertSame(['e1', 'e4'], array_map(static fn (ImportedTimeEntryCandidate $c): string => $c->entry->id, $delivered));
-        self::assertSame('Task', $delivered[0]->task?->getTitle());
-        self::assertSame('9001', $delivered[0]->person->getProviderUserId());
+        self::assertSame('Task', $this->em->find(Task::class, (string) $delivered[0]->taskId())?->getTitle());
+        self::assertSame('9001', $delivered[0]->personProviderUserId());
         // Since 1.27.0: the host user of the entry (the person's mapping); none once the person is unmapped.
-        self::assertSame($delivered[0]->person->getMappedUser(), $delivered[0]->user());
-        self::assertNotNull($delivered[0]->user());
-        $delivered[0]->person->map(TaskSyncPersonMapping::Unmatched, null, null, new DateTimeImmutable());
-        self::assertNull($delivered[0]->user());
-        self::assertNull($delivered[1]->task, 'not linked on this board');
+        // Since 3.0.0 the candidate's entities are private: the person is read again (the run cleared the private manager).
+        $person = $this->em->find(TaskSyncPerson::class, $delivered[0]->personId());
+        self::assertInstanceOf(TaskSyncPerson::class, $person);
+        $mapped = $delivered[0]->user();
+        self::assertInstanceOf(AppUser::class, $mapped);
+        self::assertSame($person->getMappedUser()?->getId(), $mapped->getId());
+        $person->map(TaskSyncPersonMapping::Unmatched, null, null, new DateTimeImmutable());
+        self::assertNull((new ImportedTimeEntryCandidate($delivered[0]->entry, $person, null))->user());
+        self::assertNull($delivered[1]->taskId(), 'not linked on this board');
         // e5: 9555 is not in the directory, so its id is never sent as an assignee.
         self::assertSame(self::LIST, RecordingTimeSink::$calls[0]['window']->location->id);
 

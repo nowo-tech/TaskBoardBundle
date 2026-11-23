@@ -12,8 +12,8 @@ use Doctrine\DBAL\Exception\DeadlockException;
 use Doctrine\DBAL\Exception\DriverException;
 use Doctrine\DBAL\Exception\LockWaitTimeoutException;
 use Doctrine\DBAL\Tools\DsnParser;
+use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Events;
-use Doctrine\ORM\Exception\EntityManagerClosed;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Exception\TaskCopyRefusedException;
@@ -109,7 +109,7 @@ final class MoveLockFailureTest extends CopyTestCase
             self::assertFalse($mysql, $failure->getMessage());
         }
         self::assertSame(0, $connection->getTransactionNestingLevel());
-        self::assertFalse($this->em->isOpen());
+        $this->assertTheFailedManagerIsDropped();
         if (!str_starts_with(FunctionalKernel::databaseUrl(), 'sqlite')) {
             // The connection reconnects (an in-memory SQLite database does not survive that).
             self::assertSame($source->getId(), $connection->fetchOne('SELECT board_id FROM task_board_tasks WHERE id = ?', [$task->getId()]));
@@ -133,12 +133,9 @@ final class MoveLockFailureTest extends CopyTestCase
                 self::assertSame($failure, $exception);
             }
             self::assertSame($target->getId(), $task->getBoard()->getId(), 'the move was applied in memory');
-            self::assertFalse($this->em->isOpen());
-            try {
-                $this->em->flush();
-                self::fail('A later flush must not write the half-applied move.');
-            } catch (EntityManagerClosed) {
-            }
+            $this->assertTheFailedManagerIsDropped();
+            // A later flush does not write the half-applied move (since 3.0.0: the closed private manager was replaced).
+            $this->em->flush();
             self::assertSame($source->getId(), $this->em->getConnection()->fetchOne('SELECT board_id FROM task_board_tasks WHERE id = ?', [$task->getId()]));
             self::ensureKernelShutdown();
             $this->setUp();
@@ -228,7 +225,7 @@ final class MoveLockFailureTest extends CopyTestCase
         }
         self::assertTrue($connection->isConnected(), 'the connection was not closed');
         self::assertGreaterThan(0, $connection->getTransactionNestingLevel(), 'the caller still has a transaction to end');
-        self::assertFalse($this->em->isOpen());
+        $this->assertTheFailedManagerIsDropped();
         $connection->close();
     }
 
@@ -337,5 +334,18 @@ final class MoveLockFailureTest extends CopyTestCase
                 return $this->inner->findByHostObject($objectType, $objectId);
             }
         }, new TaskChangeRecorder());
+    }
+
+    /**
+     * Since 3.0.0 (the private entity manager is the only mode): the failed write closed TaskBoard's private manager, never
+     * the application's; the next call gets a fresh one that holds nothing of the half-applied move.
+     */
+    private function assertTheFailedManagerIsDropped(): void
+    {
+        $host = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $host);
+        self::assertTrue($host->isOpen(), 'the application\'s manager stays open');
+        self::assertTrue($this->em->isOpen(), 'a new private manager serves the next call');
+        self::assertSame(0, $this->em->getUnitOfWork()->size(), 'nothing of the failed move is pending');
     }
 }

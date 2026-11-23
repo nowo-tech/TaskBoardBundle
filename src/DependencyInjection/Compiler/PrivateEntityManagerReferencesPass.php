@@ -20,21 +20,21 @@ use function sprintf;
 use function str_starts_with;
 
 /**
- * Since 2.15.0 (`database.private_entity_manager: true`, REQ-ARCH-001 rule 6): every service of the bundle (a class of
+ * Since 2.15.0 (REQ-ARCH-001 rule 6; since 3.0.0 always, the private manager being the only mode): every service of the bundle (a class of
  * the `Nowo\TaskBoardBundle\` namespace, its inline definitions included) that was given the source entity manager
  * (`database.entity_manager`, whether explicitly, through `doctrine.orm.entity_manager` or by autowiring
  * `EntityManagerInterface`) gets {@see TaskBoardEntityManager} instead, and the Doctrine registry (`doctrine`,
  * `ManagerRegistry`) becomes {@see TaskBoardManagerRegistry}. Host services are never touched: the application's manager
  * is still the one they get.
  *
- * Runs after autowiring (before the removing passes), so autowired arguments are rewritten too. Without the option the
- * parameter is false and nothing changes.
+ * Runs after autowiring (before the removing passes), so autowired arguments are rewritten too. Without the parameter (the
+ * extension not loaded) nothing changes.
  *
  * @internal
  */
 final class PrivateEntityManagerReferencesPass implements CompilerPassInterface
 {
-    /** Whether `database.private_entity_manager` is true. */
+    /** The private entity manager is registered (since 3.0.0 always true; host code may read it). */
     public const PARAMETER = 'nowo_task_board.database.private_entity_manager';
 
     /** `database.entity_manager`: the source of the private manager. */

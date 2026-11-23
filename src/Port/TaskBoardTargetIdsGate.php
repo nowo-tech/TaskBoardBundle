@@ -8,13 +8,13 @@ use Nowo\TaskBoardBundle\DependencyInjection\Compiler\TaskBoardPortsPass;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Move\TaskBoardTargetIdsInterface;
-use Nowo\TaskBoardBundle\Move\TaskBoardTargetsInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TaskBoardTargetsInterface;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 
 use function array_values;
 
 /**
- * Since 2.15.0: asks a host {@see TaskBoardTargetIdsInterface} where the bundle asks the deprecated {@see TaskBoardTargetsInterface}. Exceptions propagate. Stateless.
+ * Since 2.15.0: asks a host {@see TaskBoardTargetIdsInterface} where the bundle asks its internal seam {@see TaskBoardTargetsInterface}. Exceptions propagate. Stateless.
  *
  * @internal built by {@see Ports} / {@see TaskBoardPortsPass}
  */

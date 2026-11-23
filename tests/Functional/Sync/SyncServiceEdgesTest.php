@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Tests\Functional\Sync;
 
+use RuntimeException;
+use Doctrine\ORM\Events;
 use LogicException;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
+use Nowo\TaskBoardBundle\Port\Internal\SyncActorResolverInterface;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncError;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncRequest;
@@ -18,7 +21,6 @@ use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncRun;
 use Nowo\TaskBoardBundle\Sync\Event\SyncPageDoneEvent;
 use Nowo\TaskBoardBundle\Sync\Event\SyncStartedEvent;
 use Nowo\TaskBoardBundle\Sync\Hook\InlineSyncRunner;
-use Nowo\TaskBoardBundle\Sync\Hook\SyncActorResolverInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\ContainerType;
 use Nowo\TaskBoardBundle\Sync\Provider\ProviderCredential;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteContainer;
@@ -59,8 +61,8 @@ final class SyncServiceEdgesTest extends SyncFunctionalTestCase
             $small->putTask(self::LIST, $this->remote('c' . $i, 'Task ' . $i, $i));
         }
         $service = $this->service();
-        $this->dispatcher()->addListener(TaskBoardEvents::SYNC_PAGE_DONE, static function (SyncPageDoneEvent $event) use ($service): void {
-            $service->requestCancel($event->board, $event->progress->runId);
+        $this->dispatcher()->addListener(TaskBoardEvents::SYNC_PAGE_DONE, static function (SyncPageDoneEvent $event) use ($service, $board): void {
+            $service->requestCancel($board, $event->progress->runId);
         });
 
         self::assertSame(SyncStatus::Cancelled, $this->sync($board, $small)->status);
@@ -168,13 +170,35 @@ final class SyncServiceEdgesTest extends SyncFunctionalTestCase
         // A listener breaks the entity manager (a duplicate slug in the tenant): the run fails, its history cannot be saved.
         $board->setTenantKey('tenant-a');
         $em->flush();
-        $this->dispatcher()->addListener(TaskBoardEvents::SYNC_STARTED, static function (SyncStartedEvent $event) use ($em): void {
-            $em->persist((new TaskBoard('Dup', $event->board->getSlug(), $event->board->getCreator()))->setTenantKey('tenant-a'));
-            $em->flush();
+        // Since 3.0.0 the closed private manager is replaced on the next call, so the history save is made to fail too.
+        $history = new class {
+            public bool $armed = false;
+
+            public function preFlush(): void
+            {
+                if ($this->armed) {
+                    $this->armed = false;
+
+                    throw new RuntimeException('history not saved');
+                }
+            }
+        };
+        $em->getEventManager()->addEventListener(Events::preFlush, $history);
+        $this->dispatcher()->addListener(TaskBoardEvents::SYNC_STARTED, static function (SyncStartedEvent $event) use ($em, $board, $history): void {
+            $history->armed = true;
+            $em->persist((new TaskBoard('Dup', $board->getSlug(), $board->getCreator()))->setTenantKey('tenant-a'));
+            $history->armed = false;
+            try {
+                $em->flush();
+            } finally {
+                $history->armed = true;
+            }
         });
 
         $report = $this->sync($board);
+        $em->getEventManager()->removeEventListener(Events::preFlush, $history);
         self::assertSame(SyncStatus::Failed, $report->status);
+        self::assertFalse($history->armed, 'the history save was attempted and failed');
         // Since 2.15.1 (audit OM TB-M1): the failed run reopens the manager it closed (worker mode, kernel not reset).
         self::assertTrue(self::getContainer()->get('doctrine')->getManager()->isOpen());
     }

@@ -32,7 +32,7 @@ final class EventsAfterHostCommitTest extends FunctionalTestCase
 
     protected function setUp(): void
     {
-        self::$taskBoardConfig = ['database' => ['private_entity_manager' => true], 'events' => ['after_host_commit' => true]];
+        self::$taskBoardConfig = ['events' => ['after_host_commit' => true]];
         parent::setUp();
         $host = self::getContainer()->get('doctrine.orm.entity_manager');
         self::assertInstanceOf(EntityManagerInterface::class, $host);

@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Command;
 
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Port\Internal\SyncActorResolverInterface;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncOptions;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncReport;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncStatus;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncTrigger;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
-use Nowo\TaskBoardBundle\Sync\Hook\SyncActorResolverInterface;
 use Nowo\TaskBoardBundle\Sync\Repository\SyncStore;
 use Nowo\TaskBoardBundle\Sync\TaskBoardSyncService;
 use Symfony\Component\Console\Attribute\AsCommand;

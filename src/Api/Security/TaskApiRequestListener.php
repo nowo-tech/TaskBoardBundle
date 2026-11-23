@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Api\Security;
 
 use LogicException;
-use Nowo\TaskBoardBundle\Api\Hook\TaskApiAuthenticatorInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiRateLimiterInterface;
 use Nowo\TaskBoardBundle\Api\TaskApiAuthFailure;
 use Nowo\TaskBoardBundle\Api\TaskApiCredential;
@@ -14,6 +13,7 @@ use Nowo\TaskBoardBundle\Api\TaskApiRefusal;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiRateLimitState;
 use Nowo\TaskBoardBundle\Doctrine\LockConflictChain;
 use Nowo\TaskBoardBundle\Exception\TaskNumberScopeConflictException;
+use Nowo\TaskBoardBundle\Port\Internal\TaskApiAuthenticatorInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TransactionDoctrine\Symfony\Conflict\ConflictResponsePolicy;
 use Psr\Log\LoggerInterface;

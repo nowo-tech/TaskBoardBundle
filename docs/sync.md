@@ -43,38 +43,38 @@ The bundle **never stores a token**. The host keeps the credentials and gives on
 
 | Hook (service id in `sync.*`) | Required | Default |
 | --- | --- | --- |
-| `credential_resolver`: `Nowo\TaskBoardBundle\Sync\Hook\ProviderCredentialResolverInterface` | **yes** | — (the container build fails without it) |
-| `attachment_storage`: `TaskAttachmentStorageInterface` | no | files are counted as refused (`storage_disabled`) |
-| `inline_image_rewriter`: `InlineImageRewriterInterface` | no | `MapInlineImageRewriter` (stored copy, else the text "[image not copied]") |
-| `limit_checker`: `SyncLimitCheckerInterface` | no | no host limit |
+| `credential_resolver`: `Nowo\TaskBoardBundle\Sync\Hook\ProviderCredentialSourceInterface` | **yes** | — (the container build fails without it) |
+| `attachment_storage`: `SyncedFileStorageInterface` | no | files are counted as refused (`storage_disabled`) |
+| `inline_image_rewriter`: `SyncedImageRewriterInterface` | no | `MapInlineImageRewriter` (stored copy, else the text "[image not copied]") |
+| `limit_checker`: `SyncQuotaPolicyInterface` | no | no host limit |
 | `runner`: `SyncRunnerInterface` | no | `InlineSyncRunner` (one slice per request; the progress page continues it) |
-| `actor_resolver`: `SyncActorResolverInterface` | no | the user of the request, else the user who linked the board; since 1.24 a disabled user (`isEnabled()` false) or one `actor_checker` refuses is never the actor, and a named user that is refused, no longer found or fails to load is not replaced by the linker |
+| `actor_resolver`: `SyncActorProviderInterface` | no | the user of the request, else the user who linked the board; since 1.24 a disabled user (`isEnabled()` false) or one `actor_checker` refuses is never the actor, and a named user that is refused, no longer found or fails to load is not replaced by the linker |
 | `actor_checker`: Symfony `UserCheckerInterface` (since 1.24) | no | none: only `isEnabled()` is checked |
-| `people.resolver`: `SyncPersonResolverInterface` (since 1.25) | no | `DefaultSyncPersonResolver`: one directory per board, the board's assignable users as candidates, 1.23 e-mail lookup |
-| `time_entries.sink`: `ImportedTimeEntrySinkInterface` (since 1.25) | no | none: the `time_entries` phase never runs |
+| `people.resolver`: `SyncPersonDirectoryInterface` (since 1.25) | no | `DefaultSyncPersonResolver`: one directory per board, the board's assignable users as candidates, 1.23 e-mail lookup |
+| `time_entries.sink`: `ImportedTimeEntryReceiverInterface` (since 1.25) | no | none: the `time_entries` phase never runs |
 | `BOARD_ACCESS_CHECK` listener for `import_tasks` (since 1.25) | no | granted: who may edit the board (and, for the connection, manage it) may import |
 
 ```php
-use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Sync\Hook\ConnectionChoice;
-use Nowo\TaskBoardBundle\Sync\Hook\ProviderCredentialResolverInterface;
+use Nowo\TaskBoardBundle\Sync\Hook\ProviderCredentialSourceInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\ProviderCredential;
+use Nowo\TaskBoardBundle\ValueObject\TaskBoardSnapshot;
 
-final class ProjectConnections implements ProviderCredentialResolverInterface
+final class ProjectConnections implements ProviderCredentialSourceInterface
 {
-    public function connectionsFor(TaskBoard $board, object $user, string $provider): array
+    public function connectionsFor(TaskBoardSnapshot $board, object $user, string $provider): array
     {
         // The stored connections this user may use on this board: an opaque ref, a label, the last 4 characters.
         return [new ConnectionChoice('42', 'Team token', 'a1b2')];
     }
 
-    public function credentialFor(TaskBoard $board, string $connectionRef): ?ProviderCredential
+    public function credentialFor(TaskBoardSnapshot $board, string $connectionRef): ?ProviderCredential
     {
         // Decrypt the token for one run; null when the connection is gone or no longer allowed for this board.
         return new ProviderCredential($this->decryptedToken($connectionRef), $connectionRef);
     }
 
-    public function credentialFormUrl(TaskBoard $board, string $provider): ?string
+    public function credentialFormUrl(TaskBoardSnapshot $board, string $provider): ?string
     {
         return '/settings/connections/new?provider=' . $provider; // where a token is pasted
     }
@@ -217,10 +217,10 @@ final class MessengerSyncRunner implements SyncRunnerInterface
 }
 ```
 
-In the handler, resolve the actor through `SyncActorResolverInterface` and stop when it answers `null`, then run:
+In the handler, resolve the actor through `SyncActorProviderInterface` and stop when it answers `null`, then run:
 
 ```php
-$actor = $this->actors->actorFor($board, $message->actorId); // SyncActorResolverInterface
+$actor = $this->actors->actorFor($boardSnapshot, $message->actorId); // SyncActorProviderInterface: the board as a TaskBoardSnapshot
 if ($actor === null) {
     return; // disabled, erased or refused: never run as anyone else
 }
@@ -281,7 +281,7 @@ public function onBoardAccess(BoardAccessCheckEvent $event): void
 Every remote person (ClickUp user) is one row of a **directory** per (host scope, provider, workspace): every board and
 connection of that scope shares it, so a remote identity maps to at most one local user per scope (several remote
 identities may map to the same user: old and new e-mails). The scope comes from
-`SyncPersonResolverInterface::directoryScope()` (`[a-z0-9:_-]{1,64}`, e.g. `org:<uuid>`; the default resolver uses
+`SyncPersonDirectoryInterface::directoryScope()` (`[a-z0-9:_-]{1,64}`, e.g. `org:<uuid>`; the default resolver uses
 `board:<id>`, no sharing). The directory is attached on the first run of a connection (the workspace is looked up once).
 
 | State | Meaning | Projected |
@@ -423,7 +423,7 @@ whether guests can track time, and what a member token gets when `assignee` list
 ### Hours of people with no user (since 1.28.0)
 
 A plain sink gets people mapped to a user, and the rest is counted (`time.skippedUnmapped`, shown with its hours in the
-completeness report). A sink that implements `OwnerlessTimeEntrySinkInterface` also gets those entries, with `user()` null and the
+completeness report). A sink that implements `OwnerlessTimeEntryReceiverInterface` also gets those entries, with `user()` null and the
 person on the candidate; the bundle stores no time and the hours stay at the provider either way. `ownerless.entries` counts them.
 
 ## Pre-scans and re-association (since 1.25)
@@ -454,7 +454,7 @@ TB-SYNC-2: a UI on top of the people directory, so a manager decides who each re
   row per remote person of the connection's directory (workspace members and every creator, assignee, watcher,
   commenter, checklist and time-entry user a run or scan saw), by name, `page_size` per page, filter *All* /
   *Not mapped yet*. Each row has a host-user select: *Not mapped*, the board's candidates
-  (`SyncPersonResolverInterface::candidates()`, at most `candidate_limit`) and, with `sync.people.inviter` and a
+  (`SyncPersonDirectoryInterface::candidates()`, at most `candidate_limit`) and, with `sync.people.inviter` and a
   remote e-mail, *Invite by e-mail*. No remote avatar is shown (none is stored): an initial instead.
 - **Pre-fill, deny by default.** The select starts on the current mapping; else the host's suggestion (unverified
   e-mail match); else the only candidate with the same normalised e-mail. The only candidate whose label (`UserLabel`) has the
@@ -473,7 +473,7 @@ TB-SYNC-2: a UI on top of the people directory, so a manager decides who each re
   marks the directory reviewed (`SYNC_PEOPLE_REVIEWED`) and dispatches **`SYNC_PEOPLE_MAPPING_CHANGED`**
   (`PeopleMappingChangedEvent`: board id, directory id, actor id, the changes as ids and mapping states, invitations,
   pending) once, besides the per-person `SYNC_PERSON_MAPPED` / `SYNC_PERSON_REASSIGNED`.
-- **Invite by e-mail** (`Sync\Hook\PeopleInviterInterface`: `canInvite($board, $actor)`, `invite($board, $email, $name,
+- **Invite by e-mail** (`Sync\Hook\PeopleInvitationInterface`: `canInvite($board, $actor)`, `invite($board, $email, $name,
   $actor): ?object`): a returned user is mapped right away (still checked as a candidate); null = pending invitation, the
   person stays unmapped until a later sync matches the verified account.
 - **Step** (`sync.people.step: true`): linking a board attaches the directory and runs the people pre-scan
@@ -493,7 +493,7 @@ TB-SYNC-2: a UI on top of the people directory, so a manager decides who each re
 former person: mapping `external`. Their name stays on tasks, comments and history; they cannot be assigned, mentioned or notified,
 and nothing moves. A person remains changeable, and anonymising stays available.
 
-`AttributionOnlyResolverInterface` lets a host offer a user for attribution only. The option says so in the select. Such a mapping
+`AttributionOnlyPolicyInterface` lets a host offer a user for attribution only. The option says so in the select. Such a mapping
 writes no membership and does not set the task's creator or a comment's author, because a task's creator gets access through
 `isTaskParticipant`. The panel shows the user's label from the view model, and the sink receives the user for tracked time.
 
@@ -585,7 +585,7 @@ ClickUp* section (`_task_sync_details.html.twig`, Twig `task_board_sync_details(
   dependencies; the file import maps them the same way.
 - **Archived tasks** (`sync.import_archived`, default `true`): after the active pages, the archived ones are read
   (ClickUp `archived=true`, cursor `a<n>`, at least one more request per run) and imported archived (reason `remote`).
-  They do not count against the host's limit of new tasks (`SyncLimitCheckerInterface`), which is about active tasks;
+  They do not count against the host's limit of new tasks (`SyncQuotaPolicyInterface`), which is about active tasks;
   every restore, by a sync or by hand, asks it. The id scan
   of deletions still reads active tasks only.
 - Watchers are mapped to host users through the People mapping (since 1.25); description images are stored and

@@ -6,12 +6,12 @@ namespace Nowo\TaskBoardBundle\Port;
 
 use Nowo\TaskBoardBundle\DependencyInjection\Compiler\TaskBoardPortsPass;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Port\Internal\SyncLimitCheckerInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
-use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncQuotaPolicyInterface;
 
 /**
- * Since 2.15.0: asks a host {@see SyncQuotaPolicyInterface} where the bundle asks the deprecated
+ * Since 2.15.0: asks a host {@see SyncQuotaPolicyInterface} where the bundle asks its internal seam
  * {@see SyncLimitCheckerInterface}. Exceptions propagate. Stateless.
  *
  * @internal built by {@see Ports} / {@see TaskBoardPortsPass}

@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Tests\Functional\App;
 
 use Nowo\TaskBoardBundle\Entity\Task;
+use Nowo\TaskBoardBundle\Port\Internal\TaskAttachmentStorageInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\StoredAttachment;
-use Nowo\TaskBoardBundle\Sync\Hook\TaskAttachmentStorageInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteAttachment;
 use RuntimeException;
 

@@ -11,13 +11,12 @@ use Nowo\TaskBoardBundle\DependencyInjection\Compiler\PrivateEntityManagerRefere
 use Nowo\TaskBoardBundle\DependencyInjection\TaskBoardExtension;
 use Nowo\TaskBoardBundle\Doctrine\PrivateEntityManagerMiddleware;
 use Nowo\TaskBoardBundle\Doctrine\TaskBoardEntityManager;
-use Nowo\TaskBoardBundle\Doctrine\TaskBoardHostFlushProbe;
 use Nowo\TaskBoardBundle\Doctrine\TaskBoardManagerRegistry;
 use Nowo\TaskBoardBundle\EventListener\TaskBoardRequestBoundarySubscriber;
 use Nowo\TaskBoardBundle\Service\TaskBoardEraser;
-use Nowo\TransactionDoctrine\HostFlushProbe;
 use PHPUnit\Framework\TestCase;
 use Symfony\Bundle\SecurityBundle\SecurityBundle;
+use Symfony\Component\Config\Definition\Exception\InvalidConfigurationException;
 use Symfony\Component\DependencyInjection\Argument\IteratorArgument;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -31,57 +30,45 @@ use function set_error_handler;
 use const E_USER_DEPRECATED;
 
 /**
- * Since 2.15.0: `database.private_entity_manager`. null keeps the 2.14 wiring, false too with a deprecation, true
+ * Since 2.15.0 `database.private_entity_manager`; since 3.0.0 the private entity manager is the only mode: unset
  * registers the private manager, its registry and (DBAL 4) the rollback middleware, and moves every bundle service onto
- * them; host services are never touched.
+ * them (host services are never touched); `true` is a deprecated no-op; `false` fails the build.
  */
 final class PrivateEntityManagerConfigTest extends TestCase
 {
-    public function testNullKeepsThe214Wiring(): void
+    public function testUnsetRegistersThePrivateManagerWithoutANotice(): void
     {
         $container = $this->loadRecording([], $deprecations);
 
-        self::assertFalse($container->getParameter(PrivateEntityManagerReferencesPass::PARAMETER));
+        self::assertSame([], $deprecations);
+        self::assertTrue($container->getParameter(PrivateEntityManagerReferencesPass::PARAMETER));
         self::assertSame('default', $container->getParameter(PrivateEntityManagerReferencesPass::SOURCE_PARAMETER));
-        self::assertFalse($container->hasDefinition(TaskBoardEntityManager::class));
-        self::assertFalse($container->hasDefinition(TaskBoardManagerRegistry::class));
+        self::assertTrue($container->hasDefinition(TaskBoardEntityManager::class));
+        self::assertTrue($container->hasDefinition(TaskBoardManagerRegistry::class));
+        self::assertFalse($container->hasDefinition('Nowo\\TaskBoardBundle\\Doctrine\\TaskBoardHostFlushProbe'), 'no host-flush probe in 3.0');
     }
 
-    /**
-     * Since 2.28.0 (REQ-ARCH-001 rule 6 deprecation layer): unset is deprecated (once per container build), naming the
-     * manager, the 3.0 default and the line that opts in now; the host-flush probe is registered.
-     */
-    public function testUnsetIsDeprecatedAndRegistersTheHostFlushProbe(): void
+    public function testFalseFailsTheBuild(): void
     {
-        $container = $this->loadRecording(['entity_manager' => 'tasks'], $deprecations);
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessage(TaskBoardExtension::PRIVATE_ENTITY_MANAGER_FALSE);
 
-        self::assertSame(['Since nowo-tech/task-board-bundle 2.28: ' . TaskBoardExtension::unsetPrivateEntityManagerNotice('tasks')], $deprecations);
-        self::assertSame('Since nowo-tech/task-board-bundle 2.28: Not setting "nowo_task_board.database.private_entity_manager" is deprecated: every TaskBoard write then flushes your entity manager "tasks", including what your application left pending in it. In 3.0 the option is removed and the private entity manager is the only mode (as if true): TaskBoard writes never flush, clear or close your manager. Opt in now with "nowo_task_board: { database: { private_entity_manager: true } }" once the "were flushed by NowoTaskBoardBundle" deprecations are gone (see UPGRADING.md "To 2.28.0").', $deprecations[0]);
-        $this->assertHostFlushProbe($container);
+        $this->load(['private_entity_manager' => false]);
     }
 
-    public function testFalseIsDeprecated(): void
-    {
-        $container = $this->loadRecording(['private_entity_manager' => false], $deprecations);
-
-        self::assertFalse($container->hasDefinition(TaskBoardEntityManager::class));
-        self::assertCount(1, $deprecations);
-        self::assertStringContainsString('"nowo_task_board.database.private_entity_manager: false" is deprecated', $deprecations[0]);
-        $this->assertHostFlushProbe($container);
-    }
-
-    /** Since 2.28.0: true gives no notice and no probe (the private manager never flushes the application's). */
-    public function testTrueIsNotDeprecatedAndHasNoProbe(): void
+    /** Since 3.0.0: true is a deprecated no-op (removed in 4.0). */
+    public function testTrueIsADeprecatedNoOp(): void
     {
         $container = $this->loadRecording(['private_entity_manager' => true], $deprecations);
 
-        self::assertSame([], $deprecations);
-        self::assertFalse($container->hasDefinition(TaskBoardHostFlushProbe::class));
+        self::assertSame(['Since nowo-tech/task-board-bundle 3.0: The "nowo_task_board.database.private_entity_manager" option has no effect since 3.0 (the private entity manager is the only mode); remove it.'], $deprecations);
+        self::assertTrue($container->getParameter(PrivateEntityManagerReferencesPass::PARAMETER));
+        self::assertTrue($container->hasDefinition(TaskBoardEntityManager::class));
     }
 
     public function testTrueRegistersThePrivateManagerOnTheSource(): void
     {
-        $container = $this->load(['private_entity_manager' => true, 'entity_manager' => 'tasks']);
+        $container = $this->load(['entity_manager' => 'tasks']);
 
         self::assertTrue($container->getParameter(PrivateEntityManagerReferencesPass::PARAMETER));
         self::assertSame('tasks', $container->getParameter(PrivateEntityManagerReferencesPass::SOURCE_PARAMETER));
@@ -149,18 +136,6 @@ final class PrivateEntityManagerConfigTest extends TestCase
         (new PrivateEntityManagerReferencesPass())->process($container);
 
         self::assertEquals([new Reference('doctrine.orm.default_entity_manager')], $definition->getArguments());
-    }
-
-    private function assertHostFlushProbe(ContainerBuilder $container): void
-    {
-        $probe = $container->getDefinition(TaskBoardHostFlushProbe::class);
-        self::assertEquals([new Reference(HostFlushProbe::SERVICE_ID, ContainerInterface::NULL_ON_INVALID_REFERENCE)], $probe->getArguments());
-        self::assertSame([['event' => 'preFlush', 'method' => 'preFlush']], $probe->getTag('doctrine.event_listener'), 'every manager: a TaskBoard flush of any of them is probed');
-        self::assertSame([['event' => 'kernel.request', 'method' => 'onKernelRequest', 'priority' => 4096]], $probe->getTag('kernel.event_listener'));
-        self::assertSame([['method' => 'reset']], $probe->getTag('kernel.reset'));
-        $state = $container->getDefinition(TaskBoardRequestBoundarySubscriber::class)->getArgument('$state');
-        self::assertInstanceOf(IteratorArgument::class, $state);
-        self::assertContainsEquals(new Reference(TaskBoardHostFlushProbe::class, ContainerInterface::IGNORE_ON_UNINITIALIZED_REFERENCE), $state->getValues(), 'reset at every boundary');
     }
 
     /**

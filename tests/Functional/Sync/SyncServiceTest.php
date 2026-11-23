@@ -246,7 +246,7 @@ final class SyncServiceTest extends SyncFunctionalTestCase
         $dispatcher = self::getContainer()->get('event_dispatcher');
         self::assertInstanceOf(EventDispatcherInterface::class, $dispatcher);
         $dispatcher->addListener(TaskBoardEvents::TASK_ACCESS_CHECK, static function (TaskAccessCheckEvent $event) use ($readOnly): void {
-            if ($event->getTask()->getId() === $readOnly) {
+            if ($event->getTaskId() === $readOnly) {
                 $event->grant();
                 $event->markReadOnly();
             }

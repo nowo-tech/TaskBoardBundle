@@ -26,15 +26,6 @@ final class TaskBoardEvents
 {
     public const BOARD_LIST_QUERY = 'nowo_task_board.board_list_query';
 
-    /** @deprecated since 2.10.0 (DDD audit G5): never dispatched; removed in 3.0. */
-    public const BOARD_LIST_RESULT = 'nowo_task_board.board_list_result';
-
-    /** @deprecated since 2.10.0 (DDD audit G5): never dispatched; removed in 3.0. */
-    public const TASK_LIST_QUERY = 'nowo_task_board.task_list_query';
-
-    /** @deprecated since 2.10.0 (DDD audit G5): never dispatched; removed in 3.0. */
-    public const TASK_LIST_RESULT = 'nowo_task_board.task_list_result';
-
     public const BOARD_ACCESS_CHECK = 'nowo_task_board.board_access_check';
 
     public const TASK_ACCESS_CHECK = 'nowo_task_board.task_access_check';
@@ -47,12 +38,6 @@ final class TaskBoardEvents
      * ask, answer or withdraw.
      */
     public const TASK_QUESTION_ACCESS_CHECK = 'nowo_task_board.task_question_access_check';
-
-    /** @deprecated since 2.10.0 (DDD audit G5): never dispatched; removed in 3.0. */
-    public const TASK_READ_ONLY_RESOLVE = 'nowo_task_board.task_read_only_resolve';
-
-    /** @deprecated since 2.10.0 (DDD audit G5): never dispatched; removed in 3.0. */
-    public const MEMBER_LIST_QUERY = 'nowo_task_board.member_list_query';
 
     /** {@see TaskCreatedEvent}, after flush (since 1.10). */
     public const TASK_CREATED = 'nowo_task_board.task_created';

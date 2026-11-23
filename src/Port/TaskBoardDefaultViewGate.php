@@ -6,11 +6,11 @@ namespace Nowo\TaskBoardBundle\Port;
 
 use Nowo\TaskBoardBundle\DependencyInjection\Compiler\TaskBoardPortsPass;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Port\Internal\TaskBoardDefaultViewResolverInterface;
 use Nowo\TaskBoardBundle\View\TaskBoardDefaultViewPolicyInterface;
-use Nowo\TaskBoardBundle\View\TaskBoardDefaultViewResolverInterface;
 
 /**
- * Since 2.15.0: asks a host {@see TaskBoardDefaultViewPolicyInterface} where the bundle asks the deprecated {@see TaskBoardDefaultViewResolverInterface}. Exceptions propagate. Stateless.
+ * Since 2.15.0: asks a host {@see TaskBoardDefaultViewPolicyInterface} where the bundle asks its internal seam {@see TaskBoardDefaultViewResolverInterface}. Exceptions propagate. Stateless.
  *
  * @internal built by {@see Ports} / {@see TaskBoardPortsPass}
  */

@@ -6,11 +6,11 @@ namespace Nowo\TaskBoardBundle\Port;
 
 use Nowo\TaskBoardBundle\DependencyInjection\Compiler\TaskBoardPortsPass;
 use Nowo\TaskBoardBundle\Entity\Task;
-use Nowo\TaskBoardBundle\Sync\Hook\InlineImageRewriterInterface;
+use Nowo\TaskBoardBundle\Port\Internal\InlineImageRewriterInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncedImageRewriterInterface;
 
 /**
- * Since 2.15.0: asks a host {@see SyncedImageRewriterInterface} where the bundle asks the deprecated
+ * Since 2.15.0: asks a host {@see SyncedImageRewriterInterface} where the bundle asks its internal seam
  * {@see InlineImageRewriterInterface}. Exceptions propagate. Stateless.
  *
  * @internal built by {@see Ports} / {@see TaskBoardPortsPass}

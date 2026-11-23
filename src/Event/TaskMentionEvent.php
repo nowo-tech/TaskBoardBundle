@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Event;
 
-use Nowo\TaskBoardBundle\Comment\TaskMentionCandidatesResolverInterface;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
+use Nowo\TaskBoardBundle\Port\Internal\TaskMentionCandidatesResolverInterface;
 use Nowo\TaskBoardBundle\Port\Snapshots;
 use Nowo\TaskBoardBundle\Support\ActorId;
 use Nowo\TaskBoardBundle\ValueObject\TaskCommentSnapshot;
@@ -30,14 +30,6 @@ final class TaskMentionEvent extends AbstractTaskEvent
         private readonly array $users,
     ) {
         parent::__construct($comment->getTask(), $actor);
-    }
-
-    /**
-     * @deprecated since 2.15.0, use {@see self::getCommentId()} or {@see self::getCommentSnapshot()}; removed in 3.0
-     */
-    public function getComment(): TaskComment
-    {
-        return $this->comment;
     }
 
     /** @return list<object> */

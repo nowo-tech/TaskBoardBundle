@@ -12,7 +12,6 @@ use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\AppUser;
 use Nowo\TaskBoardBundle\Tests\Functional\App\FunctionalKernel;
 use Nowo\TaskBoardBundle\Tests\Functional\App\RecordingLogger;
-use Nowo\TaskBoardBundle\Tests\Support\PrivateEntityManagerReplay;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\HttpKernel\KernelInterface;
@@ -45,9 +44,9 @@ abstract class FunctionalTestCase extends WebTestCase
     {
         $this->client = static::createClient();
         $this->client->disableReboot();
-        // Since 2.15.0: TASK_BOARD_TEST_PRIVATE_EM=1 replays the suite with database.private_entity_manager: true; the
-        // fixtures then go through the bundle's private manager, as a host goes through the bundle's services.
-        $em = static::getContainer()->get(PrivateEntityManagerReplay::enabled() && static::getContainer()->has('app.task_board_em') ? 'app.task_board_em' : 'doctrine.orm.entity_manager');
+        // Since 3.0.0 (the private entity manager is the only mode): the fixtures go through the bundle's private manager,
+        // as a host goes through the bundle's services.
+        $em = static::getContainer()->get('app.task_board_em');
         self::assertInstanceOf(EntityManagerInterface::class, $em);
         $this->em = $em;
 
@@ -101,7 +100,11 @@ abstract class FunctionalTestCase extends WebTestCase
 
     protected function task(TaskBoard $board, string $title, int $column = 0, ?Task $parent = null, int $position = 0): Task
     {
-        $task = new Task(board: $board, title: $title, creator: $this->owner, column: $board->getColumns()->get($column), parent: $parent, position: $position);
+        // Since 3.0.0 the private manager is dropped at every request boundary: a board or parent created before a request
+        // is read again (the instances the test holds are detached).
+        $board  = $this->em->contains($board) ? $board : ($this->em->find(TaskBoard::class, $board->getId()) ?? $board);
+        $parent = $parent === null || $this->em->contains($parent) ? $parent : ($this->em->find(Task::class, $parent->getId()) ?? $parent);
+        $task   = new Task(board: $board, title: $title, creator: $this->owner, column: $board->getColumns()->get($column), parent: $parent, position: $position);
         $this->em->persist($task);
         $this->em->flush();
 

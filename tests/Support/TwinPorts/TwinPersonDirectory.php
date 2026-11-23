@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Tests\Support\TwinPorts;
 
+use Nowo\TaskBoardBundle\Port\Internal\SyncPersonResolverInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncPersonDirectoryInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncPersonMatch;
-use Nowo\TaskBoardBundle\Sync\Hook\SyncPersonResolverInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\RemotePerson;
 use Nowo\TaskBoardBundle\Sync\Provider\RemotePersonRef;
 use Nowo\TaskBoardBundle\ValueObject\TaskBoardSnapshot;

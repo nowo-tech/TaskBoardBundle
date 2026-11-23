@@ -117,7 +117,7 @@ final class ApiTrackTimeTest extends ApiTestCase
 
         $this->issueToken();
         $this->dispatcher()->addListener(TaskBoardEvents::BOARD_ACCESS_CHECK, static function (BoardAccessCheckEvent $event) use ($hiddenBoardId): void {
-            if ($event->getBoard()->getId() === $hiddenBoardId) {
+            if ($event->getBoardId() === $hiddenBoardId) {
                 $event->deny();
             }
         });

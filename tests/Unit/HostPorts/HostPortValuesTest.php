@@ -118,7 +118,7 @@ final class HostPortValuesTest extends TestCase
             }
         };
         $list = new BoardListQueryEvent($user, 'acme');
-        self::assertSame(['u-9', $user], [$list->getSubjectId(), $list->getSubject()]);
+        self::assertSame('u-9', $list->getSubjectId());
         self::assertInstanceOf(DateTimeImmutable::class, $list->getOccurredAt());
         self::assertNull((new BoardListQueryEvent(new stdClass()))->getSubjectId());
 

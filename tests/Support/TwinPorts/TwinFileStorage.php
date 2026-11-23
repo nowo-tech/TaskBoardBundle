@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Tests\Support\TwinPorts;
 
+use Nowo\TaskBoardBundle\Port\Internal\TaskAttachmentStorageInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\StoredAttachment;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncedFileStorageInterface;
-use Nowo\TaskBoardBundle\Sync\Hook\TaskAttachmentStorageInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteAttachment;
 use Nowo\TaskBoardBundle\ValueObject\TaskSnapshot;
 

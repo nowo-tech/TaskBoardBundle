@@ -43,7 +43,7 @@ final class PrivateEntityManagerWorkerTest extends FunctionalTestCase
     {
         $this->debug = getenv('TASK_BOARD_TEST_DEBUG');
         putenv('TASK_BOARD_TEST_DEBUG=0');
-        self::$taskBoardConfig = ['database' => ['private_entity_manager' => true]];
+        self::$taskBoardConfig = [];
         parent::setUp();
     }
 

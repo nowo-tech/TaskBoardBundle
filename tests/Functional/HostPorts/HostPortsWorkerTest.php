@@ -46,7 +46,7 @@ final class HostPortsWorkerTest extends FunctionalTestCase
     {
         $this->debug = getenv('TASK_BOARD_TEST_DEBUG');
         putenv('TASK_BOARD_TEST_DEBUG=0');
-        self::$taskBoardConfig = ['database' => ['private_entity_manager' => true], 'events' => ['after_host_commit' => true]];
+        self::$taskBoardConfig = ['events' => ['after_host_commit' => true]];
         parent::setUp();
     }
 

@@ -22,14 +22,6 @@ final class TaskMemberAddedEvent extends AbstractTaskEvent
     }
 
     /**
-     * @deprecated since 2.15.0, use {@see self::getMemberId()}, {@see self::getUserId()} and {@see self::getRole()}; removed in 3.0
-     */
-    public function getMember(): TaskMember
-    {
-        return $this->member;
-    }
-
-    /**
      * The user added to the task.
      */
     public function getUser(): object

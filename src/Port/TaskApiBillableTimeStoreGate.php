@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Port;
 
-use Nowo\TaskBoardBundle\Api\Hook\TaskApiTimeEntriesInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiTimeEntryBillableInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiTimeStoreInterface;
 use Nowo\TaskBoardBundle\Api\TaskApiPrincipal;
@@ -14,9 +13,10 @@ use Nowo\TaskBoardBundle\Api\Value\TaskApiTimePage;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiTimeQuery;
 use Nowo\TaskBoardBundle\DependencyInjection\Compiler\TaskBoardPortsPass;
 use Nowo\TaskBoardBundle\Entity\Task;
+use Nowo\TaskBoardBundle\Port\Internal\TaskApiTimeEntriesInterface;
 
 /**
- * Since 2.15.0: asks a host {@see TaskApiTimeStoreInterface} where the bundle asks the deprecated
+ * Since 2.15.0: asks a host {@see TaskApiTimeStoreInterface} where the bundle asks its internal seam
  * {@see TaskApiTimeEntriesInterface} (with billable entries). Exceptions propagate. Stateless.
  *
  * @internal built by {@see Ports} / {@see TaskBoardPortsPass}

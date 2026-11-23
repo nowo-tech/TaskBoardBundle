@@ -6,13 +6,13 @@ namespace Nowo\TaskBoardBundle\Port;
 
 use Nowo\TaskBoardBundle\DependencyInjection\Compiler\TaskBoardPortsPass;
 use Nowo\TaskBoardBundle\Entity\Task;
+use Nowo\TaskBoardBundle\Port\Internal\TaskAttachmentStorageInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\StoredAttachment;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncedFileStorageInterface;
-use Nowo\TaskBoardBundle\Sync\Hook\TaskAttachmentStorageInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteAttachment;
 
 /**
- * Since 2.15.0: asks a host {@see SyncedFileStorageInterface} where the bundle asks the deprecated
+ * Since 2.15.0: asks a host {@see SyncedFileStorageInterface} where the bundle asks its internal seam
  * {@see TaskAttachmentStorageInterface}. Exceptions propagate. Stateless.
  *
  * @internal built by {@see Ports} / {@see TaskBoardPortsPass}

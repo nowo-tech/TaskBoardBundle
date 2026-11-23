@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Tests\Support\TwinPorts;
 
+use Nowo\TaskBoardBundle\Port\Internal\AttributionOnlyResolverInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\AttributionOnlyPolicyInterface;
-use Nowo\TaskBoardBundle\Sync\Hook\AttributionOnlyResolverInterface;
 use Nowo\TaskBoardBundle\ValueObject\TaskBoardSnapshot;
 use RuntimeException;
 
