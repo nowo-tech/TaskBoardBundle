@@ -154,6 +154,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - A `_target_path` with dot segments (`/tools/task-board/../x`, `%2e`) no longer turns a committed dialog write into a 500 (audit TB-L1). `safeTargetPath()` (manage and menu controllers) and `TaskQuestionController::targetPath()` validate the target with UiKit's `RemoteDialogTarget::tryPath()` (same rules as the dialog redirect); a refused target falls back to the default task URL, so the dialog closes normally and the user is not invited to submit a second time (a duplicate time entry).
 
+### Added
+
+- **Console**: `task-board.js` (the same build time is still stamped on `<html data-task-board-build>`) logs one line on load, `📦 [task-board] script loaded, build: 2026-11-23 14:05 UTC`, with the house `createBundleLogger`. The build time is read from the committed `build-info.json` (`{sourceHash, builtAt}`): it is reused while the sources are unchanged and renewed only when they change, so rebuilding unchanged sources never rewrites the committed assets (no wall-clock stamp, no user data). Quiet switch: `<html data-nowo-console="quiet">` or `globalThis.NOWO_CONSOLE = 'quiet'` prints nothing; the default is unchanged.
+
 ## [2.31.0] - 2026-11-23
 
 ### Changed

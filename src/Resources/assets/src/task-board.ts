@@ -30,12 +30,17 @@ import { installColumnCollapse } from './column-collapse';
 import { installSharedMenus } from './task-menu-shared';
 import { installQuestionAsk } from './task-questions';
 import { observeCssVars } from './css-vars';
+import { createBundleLogger } from './logger';
 
 declare const __TASK_BOARD_BUILD_TIME__: string;
 
 if (typeof __TASK_BOARD_BUILD_TIME__ !== 'undefined') {
     document.documentElement.dataset.taskBoardBuild = __TASK_BOARD_BUILD_TIME__;
 }
+
+createBundleLogger('task-board', {
+    buildTime: typeof __TASK_BOARD_BUILD_TIME__ !== 'undefined' ? __TASK_BOARD_BUILD_TIME__ : undefined,
+}).scriptLoaded();
 
 const application = Application.start();
 application.register('nowo-task-board', BoardController);
