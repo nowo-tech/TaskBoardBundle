@@ -127,6 +127,20 @@ final class TaskMenuOutcomesTest extends FunctionalTestCase
         self::assertSame($outcome === TaskTimerStart::Started ? [$this->task->getId()] : [], ScriptedTimerStarter::$started);
     }
 
+    /** TB-L1: a dot-segment `_target_path` falls back to the board, never a 500. */
+    public function testADotSegmentTargetPathFallsBackToTheBoard(): void
+    {
+        $this->boot([]);
+        $this->login($this->owner);
+        foreach (['/tools/task-board/../x', '/tools/task-board/%2e%2e/x'] as $bad) {
+            $this->client->request('POST', '/tools/task-board/menu/task?_target_path=' . $bad, [
+                'action' => TaskMenuOperation::value($this->task->getId(), 'due', 'next_week'),
+                '_token' => PredictableCsrfTokenManager::value(TaskMenuOperation::CSRF_TOKEN_ID),
+            ]);
+            self::assertResponseRedirects('/tools/task-board/board/' . $this->board->getId(), 303, $bad);
+        }
+    }
+
     public function testAnAnonymousRequestIsRefused(): void
     {
         $this->boot([]);

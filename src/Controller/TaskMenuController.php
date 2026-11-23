@@ -26,6 +26,7 @@ use Nowo\TaskBoardBundle\Service\TaskManager;
 use Nowo\TaskBoardBundle\Service\TaskMemberAssigner;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext;
 use Nowo\TaskBoardBundle\Tree\TaskTreeRefusedException;
+use Nowo\UiKitBundle\Dialog\RemoteDialogTarget;
 use Psr\Clock\ClockInterface;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
@@ -317,7 +318,8 @@ final class TaskMenuController extends AbstractController
             return null;
         }
 
-        return $target;
+        // TB-L1: the same rules as the dialog redirect (no `.` / `..` / `%2e` segments).
+        return RemoteDialogTarget::tryPath($target, null);
     }
 
     private function refused(string $reason): void
