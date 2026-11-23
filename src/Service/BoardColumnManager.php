@@ -85,7 +85,7 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
 
     public function add(TaskBoard $board, BoardColumnFormData $data, ?object $actor = null): BoardColumn
     {
-        $board = $this->rows?->attach($board) ?? $board;
+        $board = $this->own($board);
         // Audit PW-H1: on a board of a folder that shares its statuses the edit changes every board of the folder.
         if ($actor !== null) {
             $this->statusSets?->assertMayChangeColumns($actor, $board);
@@ -111,6 +111,7 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
             ColumnTypes::materialize($board);
             $column->setType($data->type);
         }
+        // @igor-ignore - Request data: the row the caller passed, or TaskBoard's own copy of it (own(), audit ZAS-1); not service state.
         $board->addColumn($column);
         $this->columnRepository->save($column);
         $this->dispatch(new ColumnCreatedEvent($board->getId(), $board->getTenantKey(), $column->getId(), $column->getName(), $column->getPosition(), ActorId::of($actor), $this->cause(), $actor), TaskBoardEvents::COLUMN_CREATED);
@@ -125,7 +126,7 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
      */
     public function reorder(TaskBoard $board, array $orderedColumnIds, ?object $actor = null): void
     {
-        $board = $this->rows?->attach($board) ?? $board;
+        $board = $this->own($board);
         // Audit PW-H1: on a board of a folder that shares its statuses the edit changes every board of the folder.
         if ($actor !== null) {
             $this->statusSets?->assertMayChangeColumns($actor, $board);
@@ -171,7 +172,7 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
 
     public function update(BoardColumn $column, BoardColumnFormData $data, ?object $actor = null): void
     {
-        $column = $this->rows?->attach($column) ?? $column;
+        $column = $this->own($column);
         // Audit PW-H1: on a board of a folder that shares its statuses the edit changes every board of the folder.
         if ($actor !== null) {
             $this->statusSets?->assertMayChangeColumns($actor, $column->getBoard());
@@ -184,6 +185,7 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
         }
         // @igor-ignore - The closure runs once, now (inside the locked write or directly), and is never stored.
         $edit = function () use ($column, $data): void {
+            // @igor-ignore - Request data: the row the caller passed, or TaskBoard's own copy of it (own(), audit ZAS-1); not service state.
             $column
                 ->setName(trim($data->name))
                 ->setColor($this->normalize($data->color))
@@ -203,6 +205,7 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
                 // Since 2.19.0 (FR-033): the board's other columns keep their meaning; this column's tasks follow its type
                 // (the flush of the columns saves them).
                 ColumnTypes::materialize($board);
+                // @igor-ignore - Request data: the row the caller passed, or TaskBoard's own copy of it (own(), audit ZAS-1); not service state.
                 $column->setType($retyped);
                 $snapshot = $this->follow?->snapshot($board) ?? [];
                 $this->followType($column, $retyped);
@@ -234,13 +237,14 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
      */
     public function setHumansOnly(BoardColumn $column, bool $humansOnly, ?object $actor = null): bool
     {
-        $column = $this->rows?->attach($column) ?? $column;
+        $column = $this->own($column);
         if ($column->isHumansOnly() === $humansOnly) {
             return false;
         }
         if ($actor !== null) {
             $this->statusSets?->assertMayChangeColumns($actor, $column->getBoard());
         }
+        // @igor-ignore - Request data: the row the caller passed, or TaskBoard's own copy of it (own(), audit ZAS-1); not service state.
         $column->setHumansOnly($humansOnly);
         $this->columnRepository->save($column);
         $board = $column->getBoard();
@@ -268,7 +272,7 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
      */
     public function delete(BoardColumn $column, ?object $actor = null, ?ColumnTransitionVia $via = null): bool
     {
-        $column = $this->rows?->attach($column) ?? $column;
+        $column = $this->own($column);
         // Audit PW-H1: on a board of a folder that shares its statuses the edit changes every board of the folder.
         if ($actor !== null) {
             $this->statusSets?->assertMayChangeColumns($actor, $column->getBoard());
@@ -349,6 +353,7 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
                 }
             }
 
+            // @igor-ignore - Request data: the row the caller passed, or TaskBoard's own copy of it (own(), audit ZAS-1); not service state.
             $board->removeColumn($column);
             foreach ($remaining as $index => $candidate) {
                 $candidate->setPosition($index);
@@ -532,5 +537,20 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
                 $task->markIncomplete();
             }
         }
+    }
+
+    /**
+     * Since 3.0.0 (audit ZAS-1 / ZAS-2): TaskBoard's own copy of a row the application's manager holds (read again by id),
+     * else the row itself. The row is request data handed in by the caller, never service state.
+     *
+     * @template T of object
+     *
+     * @param T $row
+     *
+     * @return T
+     */
+    private function own(object $row): object
+    {
+        return $this->rows instanceof TaskBoardEntityManager ? $this->rows->attach($row) : $row;
     }
 }
