@@ -197,7 +197,7 @@ final class SyncWriterRulesTest extends SyncFunctionalTestCase
         $dispatcher = self::getContainer()->get('event_dispatcher');
         self::assertInstanceOf(EventDispatcherInterface::class, $dispatcher);
         $dispatcher->addListener(TaskBoardEvents::TASK_ACCESS_CHECK, static function (TaskAccessCheckEvent $event) use ($locked): void {
-            if ($event->getTask()->getId() === $locked) {
+            if ($event->getTaskId() === $locked) {
                 $event->grant();
                 $event->markReadOnly();
             }
@@ -240,7 +240,7 @@ final class SyncWriterRulesTest extends SyncFunctionalTestCase
         $dispatcher = self::getContainer()->get('event_dispatcher');
         self::assertInstanceOf(EventDispatcherInterface::class, $dispatcher);
         $dispatcher->addListener(TaskBoardEvents::TASK_ACCESS_CHECK, static function (TaskAccessCheckEvent $event) use ($parent): void {
-            if ($event->getTask()->getId() === $parent) {
+            if ($event->getTaskId() === $parent) {
                 throw new RuntimeException('boom');
             }
         });

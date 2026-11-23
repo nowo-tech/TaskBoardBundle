@@ -206,7 +206,7 @@ final class ApiTaskReparentAuditTest extends ApiTestCase
         $other  = $this->task($this->roadmap, 'Other');
         $epicId = $epic->getId();
         $this->dispatcher()->addListener(TaskBoardEvents::TASK_ACCESS_CHECK, static function (TaskAccessCheckEvent $event) use ($epicId): void {
-            if ($event->getTask()->getId() === $epicId) {
+            if ($event->getTaskId() === $epicId) {
                 $event->grant();
                 $event->markReadOnly();
             }

@@ -17,8 +17,7 @@ use Symfony\Contracts\EventDispatcher\Event;
 final class SyncStartedEvent extends Event
 {
     public function __construct(
-        /** @deprecated since 2.15.0, use getBoardId(), getTenantKey() or getBoardSnapshot(); removed in 3.0 */
-        public readonly TaskBoard $board,
+        private readonly TaskBoard $board,
         public readonly string $runId,
         public readonly string $provider,
         public readonly SyncMode $mode,

@@ -8,7 +8,6 @@ use Closure;
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Comment\MentionCandidate;
-use Nowo\TaskBoardBundle\Comment\TaskMentionCandidatesResolverInterface;
 use Nowo\TaskBoardBundle\Controller\TaskBoardManageController;
 use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
 use Nowo\TaskBoardBundle\Dto\ColumnSetApplyFormData;
@@ -43,6 +42,8 @@ use Nowo\TaskBoardBundle\Import\TaskBoard\TaskBoardCsvImporter;
 use Nowo\TaskBoardBundle\Import\TaskImportOrchestrator;
 use Nowo\TaskBoardBundle\Import\TaskImportSource;
 use Nowo\TaskBoardBundle\Import\TaskImportUserResolverInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TaskBoardDefaultViewResolverInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TaskMentionCandidatesResolverInterface;
 use Nowo\TaskBoardBundle\Repository\BoardColumnRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\ColumnSetRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
@@ -72,7 +73,6 @@ use Nowo\TaskBoardBundle\Transition\ColumnTransitionPolicyInterface;
 use Nowo\TaskBoardBundle\Tree\TaskTreeRefusedException;
 use Nowo\TaskBoardBundle\ValueObject\ColumnTransition;
 use Nowo\TaskBoardBundle\ValueObject\ColumnTransitionDecision;
-use Nowo\TaskBoardBundle\View\TaskBoardDefaultViewResolverInterface;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\DependencyInjection\Container;
@@ -600,7 +600,7 @@ final class TaskBoardManageControllerAccessTest extends TestCase
         self::assertSame([$set], $this->rendered['columnSets']);
         self::assertArrayHasKey($set->getId(), $this->rendered['columnSetDeletable']);
         self::assertNotNull($this->rendered['columnSetDeleteForm']);
-        self::assertSame([], $this->rendered['columnSetDeleteForms']);
+        self::assertArrayNotHasKey('columnSetDeleteForms', $this->rendered, 'removed in 3.0');
         self::assertSame(['tabler:bug'], $this->findCreatedForm(BoardColumnFormType::class)['options']['icon_choices']);
     }
 
@@ -646,7 +646,7 @@ final class TaskBoardManageControllerAccessTest extends TestCase
         $theirs = new ColumnSet('Theirs', $this->attacker);
         $this->controller($this->owner, columnSets: $this->columnSets([$theirs]))->board($this->board->getId());
 
-        self::assertSame([], $this->rendered['columnSetDeleteForms']);
+        self::assertArrayNotHasKey('columnSetDeleteForms', $this->rendered, 'removed in 3.0');
     }
 
     public function testColumnSetRoutesAreNotFoundWithoutTheService(): void

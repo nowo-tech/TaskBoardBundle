@@ -157,7 +157,9 @@ final class RenamedRoutesRenderingTest extends TestCase
 
         $loader = new ChainLoader([
             new ArrayLoader([
-                'layout.html.twig' => '<title>{% block title %}{% endblock %}</title>{% block stylesheets %}{% endblock %}{% block javascripts %}{% endblock %}<main class="{% block container_class %}{% endblock %}">{% block body %}{% endblock %}</main>',
+                // Since 3.0.0: a host layout that renders the UiKit canonical blocks (the 2.x bridge for older layouts is gone).
+                'layout.html.twig' => '<title>{% block nowo_ui_document_title %}{% endblock %}</title>{% block nowo_ui_styles %}{% endblock %}{% block nowo_ui_head %}{% endblock %}'
+                    . '<main class="{% block container_class %}{% endblock %}">{% block nowo_ui_page_header %}{% endblock %}{% block nowo_ui_flashes %}{% endblock %}{% block nowo_ui_content %}{% endblock %}{% block nowo_ui_modals %}{% endblock %}</main>{% block nowo_ui_scripts %}{% endblock %}',
             ]),
             (static function (): FilesystemLoader {
                 $filesystem = new FilesystemLoader([self::VENDOR . '/symfony/twig-bridge/Resources/views/Form']);

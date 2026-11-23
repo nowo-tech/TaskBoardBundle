@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Tests\Support\TwinPorts;
 
+use Nowo\TaskBoardBundle\Port\Internal\ImportedTimeEntrySinkInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\ImportedTimeEntryReceiverInterface;
-use Nowo\TaskBoardBundle\Sync\Hook\ImportedTimeEntrySinkInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\TimeAccess;
 use Nowo\TaskBoardBundle\Sync\Time\TimeWindow;
 use Nowo\TaskBoardBundle\ValueObject\TaskBoardSnapshot;

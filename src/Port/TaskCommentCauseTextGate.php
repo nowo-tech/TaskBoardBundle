@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Port;
 
-use Nowo\TaskBoardBundle\Comment\TaskCommentCauseLabelerInterface;
 use Nowo\TaskBoardBundle\Comment\TaskCommentCauseTextInterface;
 use Nowo\TaskBoardBundle\DependencyInjection\Compiler\TaskBoardPortsPass;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
+use Nowo\TaskBoardBundle\Port\Internal\TaskCommentCauseLabelerInterface;
 
 /**
- * Since 2.15.0: asks a host {@see TaskCommentCauseTextInterface} where the bundle asks the deprecated {@see TaskCommentCauseLabelerInterface}. Exceptions propagate. Stateless.
+ * Since 2.15.0: asks a host {@see TaskCommentCauseTextInterface} where the bundle asks its internal seam {@see TaskCommentCauseLabelerInterface}. Exceptions propagate. Stateless.
  *
  * @internal built by {@see Ports} / {@see TaskBoardPortsPass}
  */

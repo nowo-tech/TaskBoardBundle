@@ -5,10 +5,8 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Tests\Unit\Comment;
 
 use InvalidArgumentException;
-use Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface;
 use Nowo\TaskBoardBundle\Comment\DefaultTaskMentionCandidatesResolver;
 use Nowo\TaskBoardBundle\Comment\MentionCandidate;
-use Nowo\TaskBoardBundle\Comment\TaskMentionCandidatesResolverInterface;
 use Nowo\TaskBoardBundle\Dto\TaskCommentFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
@@ -22,6 +20,8 @@ use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Event\TaskCommentEvent;
 use Nowo\TaskBoardBundle\Event\TaskMentionEvent;
 use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolver;
+use Nowo\TaskBoardBundle\Port\Internal\TaskAssigneeProviderInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TaskMentionCandidatesResolverInterface;
 use Nowo\TaskBoardBundle\Repository\TaskCommentRepositoryInterface;
 use Nowo\TaskBoardBundle\Service\TaskCommentManager;
 use Nowo\TaskBoardBundle\Support\Text;
@@ -77,12 +77,12 @@ final class TaskCommentsTest extends TestCase
         self::assertCount(2, $this->events);
         self::assertInstanceOf(TaskCommentEvent::class, $this->events[0]);
         self::assertSame(TaskCommentEvent::CREATED, $this->events[0]->getAction());
-        self::assertSame($comment, $this->events[0]->getComment());
+        self::assertSame($comment->getId(), $this->events[0]->getCommentId());
         self::assertInstanceOf(TaskMentionEvent::class, $this->events[1]);
         self::assertSame([$this->bob], $this->events[1]->getMentionedUsers());
-        self::assertSame($comment, $this->events[1]->getComment());
+        self::assertSame($comment->getId(), $this->events[1]->getCommentId());
         self::assertSame($this->ana, $this->events[1]->getActor());
-        self::assertSame($this->task, $this->events[1]->getTask());
+        self::assertSame($this->task->getId(), $this->events[1]->getTaskId());
 
         $plain = $this->manager()->add($this->task, $this->ana, 'No mentions', []);
         self::assertSame([], $plain->getMentions());

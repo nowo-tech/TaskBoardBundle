@@ -39,7 +39,7 @@ No layout: `task_panel`, `_board_create_form` (dialog answer; since 2.5.0 `actio
 
 ## Layout
 
-`web_ui.layout_template`: null = `nowo_ui_kit.layouts.admin`. A pre-2.0 layout, one without `nowo_ui_page_header`, goes through `manage/_legacy_layout.html.twig` until 3.0. See [UPGRADING](UPGRADING.md#to-200-uikit-page-contract).
+`web_ui.layout_template`: null = `nowo_ui_kit.layouts.admin`. Since 3.0.0 a layout without `nowo_ui_page_header` (a pre-2.0 layout) fails when a page is rendered: the 2.x bridge `manage/_legacy_layout.html.twig` was removed. See [UPGRADING](UPGRADING.md#templates-twig-and-layout).
 
 ## Public hooks
 

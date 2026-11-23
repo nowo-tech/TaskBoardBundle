@@ -75,7 +75,7 @@ final class BeaconHooksUnitTest extends TestCase
         self::assertSame(['One rule uses this column.'], $check->getWarnings('c1'));
         self::assertSame([], $check->getWarnings('c2'));
         self::assertSame(['c1' => ['One rule uses this column.']], $check->getAllWarnings());
-        self::assertSame(['board-1', 'acme', $user], [$check->boardId, $check->tenantKey, $check->user]);
+        self::assertSame(['board-1', 'acme', null], [$check->boardId, $check->tenantKey, $check->getUserId()]);
     }
 
     public function testAHeldTransactionDispatchesOnCommitAndDropsOnRollBack(): void

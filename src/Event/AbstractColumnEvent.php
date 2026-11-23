@@ -23,15 +23,27 @@ abstract class AbstractColumnEvent extends Event
         /**
          * Since 2.19.0 (audit PW-H1): the person or service account that made the change (null: a worker, an import), so
          * a listener that writes more on its behalf (the shared status set of a folder) can ask its rights. Not for
-         * serialisation: copy `actorId`. Deprecated since 2.29.0: use {@see self::getActorId()}; removed in 3.0.
+         * serialisation: copy `actorId`. Since 3.0.0 no longer public (deprecated since 2.29.0): read
+         * {@see self::getActorId()}.
          */
-        public readonly ?object $actor = null,
+        private readonly ?object $actor = null,
     ) {
         $this->occurredAt = new DateTimeImmutable();
     }
 
     /** Since 2.29.0 (DDD-host checklist B4): when the change happened (the event's creation, right after the write). */
     public readonly DateTimeImmutable $occurredAt;
+
+    /**
+     * Since 3.0.0: the actor object, for the bundle's own listeners that write more on its behalf (the public property
+     * was removed in 3.0).
+     *
+     * @internal
+     */
+    public function actorObject(): ?object
+    {
+        return $this->actor;
+    }
 
     /** Since 2.29.0 (DDD-host checklist B4). */
     public function getBoardId(): string

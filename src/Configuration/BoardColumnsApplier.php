@@ -11,11 +11,11 @@ use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Enum\ColumnType;
 use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
+use Nowo\TaskBoardBundle\Port\Internal\SyncLimitCheckerInterface;
 use Nowo\TaskBoardBundle\Support\ColumnIcon;
 use Nowo\TaskBoardBundle\Support\ColumnTasks;
 use Nowo\TaskBoardBundle\Support\ColumnTypes;
 use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
-use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
 use Nowo\TaskBoardBundle\Sync\Status\StatusColumns;
 
 use function array_map;

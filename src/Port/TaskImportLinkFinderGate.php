@@ -7,10 +7,10 @@ namespace Nowo\TaskBoardBundle\Port;
 use Nowo\TaskBoardBundle\DependencyInjection\Compiler\TaskBoardPortsPass;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Import\TaskImportLinkFinderInterface;
-use Nowo\TaskBoardBundle\Import\TaskImportLinkLookupInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TaskImportLinkLookupInterface;
 
 /**
- * Since 2.15.0: asks a host {@see TaskImportLinkFinderInterface} where the bundle asks the deprecated {@see TaskImportLinkLookupInterface}. Exceptions propagate. Stateless.
+ * Since 2.15.0: asks a host {@see TaskImportLinkFinderInterface} where the bundle asks its internal seam {@see TaskImportLinkLookupInterface}. Exceptions propagate. Stateless.
  *
  * @internal built by {@see Ports} / {@see TaskBoardPortsPass}
  */

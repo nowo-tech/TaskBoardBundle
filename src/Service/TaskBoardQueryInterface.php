@@ -15,7 +15,7 @@ use Nowo\TaskBoardBundle\View\TaskView;
 /**
  * Since 2.29.0 (DDD-host checklist B7, REQ-ARCH-001 rules 1 and 3): the read port over boards and tasks for a host, so
  * it never writes DQL over the bundle's entities (lists, counts, due windows, tag histograms). Implemented by
- * {@see TaskBoardQuery} on the bundle's entity manager (the private one with `database.private_entity_manager: true`).
+ * {@see TaskBoardQuery} on the bundle's private entity manager.
  *
  * It is a **system read**: it checks no access. A host that shows the result to a user decides with its own rules, or
  * with {@see TaskBoardAccessInterface} (by id), first.

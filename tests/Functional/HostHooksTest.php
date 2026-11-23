@@ -189,7 +189,7 @@ final class HostHooksTest extends FunctionalTestCase
         self::assertCount(0, $this->em->getRepository(TaskBoard::class)->findAll());
         $asked = $this->quota()->asked[0];
         self::assertSame(1, $asked->count);
-        self::assertNull($asked->board);
+        self::assertNull($asked->getBoardId());
         self::assertNull($asked->tenantKey);
         self::assertTrue($asked->isDenied());
     }
@@ -213,7 +213,7 @@ final class HostHooksTest extends FunctionalTestCase
 
         self::assertCount(1, $this->em->getRepository(Task::class)->findAll());
         self::assertSame('acme', $this->quota()->asked[0]->tenantKey);
-        self::assertSame($board->getId(), $this->quota()->asked[0]->board?->getId());
+        self::assertSame($board->getId(), $this->quota()->asked[0]->getBoardId());
     }
 
     public function testAnImportAsksForTheTasksItWouldCreateBeforeWriting(): void

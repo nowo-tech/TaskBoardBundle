@@ -6,7 +6,7 @@ namespace Nowo\TaskBoardBundle\Tests\Functional\App;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
-use Nowo\TaskBoardBundle\Tenancy\FirstBoardProvisionerInterface;
+use Nowo\TaskBoardBundle\Port\Internal\FirstBoardProvisionerInterface;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenant;
 
 /** Since 2.0.0: a host's first-board provisioning. The tenant `empty` gets none. */

@@ -172,7 +172,7 @@ final class TaskBoardResourceAccessCheckerTest extends TestCase
 
         $dispatcher = new EventDispatcher();
         $dispatcher->addListener(TaskBoardEvents::BOARD_ACCESS_CHECK, static function (BoardAccessCheckEvent $event) use (&$received, $guest, $owner): void {
-            $received[] = [$event->getSubject(), $event->getBoard(), $event->isDefaultGranted()];
+            $received[] = [$event->getSubject(), $event->getBoardId(), $event->isDefaultGranted()];
             if ($event->getSubject() === $guest) {
                 $event->grant();
             }
@@ -185,7 +185,7 @@ final class TaskBoardResourceAccessCheckerTest extends TestCase
 
         self::assertTrue($checker->canViewBoard($guest, $board));
         self::assertFalse($checker->canViewBoard($owner, $board));
-        self::assertSame([[$guest, $board, false], [$owner, $board, true]], $received);
+        self::assertSame([[$guest, $board->getId(), false], [$owner, $board->getId(), true]], $received);
     }
 
     public function testBoardEditNeedsViewAccessThatIsNotReadOnly(): void
@@ -207,7 +207,7 @@ final class TaskBoardResourceAccessCheckerTest extends TestCase
             }
         });
         $dispatcher->addListener(TaskBoardEvents::TASK_ACCESS_CHECK, static function (TaskAccessCheckEvent $event) use ($viewer, $granted): void {
-            if ($event->getSubject() === $viewer && $event->getTask() === $granted) {
+            if ($event->getSubject() === $viewer && $event->getTaskId() === $granted->getId()) {
                 $event->grant();
             }
         });
@@ -245,14 +245,14 @@ final class TaskBoardResourceAccessCheckerTest extends TestCase
             if ($event->getSubject() === $guest) {
                 $event->grant();
             }
-            if ($event->getSubject() === $owner && $event->getTask() !== $readOnly) {
+            if ($event->getSubject() === $owner && $event->getTaskId() !== $readOnly->getId()) {
                 $event->deny();
             }
             if ($event->getSubject() === $reader) {
                 $event->grant();
                 $event->markReadOnly();
             }
-            if ($event->getTask() === $readOnly) {
+            if ($event->getTaskId() === $readOnly->getId()) {
                 $event->markReadOnly();
             }
         });
@@ -287,8 +287,8 @@ final class TaskBoardResourceAccessCheckerTest extends TestCase
         $theirs = new TaskBoard('Theirs', 'theirs', new TestUser('2', 'other@example.com'));
 
         $dispatcher = new EventDispatcher();
-        $dispatcher->addListener(TaskBoardEvents::BOARD_LIST_QUERY, static function (BoardListQueryEvent $event) use ($owner, $extra, $theirs): void {
-            self::assertSame($owner, $event->getSubject());
+        $dispatcher->addListener(TaskBoardEvents::BOARD_LIST_QUERY, static function (BoardListQueryEvent $event) use ($extra, $theirs): void {
+            self::assertSame('1', $event->getSubjectId());
             $event->overrideList([$extra, $theirs]);
         });
 

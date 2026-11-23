@@ -6,12 +6,12 @@ namespace Nowo\TaskBoardBundle\Port;
 
 use Nowo\TaskBoardBundle\DependencyInjection\Compiler\TaskBoardPortsPass;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
-use Nowo\TaskBoardBundle\Sync\Hook\ProviderCredentialResolverInterface;
+use Nowo\TaskBoardBundle\Port\Internal\ProviderCredentialResolverInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\ProviderCredentialSourceInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\ProviderCredential;
 
 /**
- * Since 2.15.0: asks a host {@see ProviderCredentialSourceInterface} where the bundle asks the deprecated
+ * Since 2.15.0: asks a host {@see ProviderCredentialSourceInterface} where the bundle asks its internal seam
  * {@see ProviderCredentialResolverInterface}. Exceptions propagate. Stateless.
  *
  * @internal built by {@see Ports} / {@see TaskBoardPortsPass}

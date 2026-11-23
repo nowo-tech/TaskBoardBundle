@@ -5,21 +5,24 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Tests\Unit\DependencyInjection\Compiler;
 
 use LogicException;
-use Nowo\TaskBoardBundle\Api\Hook\TaskApiAuthenticatorInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiRequestAuthenticatorInterface;
 use Nowo\TaskBoardBundle\Api\TaskApiAuthFailure;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiRequestContext;
 use Nowo\TaskBoardBundle\DependencyInjection\Compiler\TaskBoardPortsPass;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Import\DoctrineTaskImportLinkLookup;
+use Nowo\TaskBoardBundle\Import\TaskImportLinkFinderInterface;
 use Nowo\TaskBoardBundle\Move\TaskBoardTargetIdsInterface;
-use Nowo\TaskBoardBundle\Move\TaskBoardTargetsInterface;
+use Nowo\TaskBoardBundle\Port\Internal\FirstBoardProvisionerInterface;
+use Nowo\TaskBoardBundle\Port\Internal\SyncActorResolverInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TaskApiAuthenticatorInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TaskBoardTargetsInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TaskImportLinkLookupInterface;
 use Nowo\TaskBoardBundle\Port\Ports;
 use Nowo\TaskBoardBundle\Port\TaskApiRequestAuthenticatorGate;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\ConnectionCreatorActorResolver;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncActorProviderInterface;
-use Nowo\TaskBoardBundle\Sync\Hook\SyncActorResolverInterface;
-use Nowo\TaskBoardBundle\Tenancy\FirstBoardProvisionerInterface;
 use Nowo\TaskBoardBundle\Tenancy\FirstBoardProvisioningInterface;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenant;
 use Nowo\TaskBoardBundle\ValueObject\TaskBoardSnapshot;
@@ -31,13 +34,14 @@ use Symfony\Component\DependencyInjection\Reference;
 use Symfony\Component\HttpFoundation\Request;
 
 /**
- * Since 2.15.0: the build-time half of the selection rule. A deprecated implementation keeps its alias; a twin-only one is
- * put behind the {@see Ports} factory; a class implementing neither stops the build; a class the build cannot know is
- * left to the factory, which fails closed at run time.
+ * Since 2.15.0: the build-time half of the selection rule. Since 3.0.0: the bundle's own implementation of an internal
+ * seam keeps its alias; a framework-free one is put behind the {@see Ports} factory; a class implementing neither, or a
+ * class outside the bundle implementing the seam, stops the build; a class the build cannot know is left to the factory,
+ * which fails closed at run time.
  */
 final class TaskBoardPortsPassTest extends TestCase
 {
-    public function testDeprecatedImplementationKeepsItsAlias(): void
+    public function testTheBundlesOwnSeamImplementationKeepsItsAlias(): void
     {
         $container = new ContainerBuilder();
         $container->register('app.auth', LegacyAuthenticator::class);
@@ -104,9 +108,56 @@ final class TaskBoardPortsPassTest extends TestCase
         $container->setAlias(TaskApiAuthenticatorInterface::class, 'app.auth');
 
         $this->expectException(LogicException::class);
-        $this->expectExceptionMessage('nowo_task_board: the service "app.auth" (stdClass) of api.hooks.authenticator must implement "' . TaskApiRequestAuthenticatorInterface::class . '" (or the deprecated "' . TaskApiAuthenticatorInterface::class . '").');
+        $this->expectExceptionMessage('nowo_task_board: the service "app.auth" (stdClass) of api.hooks.authenticator must implement "' . TaskApiRequestAuthenticatorInterface::class . '" (see UPGRADING.md "To 3.0.0").');
 
         (new TaskBoardPortsPass())->process($container);
+    }
+
+    /** Since 3.0.0: a class outside the bundle that implements the internal seam (the removed interface's shape) stops the build. */
+    public function testASeamImplementedOutsideTheBundleIsRefused(): void
+    {
+        $host = new class implements TaskApiAuthenticatorInterface {
+            public function authenticate(Request $request): TaskApiAuthFailure
+            {
+                return TaskApiAuthFailure::Invalid;
+            }
+        };
+        $container = new ContainerBuilder();
+        $container->register('app.auth', $host::class);
+        $container->setAlias(TaskApiAuthenticatorInterface::class, 'app.auth');
+
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage('of api.hooks.authenticator must implement "' . TaskApiRequestAuthenticatorInterface::class . '"');
+
+        (new TaskBoardPortsPass())->process($container);
+    }
+
+    /** Since 3.0.0: a host alias of TaskImportLinkFinderInterface answers the import link lookup, through its gate. */
+    public function testTheImportLinkFinderAliasAnswersTheLookup(): void
+    {
+        $container = new ContainerBuilder();
+        $container->register(DoctrineTaskImportLinkLookup::class, DoctrineTaskImportLinkLookup::class);
+        $container->setAlias(TaskImportLinkLookupInterface::class, DoctrineTaskImportLinkLookup::class);
+        $container->register('app.links', HostLinkFinder::class);
+        $container->setAlias(TaskImportLinkFinderInterface::class, 'app.links');
+
+        (new TaskBoardPortsPass())->process($container);
+
+        $definition = $container->getDefinition(TaskImportLinkLookupInterface::class);
+        self::assertSame([Ports::class, 'importLinkLookup'], $definition->getFactory());
+        self::assertEquals([new Reference('app.links')], $definition->getArguments());
+    }
+
+    /** Without the host alias the bundle's own lookup keeps answering. */
+    public function testWithoutTheAliasTheBundlesLookupStays(): void
+    {
+        $container = new ContainerBuilder();
+        $container->register(DoctrineTaskImportLinkLookup::class, DoctrineTaskImportLinkLookup::class);
+        $container->setAlias(TaskImportLinkLookupInterface::class, DoctrineTaskImportLinkLookup::class);
+
+        (new TaskBoardPortsPass())->process($container);
+
+        self::assertSame(DoctrineTaskImportLinkLookup::class, (string) $container->getAlias(TaskImportLinkLookupInterface::class));
     }
 
     public function testUnknownClassesAreLeftToTheRuntimeFactory(): void
@@ -154,7 +205,7 @@ final class TaskBoardPortsPassTest extends TestCase
         self::assertTrue($container->getAlias(SyncActorProviderInterface::class)->isPublic());
     }
 
-    public function testADeprecatedOnlyActorResolverLeavesTheTwinAliasOnTheDefault(): void
+    public function testASeamOnlyActorResolverLeavesTheTwinAliasOnTheDefault(): void
     {
         $container = $this->actorContainer(LegacyActorResolver::class);
 
@@ -237,5 +288,13 @@ final class LegacyActorResolver implements SyncActorResolverInterface
     public function actorFor(TaskBoard $board, ?string $actorId = null): ?object
     {
         return null;
+    }
+}
+
+final class HostLinkFinder implements TaskImportLinkFinderInterface
+{
+    public function findOnOtherBoards(TaskBoardSnapshot $board, string $scope, array $externalIds): array
+    {
+        return [];
     }
 }

@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Tests\Unit\Sync\People;
 
 use Doctrine\ORM\EntityManagerInterface;
-use Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
-use Nowo\TaskBoardBundle\Import\BoardAwareTaskImportUserResolverInterface;
+use Nowo\TaskBoardBundle\Import\BoardScopedTaskImportUserResolverInterface;
 use Nowo\TaskBoardBundle\Import\TaskImportUserResolverInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TaskAssigneeProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPersonMapping;
 use Nowo\TaskBoardBundle\Sync\Event\SyncPeopleReprojectedEvent;
 use Nowo\TaskBoardBundle\Sync\Event\SyncPersonReassignedEvent;
@@ -23,6 +23,7 @@ use Nowo\TaskBoardBundle\Sync\People\SyncUser;
 use Nowo\TaskBoardBundle\Sync\Provider\RemotePersonRef;
 use Nowo\TaskBoardBundle\Sync\View\SyncPersonView;
 use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
+use Nowo\TaskBoardBundle\ValueObject\TaskBoardSnapshot;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Stringable;
@@ -142,7 +143,7 @@ final class PeopleUnitTest extends TestCase
                 return SyncUser::id($user) === '1';
             }
         };
-        $boardAware = new class($users) implements BoardAwareTaskImportUserResolverInterface {
+        $boardAware = new class($users) implements BoardScopedTaskImportUserResolverInterface {
             public int $calls = 0;
 
             public function __construct(private readonly TaskImportUserResolverInterface $inner)
@@ -154,7 +155,7 @@ final class PeopleUnitTest extends TestCase
                 return $this->inner->resolveByEmail($email);
             }
 
-            public function resolveByEmailForBoard(string $email, TaskBoard $board): ?object
+            public function resolveByEmailOnBoard(string $email, TaskBoardSnapshot $board): ?object
             {
                 ++$this->calls;
 

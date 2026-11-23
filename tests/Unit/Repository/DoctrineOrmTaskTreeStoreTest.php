@@ -84,6 +84,17 @@ final class DoctrineOrmTaskTreeStoreTest extends TestCase
         self::assertSame($task, (new DoctrineOrmTaskTreeStore($manager))->task(new TaskTreeNode($task->getId(), $task->getBoard()->getId(), null, $task->getRevision())));
     }
 
+    /** A copy loaded before a concurrent writer committed (an older revision) is read again from the locked row. */
+    public function testAStaleCopyIsRefreshed(): void
+    {
+        $task    = new Task(new TaskBoard('Roadmap', 'roadmap', new stdClass()), 'Story', new stdClass());
+        $manager = $this->createMock(EntityManagerInterface::class);
+        $manager->method('find')->willReturn($task);
+        $manager->expects(self::once())->method('refresh')->with($task);
+
+        self::assertSame($task, (new DoctrineOrmTaskTreeStore($manager))->task(new TaskTreeNode($task->getId(), $task->getBoard()->getId(), null, $task->getRevision() + 1)));
+    }
+
     private static function deadlock(): DeadlockException
     {
         return new DeadlockException(new class('Deadlock found when trying to get lock', '40001', 1213) extends AbstractException {}, null);

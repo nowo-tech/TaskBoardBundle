@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Tests\Functional\Sync;
 
+use Nowo\TaskBoardBundle\Port\Internal\SyncActorResolverInterface;
 use Nowo\TaskBoardBundle\Port\Snapshots;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
 use Nowo\TaskBoardBundle\Sync\Hook\ConnectionCreatorActorResolver;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncActorProviderInterface;
-use Nowo\TaskBoardBundle\Sync\Hook\SyncActorResolverInterface;
 
 /**
  * Since 2.15.1 (Beacon request): the default actor resolver is also the framework-free {@see SyncActorProviderInterface},

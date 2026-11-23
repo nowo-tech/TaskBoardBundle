@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Service;
 
 use InvalidArgumentException;
-use Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface;
 use Nowo\TaskBoardBundle\Dto\TaskMemberFormData;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
@@ -15,6 +14,7 @@ use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Event\TaskMemberAddedEvent;
 use Nowo\TaskBoardBundle\Event\TaskMemberRemovedEvent;
 use Nowo\TaskBoardBundle\Exception\UnassignableUserException;
+use Nowo\TaskBoardBundle\Port\Internal\TaskAssigneeProviderInterface;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Support\ActorId;
 use Nowo\TaskBoardBundle\User\TaskBoardUserLocator;

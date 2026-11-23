@@ -30,7 +30,11 @@ final class TaskUpdatedEvent extends AbstractTaskEvent
         private readonly array $previous = [],
     ) {
         parent::__construct($task, $actor);
+        $this->tags = $task->getTags();
     }
+
+    /** @var list<string> Since 3.0.0: the task's tags after the write (the entity getter was removed). */
+    private readonly array $tags;
 
     /** Since 2.3.0: the value of `$field` before the write; null when it did not change or was null. */
     public function getPreviousValue(string $field): mixed
@@ -47,7 +51,7 @@ final class TaskUpdatedEvent extends AbstractTaskEvent
     {
         $before = $this->previous['tags'] ?? null;
 
-        return is_array($before) && $this->hasChanged('tags') ? array_values(array_diff($this->getTask()->getTags(), $before)) : [];
+        return is_array($before) && $this->hasChanged('tags') ? array_values(array_diff($this->tags, $before)) : [];
     }
 
     /**
@@ -59,7 +63,7 @@ final class TaskUpdatedEvent extends AbstractTaskEvent
     {
         $before = $this->previous['tags'] ?? null;
 
-        return is_array($before) && $this->hasChanged('tags') ? array_values(array_diff($before, $this->getTask()->getTags())) : [];
+        return is_array($before) && $this->hasChanged('tags') ? array_values(array_diff($before, $this->tags)) : [];
     }
 
     /**

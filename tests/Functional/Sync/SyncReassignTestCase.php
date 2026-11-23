@@ -13,6 +13,7 @@ use Nowo\TaskBoardBundle\Entity\TaskMember;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Event\BoardAccessCheckEvent;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
+use Nowo\TaskBoardBundle\Port\Internal\SyncPersonResolverInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncComment;
@@ -22,7 +23,6 @@ use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncMember;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPerson;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPersonMapping;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncPersonMatch;
-use Nowo\TaskBoardBundle\Sync\Hook\SyncPersonResolverInterface;
 use Nowo\TaskBoardBundle\Sync\People\PeopleProjection;
 use Nowo\TaskBoardBundle\Sync\People\SyncUser;
 use Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleDirectoryService;
@@ -64,7 +64,7 @@ abstract class SyncReassignTestCase extends SyncFunctionalTestCase
         $this->dispatcher = $dispatcher;
         $this->dispatcher->addListener(TaskBoardEvents::BOARD_ACCESS_CHECK, function (BoardAccessCheckEvent $event): void {
             $subject = $event->getSubject();
-            if ($event->getAction() === BoardAccessCheckEvent::ACTION_VIEW && $subject instanceof AppUser && in_array($subject->getEmail(), $this->viewers[$event->getBoard()->getId()] ?? [], true)) {
+            if ($event->getAction() === BoardAccessCheckEvent::ACTION_VIEW && $subject instanceof AppUser && in_array($subject->getEmail(), $this->viewers[$event->getBoardId()] ?? [], true)) {
                 $event->grant();
             }
         });

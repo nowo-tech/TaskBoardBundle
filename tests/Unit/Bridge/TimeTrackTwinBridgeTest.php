@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Tests\Unit\Bridge;
 
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTaskDirectory;
-use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTaskProvider;
-use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTeamContextProvider;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTeamDirectory;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TimeTrackScopeKeys;
 use Nowo\TaskBoardBundle\Entity\Task;
@@ -19,8 +17,6 @@ use Nowo\TaskBoardBundle\Repository\TeamMemberRepositoryInterface;
 use Nowo\TaskBoardBundle\Service\TaskAccessGuard;
 use Nowo\TaskBoardBundle\Tests\Stub\TestUser;
 use Nowo\TimeTrackBundle\Dto\TaskListQuery;
-use Nowo\TimeTrackBundle\Port\TaskDirectoryGate;
-use Nowo\TimeTrackBundle\Port\TeamDirectoryGate;
 use Nowo\TimeTrackBundle\Port\TimeTrackUserRefFactory;
 use Nowo\TimeTrackBundle\Timesheet\TimesheetScopePolicyInterface;
 use Nowo\TimeTrackBundle\Timesheet\TimesheetScopeProviderInterface;
@@ -29,12 +25,12 @@ use PHPUnit\Framework\TestCase;
 use stdClass;
 
 /**
- * Since 2.28.0: the TimeTrack bridge on TimeTrack's framework-free 1.23 twins. Through TimeTrack's own gate they answer
- * exactly as the deprecated 1.x providers; a reference without a user object or an id sees nothing.
+ * Since 2.28.0: the TimeTrack bridge on TimeTrack's framework-free 1.23 interfaces (since 3.0.0 the only one: the 1.x
+ * providers are removed); a reference without a user object or an id sees nothing.
  */
 final class TimeTrackTwinBridgeTest extends TestCase
 {
-    public function testTheTaskDirectoryAnswersAsTheTaskProvider(): void
+    public function testTheTaskDirectory(): void
     {
         $user  = new TestUser('1', 'dev@example.com');
         $other = new TestUser('2', 'other@example.com');
@@ -43,27 +39,29 @@ final class TimeTrackTwinBridgeTest extends TestCase
         $repo  = $this->createStub(TaskRepositoryInterface::class);
         $repo->method('findById')->willReturnCallback(static fn (string $id): ?Task => $id === $task->getId() ? $task : null);
         $repo->method('findTrackableForUser')->willReturnCallback(static fn (string $userId): array => $userId === '1' ? [$task] : []);
-        $guard = new TaskAccessGuard($this->createStub(TeamMemberRepositoryInterface::class));
-        $twin  = new TaskDirectoryGate(new TaskBoardTaskDirectory($repo, $guard));
-        $old   = new TaskBoardTaskProvider($repo, $guard);
-
-        foreach ([$user, $other] as $who) {
-            self::assertEquals($old->findForUser($task->getId(), $who), $twin->findForUser($task->getId(), $who));
-            self::assertEquals($old->canUserTrack($who, $task->getId()), $twin->canUserTrack($who, $task->getId()));
-            self::assertEquals($old->listTrackableForUser($who, new TaskListQuery()), $twin->listTrackableForUser($who, new TaskListQuery()));
-            self::assertNull($twin->findForUser('missing', $who));
-        }
-        self::assertSame('API', $twin->findForUser($task->getId(), $user)?->title);
-
+        $guard     = new TaskAccessGuard($this->createStub(TeamMemberRepositoryInterface::class));
         $directory = new TaskBoardTaskDirectory($repo, $guard);
-        $byId      = TimeTrackUserRef::ofId(TestUser::class, '1');
+        $me        = TimeTrackUserRefFactory::build($user);
+        $them      = TimeTrackUserRefFactory::build($other);
+
+        self::assertSame('API', $directory->findTaskFor($task->getId(), $me)?->title);
+        self::assertTrue($directory->canTrackTask($me, $task->getId()));
+        self::assertCount(1, $directory->listTrackableFor($me, new TaskListQuery()));
+        self::assertSame($directory->canTrackTask($them, $task->getId()), $directory->findTaskFor($task->getId(), $them) !== null, 'one access decision');
+        self::assertSame([], $directory->listTrackableFor($them, new TaskListQuery()));
+        foreach ([$me, $them] as $who) {
+            self::assertNull($directory->findTaskFor('missing', $who));
+            self::assertFalse($directory->canTrackTask($who, 'missing'));
+        }
+
+        $byId = TimeTrackUserRef::ofId(TestUser::class, '1');
         self::assertNull($directory->findTaskFor($task->getId(), $byId), 'no user object: no access decision');
         self::assertFalse($directory->canTrackTask($byId, $task->getId()));
         self::assertCount(1, $directory->listTrackableFor($byId, new TaskListQuery()), 'the list needs the id only');
         self::assertSame([], $directory->listTrackableFor(new TimeTrackUserRef(TestUser::class, null), new TaskListQuery()));
     }
 
-    public function testTheTeamDirectoryAnswersAsTheTeamContextProvider(): void
+    public function testTheTeamDirectory(): void
     {
         $manager = new TestUser('1', 'manager@example.com');
         $member  = new TestUser('2', 'member@example.com');
@@ -73,19 +71,18 @@ final class TimeTrackTwinBridgeTest extends TestCase
         $repo->method('findByUserId')->willReturnCallback(static fn (string $id): array => $id === '2' ? [$tm, $tm] : []);
         $repo->method('isManagerOf')->willReturnCallback(static fn (string $a, string $b): bool => $a === '1' && $b === '2');
         $repo->method('findMembersManagedBy')->willReturnCallback(static fn (string $id): array => $id === '1' ? [$tm, $tm, new TeamMember($team, new stdClass(), TeamRole::Member)] : []);
-        $twin = new TeamDirectoryGate(new TaskBoardTeamDirectory($repo));
-        $old  = new TaskBoardTeamContextProvider($repo);
-
-        foreach ([[$manager, $member], [$member, $manager]] as [$a, $b]) {
-            self::assertSame($old->getTeamIdsForUser($a), $twin->getTeamIdsForUser($a));
-            self::assertSame($old->isManagerOf($a, $b), $twin->isManagerOf($a, $b));
-            self::assertSame($old->getManagedUserIds($a), $twin->getManagedUserIds($a));
-        }
-        self::assertSame([$team->getId()], $twin->getTeamIdsForUser($member));
-        self::assertSame(['2'], $twin->getManagedUserIds($manager));
-
-        $noId      = new TimeTrackUserRef(TestUser::class, null);
         $directory = new TaskBoardTeamDirectory($repo);
+        $boss      = TimeTrackUserRefFactory::build($manager);
+        $worker    = TimeTrackUserRefFactory::build($member);
+
+        self::assertSame([$team->getId()], $directory->teamIdsOf($worker), 'one id per team');
+        self::assertSame([], $directory->teamIdsOf($boss));
+        self::assertTrue($directory->manages($boss, $worker));
+        self::assertFalse($directory->manages($worker, $boss));
+        self::assertSame(['2'], $directory->managedUserIdsOf($boss), 'members without an id are left out, ids once');
+        self::assertSame([], $directory->managedUserIdsOf($worker));
+
+        $noId = new TimeTrackUserRef(TestUser::class, null);
         self::assertSame([], $directory->teamIdsOf($noId));
         self::assertFalse($directory->manages($noId, TimeTrackUserRefFactory::build($member)));
         self::assertFalse($directory->manages(TimeTrackUserRefFactory::build($manager), $noId));

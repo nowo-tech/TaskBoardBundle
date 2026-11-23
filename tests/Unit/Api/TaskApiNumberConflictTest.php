@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Tests\Unit\Api;
 
-use Nowo\TaskBoardBundle\Api\Hook\TaskApiAuthenticatorInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiRateLimiterInterface;
 use Nowo\TaskBoardBundle\Api\Security\TaskApiRequestListener;
 use Nowo\TaskBoardBundle\Api\TaskApiRefusal;
 use Nowo\TaskBoardBundle\Exception\TaskNumberScopeConflictException;
+use Nowo\TaskBoardBundle\Port\Internal\TaskApiAuthenticatorInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;

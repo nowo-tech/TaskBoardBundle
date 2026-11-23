@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Tests\Support\TwinPorts;
 
+use Nowo\TaskBoardBundle\Port\Internal\TaskBoardDefaultViewResolverInterface;
 use Nowo\TaskBoardBundle\ValueObject\TaskBoardSnapshot;
 use Nowo\TaskBoardBundle\View\TaskBoardDefaultViewPolicyInterface;
-use Nowo\TaskBoardBundle\View\TaskBoardDefaultViewResolverInterface;
 
 final readonly class TwinDefaultViewPolicy implements TaskBoardDefaultViewPolicyInterface
 {

@@ -237,8 +237,8 @@ final class ColumnSetsTest extends TestCase
         self::assertTrue((new TaskBoardResourceAccessChecker($teams, new NullTaskBoardTeamMembershipResolver(), $auth))->canDeleteColumnSet($other, $set));
 
         $dispatcher = new EventDispatcher();
-        $dispatcher->addListener(TaskBoardEvents::COLUMN_SET_ACCESS_CHECK, static function (ColumnSetAccessCheckEvent $event): void {
-            $event->getColumnSet()->getName() === 'Mine' ? $event->deny() : $event->grant();
+        $dispatcher->addListener(TaskBoardEvents::COLUMN_SET_ACCESS_CHECK, static function (ColumnSetAccessCheckEvent $event) use ($set): void {
+            $event->getColumnSetId() === $set->getId() ? $event->deny() : $event->grant();
         });
         $checker = new TaskBoardResourceAccessChecker($teams, new NullTaskBoardTeamMembershipResolver(), null, $dispatcher);
         self::assertFalse($checker->canDeleteColumnSet($this->user, $set));
@@ -250,18 +250,18 @@ final class ColumnSetsTest extends TestCase
         $set   = new ColumnSet('A');
         $query = new ColumnSetQueryEvent($this->user, null, 'tenant-1');
         self::assertSame($this->user, $query->getSubject());
-        self::assertNull($query->getBoard());
+        self::assertNull($query->getBoardId());
         self::assertSame('tenant-1', $query->getTenantKey());
         self::assertSame('tenant-1', $query->getScopeKey());
         self::assertNull($query->getOverrideList());
 
         $board = new ColumnSetQueryEvent($this->user, $this->board);
-        self::assertSame($this->board, $board->getBoard());
+        self::assertSame($this->board->getId(), $board->getBoardId());
         self::assertNull($board->getScopeKey());
 
         $access = new ColumnSetAccessCheckEvent($this->user, $set, true);
         self::assertSame($this->user, $access->getSubject());
-        self::assertSame($set, $access->getColumnSet());
+        self::assertSame($set->getId(), $access->getColumnSetId());
         self::assertTrue($access->isDefaultGranted());
         self::assertTrue($access->isGranted());
 

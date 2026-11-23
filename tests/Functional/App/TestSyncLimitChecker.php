@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Tests\Functional\App;
 
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Port\Internal\SyncLimitCheckerInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
-use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
 
 /**
  * Since 1.23: the host's quotas of the functional kernel — refuses new tasks or bytes when a test says so.

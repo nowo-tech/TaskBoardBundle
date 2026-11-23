@@ -36,6 +36,7 @@ use Symfony\Component\HttpKernel\Kernel;
 use Symfony\Component\Routing\Loader\Configurator\RoutingConfigurator;
 use Twig\Extra\TwigExtraBundle\TwigExtraBundle;
 
+use function getenv;
 use function md5;
 use function serialize;
 use function sys_get_temp_dir;
@@ -82,7 +83,7 @@ final class ApiKernel extends Kernel
 
     public function getCacheDir(): string
     {
-        return sys_get_temp_dir() . '/nowo-task-board-api/' . md5(serialize([$this->api, $this->taskBoard, $this->withFirewall, FunctionalKernel::databaseUrl(), TwinPortAdapters::enabled(), PrivateEntityManagerReplay::enabled()])) . '/cache';
+        return sys_get_temp_dir() . '/nowo-task-board-api/' . md5(serialize([$this->api, $this->taskBoard, $this->withFirewall, FunctionalKernel::databaseUrl(), TwinPortAdapters::enabled(), getenv('TASK_BOARD_TEST_XML_MAPPING') === '1'])) . '/cache';
     }
 
     public function getLogDir(): string
@@ -163,7 +164,7 @@ final class ApiKernel extends Kernel
             'members'       => 'app.api_host',
         ]]] + array_diff_key($this->taskBoard, ['security' => true, '__write_units' => true]);
         $taskBoardConfig = PrivateEntityManagerReplay::configure($taskBoardConfig);
-        PrivateEntityManagerReplay::alias($container, $taskBoardConfig);
+        PrivateEntityManagerReplay::alias($container);
         // Since 2.15.0: TASK_BOARD_TEST_PORTS=twin runs the suite through the framework-free twins of the host ports.
         $container->extension('nowo_task_board', TwinPortAdapters::enabled() ? TwinPortAdapters::rewrite($taskBoardConfig) : $taskBoardConfig);
         if (($this->taskBoard['sync']['enabled'] ?? false) === true) {

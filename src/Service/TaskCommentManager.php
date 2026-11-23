@@ -6,13 +6,13 @@ namespace Nowo\TaskBoardBundle\Service;
 
 use InvalidArgumentException;
 use Nowo\TaskBoardBundle\Comment\MentionCandidate;
-use Nowo\TaskBoardBundle\Comment\TaskMentionCandidatesResolverInterface;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Event\TaskCommentDeletedEvent;
 use Nowo\TaskBoardBundle\Event\TaskCommentEvent;
 use Nowo\TaskBoardBundle\Event\TaskMentionEvent;
+use Nowo\TaskBoardBundle\Port\Internal\TaskMentionCandidatesResolverInterface;
 use Nowo\TaskBoardBundle\Provenance\WriteProvenanceProviderInterface;
 use Nowo\TaskBoardBundle\Repository\TaskCommentRepositoryInterface;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;

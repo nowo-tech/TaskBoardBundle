@@ -21,12 +21,16 @@ use function sprintf;
  */
 final readonly class TaskNumberBackfiller
 {
+    /**
+     * @param LoggerInterface|null $logger since 2.27.0 (audit WA-1), for the application's-manager mode removed in 3.0;
+     *                                     deprecated since 3.0, ignored; removed in 4.0
+     */
+    // @phpstan-ignore constructor.unusedParameter ($logger: deprecated since 3.0 and ignored, kept for positional callers)
     public function __construct(
         private EntityManagerInterface $entityManager,
         private TaskNumberScope $scope,
         private TaskNumberReserver $reserver,
-        // Since 2.27.0 (audit WA-1): told when the loaded tasks cannot be detached safely.
-        private ?LoggerInterface $logger = null,
+        ?LoggerInterface $logger = null,
     ) {
     }
 
@@ -88,10 +92,9 @@ final readonly class TaskNumberBackfiller
             return $done;
         });
 
-        // The tasks loaded above are stale now, and a long run must not keep them. Since 2.27.0 (REQ-RUNTIME-003 rule 2,
-        // audit WA-1): only the TaskBoard rows no application entity holds leave the manager, never the application's
-        // entities. A task an application entity holds keeps the number it had in memory (load it again to read it).
-        BundleEntityDetacher::detach($this->entityManager, $this->logger);
+        // The tasks loaded above are stale now, and a long run must not keep them: the private manager is cleared
+        // (REQ-RUNTIME-003 rule 2; it never holds the application's entities).
+        BundleEntityDetacher::detach($this->entityManager);
 
         return $done;
     }

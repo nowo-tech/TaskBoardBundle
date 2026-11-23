@@ -6,16 +6,16 @@ namespace Nowo\TaskBoardBundle\Port;
 
 use Nowo\TaskBoardBundle\DependencyInjection\Compiler\TaskBoardPortsPass;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Port\Internal\AttributionOnlyResolverInterface;
+use Nowo\TaskBoardBundle\Port\Internal\SyncPersonResolverInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\AttributionOnlyPolicyInterface;
-use Nowo\TaskBoardBundle\Sync\Hook\AttributionOnlyResolverInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncPersonDirectoryInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncPersonMatch;
-use Nowo\TaskBoardBundle\Sync\Hook\SyncPersonResolverInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\RemotePerson;
 use Nowo\TaskBoardBundle\Sync\Provider\RemotePersonRef;
 
 /**
- * Since 2.15.0: asks a host {@see SyncPersonDirectoryInterface} where the bundle asks the deprecated
+ * Since 2.15.0: asks a host {@see SyncPersonDirectoryInterface} where the bundle asks its internal seam
  * {@see SyncPersonResolverInterface}. Exceptions propagate. Stateless.
  *
  * @internal built by {@see Ports} / {@see TaskBoardPortsPass}
@@ -52,7 +52,7 @@ final readonly class SyncPersonDirectoryGate implements SyncPersonResolverInterf
     }
 
     /**
-     * The directory's own attribution-only answer ({@see AttributionOnlyPolicyInterface} or the deprecated
+     * The directory's own attribution-only answer ({@see AttributionOnlyPolicyInterface} or the internal seam
      * {@see AttributionOnlyResolverInterface}); false when it implements neither, which is what the bundle concludes for a
      * resolver without the optional interface.
      */

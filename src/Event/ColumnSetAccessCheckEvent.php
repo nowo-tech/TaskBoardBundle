@@ -28,14 +28,6 @@ final class ColumnSetAccessCheckEvent extends Event
         return $this->subject;
     }
 
-    /**
-     * @deprecated since 2.15.0, use {@see self::getColumnSetId()} and {@see self::getColumnSetScopeKey()}; removed in 3.0
-     */
-    public function getColumnSet(): ColumnSet
-    {
-        return $this->columnSet;
-    }
-
     public function isDefaultGranted(): bool
     {
         return $this->defaultGranted;

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Tests\Functional\App;
 
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
-use Nowo\TaskBoardBundle\View\TaskBoardDefaultViewResolverInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TaskBoardDefaultViewResolverInterface;
 
 /**
  * Since 1.24: a host "Default task view" preference; tests set the view.

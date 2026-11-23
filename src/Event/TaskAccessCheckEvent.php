@@ -85,14 +85,6 @@ final class TaskAccessCheckEvent extends Event
     }
 
     /**
-     * @deprecated since 2.15.0, use {@see self::getTaskId()}, {@see self::getBoardId()} or {@see self::getTaskSnapshot()}; removed in 3.0
-     */
-    public function getTask(): Task
-    {
-        return $this->task;
-    }
-
-    /**
      * For {@see self::ACTION_TRACK_TIME}, a grant after a deny() is ignored: the deny sticks (since 2.4.0, audit II-L1); since
      * 2.23.0 for the question actions too.
      * For {@see self::ACTION_VIEW}, the last call wins, as before.

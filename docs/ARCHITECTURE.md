@@ -17,10 +17,11 @@ kept alive and not reset (REQ-RUNTIME-002, see [FRANKENPHP-WORKER-AUDIT](FRANKEN
 ## Host ports
 
 A host extends TaskBoard through ports it implements (service ids in the configuration). Since 2.15 every port that took
-a bundle entity, the HTTP `Request` or an `UploadedFile` has a **twin** that takes and returns only bundle value objects,
-scalars, enums and your own user object:
+a bundle entity, the HTTP `Request` or an `UploadedFile` has a **framework-free interface** that takes and returns only
+bundle value objects, scalars, enums and your own user object; since 3.0 it is the only one (the entity-typed 2.14
+interfaces, deprecated since 2.15, are removed):
 
-| Configuration key | Deprecated interface (removed in 3.0) | 2.15 twin |
+| Configuration key | Removed in 3.0 | Interface to implement |
 |---|---|---|
 | `api.hooks.authenticator` | `Api\Hook\TaskApiAuthenticatorInterface` | `Api\Hook\TaskApiRequestAuthenticatorInterface` |
 | `api.hooks.attachments` | `Api\Hook\TaskApiAttachmentsInterface` | `Api\Hook\TaskApiAttachmentStoreInterface` |
@@ -49,10 +50,12 @@ Value objects of the twins: `ValueObject\TaskBoardSnapshot`, `TaskSnapshot`, `Ta
 id, never an entity, a collection or a user object), `Api\Value\TaskApiRequestContext` (method, path, route, client IP,
 the `Authorization` credential, headers; never a cookie) and `Api\Value\TaskApiUpload`.
 
-**Selection rule.** The same configuration key takes either interface. A service that implements the deprecated one is
-asked exactly as in 2.14, also when it implements the twin too; one that implements only the twin is asked through an
-internal gate (`Port\*Gate`, built by `Port\Ports`). `TaskBoardPortsPass` stops the container build when a configured
-service implements neither (a factory service, whose class the build cannot know, fails closed when it is built).
+**Selection rule (3.0).** A configured service implements the framework-free interface and is asked through an internal
+gate (`Port\*Gate`, built by `Port\Ports`) that adapts it to the bundle's internal entity-typed seam
+(`Port\Internal\*`, `@internal`, implemented only by the bundle's own defaults and gates). `TaskBoardPortsPass` stops
+the container build when a configured service implements neither (a factory service, whose class the build cannot
+know, fails closed when it is built); `RemovedPortsPass` stops it when a service still uses a removed 2.14 interface
+(an alias or decorator of a removed id, an autodiscovered class implementing one, the service a key names).
 
 The other ports (`TaskBoardAccessCheckerInterface`, `TaskBoardTenantResolverInterface`, `TaskObjectLinkResolverInterface`,
 `MultiBoardScopeProviderInterface`, `CalendarDayAnnotationProviderInterface`, `CalendarEventSourceInterface` / `CalendarEventReschedulerInterface` (2.24: `CalendarEvent`, `CalendarEventRange`, `CalendarEventReschedule`, `CalendarEventRescheduleResult`), `Template\TaskTemplatePermissionInterface` (2.16: `TaskTemplateScope`, `TaskBoardSnapshot`, `TaskTemplateSnapshot`), the API users / workspace / plan gate /
@@ -87,15 +90,15 @@ a worker with kernel reset off never keeps a closed manager; `TASK_BOARD_CHANGED
 
 Every event that carries a bundle entity also offers ids and snapshots (`getBoardId()`, `getTaskId()`,
 `getTenantKey()`, `getActorId()` / `getSubjectId()`, `getBoardSnapshot()`, `getTaskSnapshot()`, `getCommentSnapshot()`,
-...). The entity members are deprecated and removed in 3.0. Write events are dispatched after the write is saved,
+...). Since 3.0 they carry no public entity member (the entity getters and properties, deprecated since 2.15, are
+removed). Write events are dispatched after the write is saved,
 through `TaskEventDeferral` (after the commit of a deferred write, dropped on a rollback).
 
 ## Persistence
 
-**Standard host (default).** TaskBoard reads and writes through `database.entity_manager` (`default`), exactly as up to
-2.14: a TaskBoard save flushes that manager, including what your application left pending in it.
-
-**Private entity manager (opt-in, `database.private_entity_manager: true`; the only mode in 3.0).** Every bundle
+**Private entity manager (the only mode since 3.0; opt-in with `database.private_entity_manager: true` in 2.15–2.32).**
+Up to 2.x without the option TaskBoard wrote through `database.entity_manager` and flushed it, including what your
+application left pending in it; 3.0 removed that mode (REQ-ARCH-001 rule 6). Every bundle
 service reads and writes through `Doctrine\TaskBoardEntityManager`, a private manager created on the connection,
 mapping, caches and event manager of `database.entity_manager` (REQ-ARCH-001 rule 6):
 
@@ -109,7 +112,9 @@ mapping, caches and event manager of `database.entity_manager` (REQ-ARCH-001 rul
   manager (no growth in a kept-alive worker);
 - your security user and other host objects on TaskBoard rows are adopted as the private manager's references before
   each flush; users read back from TaskBoard rows are the private manager's instances, so hooks and listeners compare
-  users **by id**, never with `===` (audit OC-L1);
+  users **by id**, never with `===` (audit OC-L1). Since 3.0 an application user not saved yet (or of the wrong class)
+  fails clearly before anything is written, a TaskBoard row your manager holds is re-resolved by id on a to-one of a new
+  TaskBoard row, and persisting one fails clearly instead of inserting it again;
 - TaskBoard bulk / DBAL statements inside your open transaction run in a savepoint; a failure rolls back to it and the
   original exception is rethrown.
 
@@ -132,7 +137,8 @@ binary on MySQL / MariaDB.
 ## Both host kinds, tested
 
 - **Standard host**: the whole unit and functional suite (`FunctionalKernel`: attribute mapping, `AppUser` Doctrine
-  entity, the deprecated ports' stubs), plus its replays: every host port through its twin only
-  (`TASK_BOARD_TEST_PORTS=twin`) and the private entity manager on (`TASK_BOARD_TEST_PRIVATE_EM=1`), each a CI job.
+  entity, the private entity manager, the ports' stubs on the internal seams), plus its replays: every host port
+  through its framework-free interface only (`TASK_BOARD_TEST_PORTS=twin`) and the XML mapping
+  (`TASK_BOARD_TEST_XML_MAPPING=1`), each a CI job.
 - **DDD host**: `tests/Functional/DddHost` (`DddHostKernel`: plain PHP users with no mapping, XML mapping, private entity
   manager, user references by id, twin ports only), and `XmlMappingParityTest`.

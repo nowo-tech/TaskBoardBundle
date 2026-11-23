@@ -6,14 +6,14 @@ namespace Nowo\TaskBoardBundle\Port;
 
 use Nowo\TaskBoardBundle\DependencyInjection\Compiler\TaskBoardPortsPass;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Port\Internal\ImportedTimeEntrySinkInterface;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncDirectory;
 use Nowo\TaskBoardBundle\Sync\Hook\ImportedTimeEntryReceiverInterface;
-use Nowo\TaskBoardBundle\Sync\Hook\ImportedTimeEntrySinkInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\TimeAccess;
 use Nowo\TaskBoardBundle\Sync\Time\TimeWindow;
 
 /**
- * Since 2.15.0: asks a host {@see ImportedTimeEntryReceiverInterface} where the bundle asks the deprecated
+ * Since 2.15.0: asks a host {@see ImportedTimeEntryReceiverInterface} where the bundle asks its internal seam
  * {@see ImportedTimeEntrySinkInterface}. Exceptions propagate. Stateless.
  *
  * @internal built by {@see Ports} / {@see TaskBoardPortsPass}

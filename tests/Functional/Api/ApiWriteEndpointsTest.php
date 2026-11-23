@@ -268,11 +268,20 @@ final class ApiWriteEndpointsTest extends ApiTestCase
 
         $this->send('POST', '/api/tasks/v2/task/' . $task->getId() . '/comment', ['comment_text' => 'Looks good', 'notify_all' => true]);
         self::assertResponseIsSuccessful();
-        $comment = $this->em->getRepository(TaskComment::class)->findOneBy(['task' => $task]);
-        self::assertSame(['id' => $comment?->getId(), 'hist_id' => $comment?->getId(), 'date' => (int) $comment?->getCreatedAt()->format('Uv'), 'warnings' => [['field' => 'notify_all', 'reason' => 'not_supported']]], $this->json());
+        $comment = $this->em->getRepository(TaskComment::class)->findOneBy(['task' => $task->getId()]);
+        $json    = $this->json();
+        // The private manager is dropped at the request boundary: the comment is read back from the database, whose
+        // column keeps whole seconds; the answer was built from the instance in memory (milliseconds).
+        self::assertIsInt($json['date'] ?? null);
+        $json['date'] = intdiv($json['date'], 1000) * 1000;
+        self::assertSame(['id' => $comment?->getId(), 'hist_id' => $comment?->getId(), 'date' => (int) $comment?->getCreatedAt()->format('U') * 1000, 'warnings' => [['field' => 'notify_all', 'reason' => 'not_supported']]], $json);
         self::assertContains(TaskBoardEvents::TASK_COMMENT, $this->events);
         // Mentions as in the UI's box: "@Label" of a candidate (here a member of a task of the board).
-        $task->addMember(new TaskMember(task: $task, user: $this->colleague, memberRole: TaskMemberRole::Watcher));
+        $task = $this->em->find(Task::class, $task->getId());
+        self::assertInstanceOf(Task::class, $task);
+        $colleague = $this->em->find(AppUser::class, $this->colleague->getId());
+        self::assertInstanceOf(AppUser::class, $colleague);
+        $task->addMember(new TaskMember(task: $task, user: $colleague, memberRole: TaskMemberRole::Watcher));
         $this->em->flush();
         $mentioned = [];
         $this->dispatcher()->addListener(TaskBoardEvents::TASK_MENTION, static function (TaskMentionEvent $event) use (&$mentioned): void {

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Sync\Hook;
 
 use Nowo\TaskBoardBundle\Entity\Task;
+use Nowo\TaskBoardBundle\Port\Internal\InlineImageRewriterInterface;
 
 use function preg_replace_callback;
 

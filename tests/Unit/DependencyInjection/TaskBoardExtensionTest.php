@@ -7,11 +7,8 @@ namespace Nowo\TaskBoardBundle\Tests\Unit\DependencyInjection;
 use App\Entity\User;
 use Doctrine\Bundle\DoctrineBundle\DependencyInjection\DoctrineExtension;
 use LogicException;
-use Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\ImportedTimeAggregatorListener;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTaskDirectory;
-use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTaskProvider;
-use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTeamContextProvider;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TaskBoardTeamDirectory;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TimeTrackTaskTimeBillableDefaultProvider;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TimeTrackTaskTimePeriodLock;
@@ -29,6 +26,7 @@ use Nowo\TaskBoardBundle\Gantt\WeekStartResolverInterface;
 use Nowo\TaskBoardBundle\Import\Dto\TaskImportResult;
 use Nowo\TaskBoardBundle\Import\TaskImportSource;
 use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolverInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TaskAssigneeProviderInterface;
 use Nowo\TaskBoardBundle\Repository\DoctrineOrmTaskRepository;
 use Nowo\TaskBoardBundle\Repository\DoctrineOrmTeamMemberRepository;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
@@ -48,10 +46,12 @@ use Nowo\TaskBoardBundle\ValueObject\Uuid;
 use Nowo\TimeTrackBundle\Event\TimeEntryCreatedEvent;
 use Nowo\TimeTrackBundle\Integration\TaskProviderInterface;
 use Nowo\TimeTrackBundle\Timesheet\TimesheetScopePolicyInterface;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Symfony\Bundle\FrameworkBundle\DependencyInjection\FrameworkExtension;
 use Symfony\Bundle\SecurityBundle\SecurityBundle;
+use Symfony\Component\Config\Definition\Exception\InvalidConfigurationException;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\DependencyInjection\Definition;
@@ -85,13 +85,12 @@ final class TaskBoardExtensionTest extends TestCase
         self::assertArrayNotHasKey('$managerRegistry', $container->getDefinition(DoctrineOrmTeamMemberRepository::class)->getArguments());
 
         if (interface_exists(TaskProviderInterface::class)) {
-            // Since 2.28.0: the 1.23 twins answer TimeTrack; the deprecated 1.x classes stay registered.
+            // Since 2.28.0: the 1.23 interfaces answer TimeTrack; since 3.0.0 the 1.x classes are gone.
             self::assertSame(TaskBoardTaskDirectory::class, (string) $container->getAlias('nowo_task_board.task_provider'));
             self::assertSame(TaskBoardTeamDirectory::class, (string) $container->getAlias('nowo_task_board.team_context_provider'));
             self::assertTrue($container->hasDefinition(TaskBoardTaskDirectory::class));
             self::assertTrue($container->hasDefinition(TaskBoardTeamDirectory::class));
-            self::assertTrue($container->hasDefinition(TaskBoardTaskProvider::class));
-            self::assertTrue($container->hasDefinition(TaskBoardTeamContextProvider::class));
+            self::assertFalse($container->hasDefinition('Nowo\\TaskBoardBundle\\Bridge\\TimeTrack\\TaskBoardTaskProvider'));
         } else {
             self::assertFalse($container->hasAlias('nowo_task_board.task_provider'));
             self::assertFalse($container->hasAlias('nowo_task_board.team_context_provider'));
@@ -116,7 +115,7 @@ final class TaskBoardExtensionTest extends TestCase
         $without->setParameter('kernel.environment', 'test');
         $without->setParameter('kernel.bundles', ['SecurityBundle' => SecurityBundle::class]);
         (new TaskBoardExtension(timeTrackImportedEvent: 'Nowo\\TimeTrackBundle\\Event\\MissingImportedEvent'))->load([['user_class' => User::class]], $without);
-        self::assertTrue($without->hasDefinition(TaskBoardTaskProvider::class));
+        self::assertTrue($without->hasDefinition(TaskBoardTaskDirectory::class));
         // The resource exclusion leaves only Symfony's "excluded" marker, never a listener.
         self::assertTrue(!$without->hasDefinition(ImportedTimeAggregatorListener::class) || $without->getDefinition(ImportedTimeAggregatorListener::class)->hasTag('container.excluded'));
         self::assertFalse($without->hasDefinition(ImportedTimeAggregatorListener::class) && $without->getDefinition(ImportedTimeAggregatorListener::class)->hasTag('kernel.event_listener'));
@@ -186,16 +185,10 @@ final class TaskBoardExtensionTest extends TestCase
         $without->setParameter('kernel.environment', 'test');
         $without->setParameter('kernel.bundles', ['SecurityBundle' => SecurityBundle::class]);
         (new TaskBoardExtension(
-            timeTrackLegacyTaskProvider: 'Nowo\\TimeTrackBundle\\Integration\\MissingTaskProvider',
-            timeTrackLegacyTeamProvider: 'Nowo\\TimeTrackBundle\\Integration\\MissingTeamProvider',
             timeTrackLegacyScopeProvider: 'Nowo\\TimeTrackBundle\\Timesheet\\MissingScopeProvider',
         ))->load([['user_class' => User::class]], $without);
         self::assertSame(TaskBoardTaskDirectory::class, (string) $without->getAlias('nowo_task_board.task_provider'));
         self::assertSame(TaskBoardTeamDirectory::class, (string) $without->getAlias('nowo_task_board.team_context_provider'));
-        foreach ([TaskBoardTaskProvider::class, TaskBoardTeamContextProvider::class] as $legacy) {
-            // The resource exclusion leaves only Symfony's "excluded" marker.
-            self::assertTrue(!$without->hasDefinition($legacy) || $without->getDefinition($legacy)->hasTag('container.excluded'), $legacy);
-        }
         foreach ([TimeTrackTaskTimeBillableDefaultProvider::class, TimeTrackTaskTimePeriodLock::class] as $id) {
             self::assertSame(TimesheetScopePolicyInterface::class, (string) $without->getDefinition($id)->getArgument('$scopes'), $id);
         }
@@ -321,33 +314,32 @@ final class TaskBoardExtensionTest extends TestCase
         self::assertFalse($resource->getArgument('$scopingEnabled'));
     }
 
-    public function testLoadHonoursCustomTemplatesLayout(): void
+    /**
+     * Since 3.0.0: the options removed in 3.0 fail the build, naming what to set instead.
+     *
+     * @return iterable<string, array{array<string, mixed>, string}>
+     */
+    public static function removedOptions(): iterable
     {
-        $container = new ContainerBuilder();
-        $container->setParameter('kernel.environment', 'test');
-        $container->setParameter('kernel.bundles', ['SecurityBundle' => SecurityBundle::class]);
-
-        (new TaskBoardExtension())->load([[
-            'user_class' => User::class,
-            'templates'  => ['layout' => 'base.html.twig'],
-        ]], $container);
-
-        self::assertSame('base.html.twig', $container->getParameter('nowo_task_board.web_ui.layout_template'));
-        self::assertSame('base.html.twig', $container->getParameter('nowo_task_board.templates')['layout']);
+        yield 'templates.layout' => [['templates' => ['layout' => 'base.html.twig']], 'The option "nowo_task_board.templates.layout" was removed in 3.0: set "nowo_task_board.web_ui.layout_template"'];
+        yield 'templates.css_framework' => [['templates' => ['css_framework' => 'bootstrap5']], 'The option "nowo_task_board.templates.css_framework" was removed in 3.0: it was ignored since 2.0: set "nowo_ui_kit.css_framework"'];
+        yield 'firewall' => [['firewall' => 'main'], 'The option "nowo_task_board.firewall" was removed in 3.0: it had no effect since 1.7'];
     }
 
-    public function testLoadHonoursCustomCssFramework(): void
+    /**
+     * @param array<string, mixed> $config
+     */
+    #[DataProvider('removedOptions')]
+    public function testARemovedOptionFailsTheBuild(array $config, string $message): void
     {
         $container = new ContainerBuilder();
         $container->setParameter('kernel.environment', 'test');
         $container->setParameter('kernel.bundles', ['SecurityBundle' => SecurityBundle::class]);
 
-        (new TaskBoardExtension())->load([[
-            'user_class' => User::class,
-            'templates'  => ['css_framework' => 'bootstrap5'],
-        ]], $container);
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessage($message);
 
-        self::assertSame('bootstrap5', $container->getParameter('nowo_task_board.templates')['css_framework']);
+        (new TaskBoardExtension())->load([['user_class' => User::class] + $config], $container);
     }
 
     public function testLoadThrowsWhenSecurityBundleMissingAndUnauthenticatedDisallowed(): void
@@ -390,7 +382,7 @@ final class TaskBoardExtensionTest extends TestCase
         (new TaskBoardExtension('Nowo\\Missing\\TaskProviderInterface'))->load([['user_class' => User::class]], $container);
 
         self::assertFalse($container->hasAlias('nowo_task_board.task_provider'));
-        self::assertFalse($container->hasDefinition(TaskBoardTaskProvider::class));
+        self::assertFalse($container->hasDefinition(TaskBoardTaskDirectory::class));
     }
 
     public function testLoadAcceptsSecurityExtensionWithoutKernelBundles(): void
@@ -456,7 +448,7 @@ final class TaskBoardExtensionTest extends TestCase
         (new TaskBoardExtension())->load([[
             'user_class' => User::class,
             'security'   => ['allow_unauthenticated' => true],
-            'templates'  => ['layout' => 'old.html.twig', 'index' => 'old_index.html.twig', 'board' => 'old_board.html.twig'],
+            'templates'  => ['index' => 'old_index.html.twig', 'board' => 'old_board.html.twig'],
             'web_ui'     => ['layout_template' => 'new.html.twig', 'templates' => ['index' => 'new_index.html.twig']],
         ]], $container);
 

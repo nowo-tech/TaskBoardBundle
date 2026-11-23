@@ -5,48 +5,47 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Tests\Unit\Port;
 
 use LogicException;
-use Nowo\TaskBoardBundle\Api\Hook\TaskApiAttachmentsInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiAttachmentStoreInterface;
-use Nowo\TaskBoardBundle\Api\Hook\TaskApiAuthenticatorInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiRequestAuthenticatorInterface;
-use Nowo\TaskBoardBundle\Api\Hook\TaskApiTimeEntriesInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiTimeStoreInterface;
 use Nowo\TaskBoardBundle\Assignee\TaskAssigneePolicyInterface;
-use Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface;
-use Nowo\TaskBoardBundle\Comment\TaskCommentCauseLabelerInterface;
 use Nowo\TaskBoardBundle\Comment\TaskCommentCauseTextInterface;
 use Nowo\TaskBoardBundle\Comment\TaskMentionCandidatesProviderInterface;
-use Nowo\TaskBoardBundle\Comment\TaskMentionCandidatesResolverInterface;
-use Nowo\TaskBoardBundle\Entity\TaskComment;
-use Nowo\TaskBoardBundle\History\TaskChangeCauseLabelerInterface;
 use Nowo\TaskBoardBundle\History\TaskChangeCauseTextInterface;
 use Nowo\TaskBoardBundle\Import\TaskImportLinkFinderInterface;
-use Nowo\TaskBoardBundle\Import\TaskImportLinkLookupInterface;
 use Nowo\TaskBoardBundle\Move\TaskBoardTargetIdsInterface;
-use Nowo\TaskBoardBundle\Move\TaskBoardTargetsInterface;
+use Nowo\TaskBoardBundle\Port\Internal\FirstBoardProvisionerInterface;
+use Nowo\TaskBoardBundle\Port\Internal\ImportedTimeEntrySinkInterface;
+use Nowo\TaskBoardBundle\Port\Internal\InlineImageRewriterInterface;
+use Nowo\TaskBoardBundle\Port\Internal\PeopleInviterInterface;
+use Nowo\TaskBoardBundle\Port\Internal\ProviderCredentialResolverInterface;
+use Nowo\TaskBoardBundle\Port\Internal\SyncActorResolverInterface;
+use Nowo\TaskBoardBundle\Port\Internal\SyncLimitCheckerInterface;
+use Nowo\TaskBoardBundle\Port\Internal\SyncPersonResolverInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TaskApiAttachmentsInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TaskApiAuthenticatorInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TaskApiTimeEntriesInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TaskAssigneeProviderInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TaskAttachmentStorageInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TaskBoardDefaultViewResolverInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TaskBoardTargetsInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TaskChangeCauseLabelerInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TaskCommentCauseLabelerInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TaskImportLinkLookupInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TaskMentionCandidatesResolverInterface;
 use Nowo\TaskBoardBundle\Port\Ports;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\ImportedTimeEntryReceiverInterface;
-use Nowo\TaskBoardBundle\Sync\Hook\ImportedTimeEntrySinkInterface;
-use Nowo\TaskBoardBundle\Sync\Hook\InlineImageRewriterInterface;
+use Nowo\TaskBoardBundle\Sync\Hook\NullSyncLimitChecker;
 use Nowo\TaskBoardBundle\Sync\Hook\PeopleInvitationInterface;
-use Nowo\TaskBoardBundle\Sync\Hook\PeopleInviterInterface;
-use Nowo\TaskBoardBundle\Sync\Hook\ProviderCredentialResolverInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\ProviderCredentialSourceInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncActorProviderInterface;
-use Nowo\TaskBoardBundle\Sync\Hook\SyncActorResolverInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncedFileStorageInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncedImageRewriterInterface;
-use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncPersonDirectoryInterface;
-use Nowo\TaskBoardBundle\Sync\Hook\SyncPersonResolverInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncQuotaPolicyInterface;
-use Nowo\TaskBoardBundle\Sync\Hook\TaskAttachmentStorageInterface;
-use Nowo\TaskBoardBundle\Tenancy\FirstBoardProvisionerInterface;
 use Nowo\TaskBoardBundle\Tenancy\FirstBoardProvisioningInterface;
-use Nowo\TaskBoardBundle\ValueObject\TaskCommentSnapshot;
 use Nowo\TaskBoardBundle\View\TaskBoardDefaultViewPolicyInterface;
-use Nowo\TaskBoardBundle\View\TaskBoardDefaultViewResolverInterface;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -85,27 +84,30 @@ final class PortsTest extends TestCase
     }
 
     /**
+     * Since 3.0.0: the internal seam (the removed 2.14 interface's shape) implemented outside the bundle is refused, as a
+     * service implementing neither.
+     *
      * @param class-string $legacy
      * @param class-string $twin
      */
     #[DataProvider('ports')]
-    public function testDeprecatedInterfaceIsAskedAsItIs(string $factory, string $legacy, string $twin): void
+    public function testASeamImplementedOutsideTheBundleFailsClosed(string $factory, string $legacy, string $twin): void
     {
-        $service = $this->createMock($legacy);
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage('must implement "' . $twin . '" (see UPGRADING.md "To 3.0.0")');
 
-        self::assertSame($service, $this->select($factory, $service));
+        $this->select($factory, $this->createMock($legacy));
     }
 
-    public function testServiceImplementingBothIsAskedThroughTheDeprecatedInterface(): void
+    /** The bundle's own defaults (classes of the bundle implementing the seam) are asked as they are. */
+    public function testTheBundlesOwnDefaultsAreAskedAsTheyAre(): void
     {
-        $both = new class implements TaskCommentCauseLabelerInterface, TaskCommentCauseTextInterface {
-            public function label(string $cause, TaskComment|TaskCommentSnapshot $comment): ?string
-            {
-                return null;
-            }
-        };
+        $default = new NullSyncLimitChecker();
 
-        self::assertSame($both, Ports::commentCauseLabeler($both));
+        self::assertSame($default, Ports::limitChecker($default));
+        self::assertTrue(Ports::isOwn(NullSyncLimitChecker::class));
+        self::assertFalse(Ports::isOwn('App\\Sync\\Limits'));
+        self::assertFalse(Ports::isOwn('Nowo\\TaskBoardBundle\\Port\\Internal\\SyncLimitCheckerInterface@anonymous'), 'an anonymous class is the host\'s');
     }
 
     /**
@@ -113,7 +115,7 @@ final class PortsTest extends TestCase
      * @param class-string $twin
      */
     #[DataProvider('ports')]
-    public function testTwinIsAskedThroughAGateOfTheDeprecatedInterface(string $factory, string $legacy, string $twin): void
+    public function testTheFrameworkFreeInterfaceIsAskedThroughAGate(string $factory, string $legacy, string $twin): void
     {
         $service = $this->createMock($twin);
         $gate    = $this->select($factory, $service);

@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Tests\Functional\App;
 
-use Nowo\TaskBoardBundle\Comment\TaskCommentCauseLabelerInterface;
 use Nowo\TaskBoardBundle\Entity\TaskChangeHistory;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
-use Nowo\TaskBoardBundle\History\TaskChangeCauseLabelerInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TaskChangeCauseLabelerInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TaskCommentCauseLabelerInterface;
 
 use function str_starts_with;
 use function substr;

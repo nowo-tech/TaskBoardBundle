@@ -16,6 +16,7 @@ use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
+use Nowo\TaskBoardBundle\Port\Internal\ProviderCredentialResolverInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Service\BoardColumnManager;
 use Nowo\TaskBoardBundle\Support\Text;
@@ -41,7 +42,6 @@ use Nowo\TaskBoardBundle\Sync\Exception\ProviderException;
 use Nowo\TaskBoardBundle\Sync\Exception\RateLimitedException;
 use Nowo\TaskBoardBundle\Sync\Exception\SyncBusyException;
 use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
-use Nowo\TaskBoardBundle\Sync\Hook\ProviderCredentialResolverInterface;
 use Nowo\TaskBoardBundle\Sync\People\PeopleMappingService;
 use Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleDirectoryService;
 use Nowo\TaskBoardBundle\Sync\Provider\ContainerType;
@@ -645,16 +645,15 @@ final readonly class TaskBoardSyncService
     }
 
     /**
-     * Detaches the TaskBoard rows no application entity holds (memory stays flat; since 2.27.0 the application's entities
-     * and the TaskBoard rows they reference stay managed, REQ-RUNTIME-003 rule 2, audit WA-1) and loads the run's board,
-     * connection and actor again (the same instances when they stayed managed).
+     * Clears the private manager (memory stays flat, REQ-RUNTIME-003 rule 2) and loads the run's board, connection and
+     * actor again.
      */
     private function reload(SyncRunContext $ctx): void
     {
         $boardId      = $ctx->board->getId();
         $connectionId = $ctx->connection->getId();
         $actor        = $this->identity($ctx->actor);
-        BundleEntityDetacher::detach($this->entityManager, $this->logger);
+        BundleEntityDetacher::detach($this->entityManager);
         $board      = $this->entityManager->find(TaskBoard::class, $boardId);
         $connection = $this->entityManager->find(TaskBoardConnection::class, $connectionId);
         if (!$board instanceof TaskBoard || !$connection instanceof TaskBoardConnection) {

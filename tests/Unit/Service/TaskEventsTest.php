@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Tests\Unit\Service;
 
 use DateTimeImmutable;
-use Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface;
 use Nowo\TaskBoardBundle\Dto\TaskBoardFormData;
 use Nowo\TaskBoardBundle\Dto\TaskFormData;
 use Nowo\TaskBoardBundle\Dto\TaskMemberFormData;
@@ -25,6 +24,8 @@ use Nowo\TaskBoardBundle\Event\TaskUpdatedEvent;
 use Nowo\TaskBoardBundle\Exception\ColumnNotFoundException;
 use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
 use Nowo\TaskBoardBundle\Exception\UnassignableUserException;
+use Nowo\TaskBoardBundle\Port\Internal\SyncLimitCheckerInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TaskAssigneeProviderInterface;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Service\TaskBoardCreator;
@@ -32,7 +33,6 @@ use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
 use Nowo\TaskBoardBundle\Service\TaskManager;
 use Nowo\TaskBoardBundle\Service\TaskMemberAssigner;
 use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
-use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Symfony\Component\EventDispatcher\EventDispatcher;
@@ -85,7 +85,7 @@ final class TaskEventsTest extends TestCase
         self::assertSame([TaskBoardEvents::TASK_CREATED], $this->names());
         $event = $this->events[0][1];
         self::assertInstanceOf(TaskCreatedEvent::class, $event);
-        self::assertSame($task, $event->getTask());
+        self::assertSame($task->getId(), $event->getTaskId());
         self::assertSame($this->user, $event->getActor());
     }
 
@@ -111,8 +111,8 @@ final class TaskEventsTest extends TestCase
         self::assertFalse($updated->hasChanged('other'));
         $moved = $this->events[1][1];
         self::assertInstanceOf(TaskMovedEvent::class, $moved);
-        self::assertSame($this->todo, $moved->getFromColumn());
-        self::assertSame($this->doing, $moved->getToColumn());
+        self::assertSame($this->todo->getId(), $moved->getFromColumnId());
+        self::assertSame($this->doing->getId(), $moved->getToColumnId());
     }
 
     /** Since 2.2.1: a column change through update() completes and reopens as moveToColumn() does, with its events once. */
@@ -282,7 +282,7 @@ final class TaskEventsTest extends TestCase
         self::assertSame([TaskBoardEvents::TASK_MEMBER_ADDED], $this->names());
         $event = $this->events[0][1];
         self::assertInstanceOf(TaskMemberAddedEvent::class, $event);
-        self::assertSame($member, $event->getMember());
+        self::assertSame($member->getId(), $event->getMemberId());
         self::assertSame($alice, $event->getUser());
 
         // The same membership again: no new member, no event.

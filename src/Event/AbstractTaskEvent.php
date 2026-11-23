@@ -43,14 +43,6 @@ abstract class AbstractTaskEvent extends Event
         $this->actorId    = ActorId::of($actor);
     }
 
-    /**
-     * @deprecated since 2.15.0, use {@see self::getTaskId()}, {@see self::getBoardId()}, {@see self::getTenantKey()}, {@see self::getTaskNumber()} or {@see self::getTaskSnapshot()}; removed in 3.0
-     */
-    public function getTask(): Task
-    {
-        return $this->task;
-    }
-
     public function getActor(): object
     {
         return $this->actor;

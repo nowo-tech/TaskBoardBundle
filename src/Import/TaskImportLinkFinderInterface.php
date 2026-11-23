@@ -7,12 +7,12 @@ namespace Nowo\TaskBoardBundle\Import;
 use Nowo\TaskBoardBundle\ValueObject\TaskBoardSnapshot;
 
 /**
- * Since 2.15.0 (REQ-ARCH-001 rule 1): the framework-free twin of {@see TaskImportLinkLookupInterface}: which source ids an
+ * Since 2.15.0 (REQ-ARCH-001 rule 1): the framework-free twin of `TaskImportLinkLookupInterface` (the 2.14 interface, removed in 3.0): which source ids an
  * import finds already imported into another board of the same tenant, given the target board as a
  * {@see TaskBoardSnapshot}.
  *
- * Alias `Nowo\TaskBoardBundle\Import\TaskImportLinkLookupInterface` to a service implementing it, as for the deprecated
- * interface; the bundle asks it through an internal gate.
+ * Alias `Nowo\TaskBoardBundle\Import\TaskImportLinkFinderInterface` to a service implementing it (since 3.0.0; up to 2.x the
+ * removed 2.14 interface was aliased); the bundle asks it through an internal gate.
  */
 interface TaskImportLinkFinderInterface
 {

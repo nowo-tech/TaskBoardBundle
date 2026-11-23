@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Tests\Functional\App;
 
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Port\Internal\OwnerlessTimeEntrySinkInterface;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncDirectory;
-use Nowo\TaskBoardBundle\Sync\Hook\OwnerlessTimeEntrySinkInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\TimeAccess;
 use Nowo\TaskBoardBundle\Sync\Time\TimeWindow;
 

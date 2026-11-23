@@ -5,10 +5,8 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Tests\Support\Legacy;
 
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
-use Nowo\TaskBoardBundle\Import\BoardAwareTaskImportUserResolverInterface;
-use Nowo\TaskBoardBundle\Import\TaskImportUserResolverInterface;
+use Nowo\TaskBoardBundle\Port\Internal\AttributionOnlyResolverInterface;
 use Nowo\TaskBoardBundle\Port\Ports;
-use Nowo\TaskBoardBundle\Sync\Hook\AttributionOnlyResolverInterface;
 
 use function in_array;
 
@@ -18,16 +16,6 @@ use function in_array;
  */
 final class Legacy2141PortDecisions
 {
-    /**
-     * v2.14.1 src/Import/ImportAssigneeResolver.php:109-111 (and src/Sync/Hook/DefaultSyncPersonResolver.php:73-75).
-     */
-    public static function importUser(TaskImportUserResolverInterface $userResolver, string $email, TaskBoard $board): ?object
-    {
-        return $userResolver instanceof BoardAwareTaskImportUserResolverInterface
-            ? $userResolver->resolveByEmailForBoard($email, $board)
-            : $userResolver->resolveByEmail($email);
-    }
-
     /**
      * v2.14.1 src/Sync/People/TaskSyncPeopleDirectoryService.php:234 (and src/Sync/View/SyncPeopleViewProvider.php:214).
      */

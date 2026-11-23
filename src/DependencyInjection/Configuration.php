@@ -16,14 +16,20 @@ use Nowo\TaskBoardBundle\Sync\Provider\ClickUp\ClickUpTaskProvider;
 use Symfony\Component\Config\Definition\Builder\ArrayNodeDefinition;
 use Symfony\Component\Config\Definition\Builder\TreeBuilder;
 use Symfony\Component\Config\Definition\ConfigurationInterface;
+use Symfony\Component\Config\Definition\Exception\InvalidConfigurationException;
 
+use function array_key_exists;
 use function array_map;
 use function in_array;
+use function is_array;
 use function is_bool;
 use function is_string;
 use function preg_match;
+use function sprintf;
 use function str_contains;
 use function str_starts_with;
+use function strlen;
+use function substr;
 
 /**
  * Configuration tree for TaskBoardBundle.
@@ -34,7 +40,7 @@ final class Configuration implements ConfigurationInterface
 
     public const ALIAS = 'nowo_task_board';
 
-    /** @var list<string> Host CSS stacks accepted by templates.css_framework (REQ-UI-001). */
+    /** @var list<string> Host CSS stacks the removed templates.css_framework accepted (REQ-UI-001; unused since 3.0.0, kept). */
     public const CSS_FRAMEWORKS = [
         'bootstrap',
         'bootstrap4',
@@ -91,6 +97,12 @@ final class Configuration implements ConfigurationInterface
         $treeBuilder = new TreeBuilder(self::ALIAS);
         $root        = $treeBuilder->getRootNode();
 
+        // Since 3.0.0: the options removed in 3.0 fail with what to set instead (not only "Unrecognized option").
+        $root
+            ->beforeNormalization()
+                ->ifArray()
+                ->then(static fn (array $config): array => self::refuseRemovedOptions($config))
+            ->end();
         $this->addUserDirectoryToFirewallSections($root);
         $this->addApiSection($root);
         $this->addSecuritySection($root);
@@ -108,6 +120,40 @@ final class Configuration implements ConfigurationInterface
         $this->addSyncSection($root);
 
         return $treeBuilder;
+    }
+
+    /**
+     * Since 3.0.0: the options deprecated in 1.x / 2.x and removed in 3.0 => what to do instead.
+     */
+    public const REMOVED_OPTIONS = [
+        'firewall'                => 'it had no effect since 1.7: protect the manage routes with your own firewall and access_control in security.yaml',
+        'templates.layout'        => 'set "nowo_task_board.web_ui.layout_template" (a layout that renders the UiKit canonical blocks)',
+        'templates.css_framework' => 'it was ignored since 2.0: set "nowo_ui_kit.css_framework"',
+    ];
+
+    /**
+     * Since 3.0.0: refuses an option removed in 3.0, naming its replacement.
+     *
+     * @param array<mixed> $config
+     *
+     * @throws InvalidConfigurationException when the configuration sets a removed option
+     *
+     * @return array<mixed>
+     */
+    public static function refuseRemovedOptions(array $config): array
+    {
+        $templates = is_array($config['templates'] ?? null) ? $config['templates'] : [];
+        foreach (self::REMOVED_OPTIONS as $path => $instead) {
+            $set = match ($path) {
+                'firewall' => array_key_exists('firewall', $config),
+                default    => array_key_exists(substr($path, strlen('templates.')), $templates),
+            };
+            if ($set) {
+                throw new InvalidConfigurationException(sprintf('The option "nowo_task_board.%s" was removed in 3.0: %s (see UPGRADING.md "To 3.0.0").', $path, $instead));
+            }
+        }
+
+        return $config;
     }
 
     /**
@@ -136,11 +182,6 @@ final class Configuration implements ConfigurationInterface
                 ->end()
                 ->scalarNode('dashboard_route')
                     ->defaultNull()
-                ->end()
-                ->scalarNode('firewall')
-                    ->info('Deprecated: never read by the bundle. Protect the manage routes with your own security.yaml firewall/access_control.')
-                    ->setDeprecated('nowo-tech/task-board-bundle', '1.7', 'The "%node%" option at path "%path%" is deprecated and has no effect; configure the firewall and access_control in your security.yaml instead.')
-                    ->defaultValue('main')
                 ->end()
             ->end();
     }
@@ -765,7 +806,7 @@ final class Configuration implements ConfigurationInterface
                     ->children()
                         ->scalarNode('layout_template')
                             ->defaultNull()
-                            ->info('Layout the pages extend. null = nowo_ui_kit.layouts.admin. A pre-2.0 layout without the UiKit canonical blocks goes through a deprecated bridge.')
+                            ->info('Layout the pages extend. null = nowo_ui_kit.layouts.admin. Since 3.0.0 a layout without the UiKit canonical blocks fails when a page is rendered (its 2.x bridge was removed).')
                         ->end()
                         ->arrayNode('templates')
                             ->info('Template per page id (index, board, list, gantt, task, import, connection, connection_people, task_panel, task_time_before, ...). Wins over the same key of templates.')
@@ -796,17 +837,6 @@ final class Configuration implements ConfigurationInterface
                 ->arrayNode('templates')
                     ->addDefaultsIfNotSet()
                     ->children()
-                        ->scalarNode('layout')
-                            ->defaultNull()
-                            ->setDeprecated(self::PACKAGE, '2.0', 'The "%path%.%node%" option is deprecated, use "nowo_task_board.web_ui.layout_template" instead.')
-                            ->info('Deprecated since 2.0.0: use web_ui.layout_template.')
-                        ->end()
-                        ->enumNode('css_framework')
-                            ->values([null, ...self::CSS_FRAMEWORKS])
-                            ->defaultNull()
-                            ->setDeprecated(self::PACKAGE, '2.0', 'The "%path%.%node%" option is deprecated and ignored, set "nowo_ui_kit.css_framework" instead.')
-                            ->info('Deprecated since 2.0.0 and ignored: the pages take their classes from nowo_ui_kit.')
-                        ->end()
                         ->scalarNode('index')->defaultValue('@NowoTaskBoardBundle/manage/index.html.twig')->end()
                         ->scalarNode('board')->defaultValue('@NowoTaskBoardBundle/manage/board.html.twig')->end()
                         ->scalarNode('list')->defaultValue('@NowoTaskBoardBundle/manage/list.html.twig')->end()
@@ -878,7 +908,8 @@ final class Configuration implements ConfigurationInterface
                         ->end()
                         ->booleanNode('private_entity_manager')
                             ->defaultNull()
-                            ->info('Since 2.15.0 (REQ-ARCH-001 rule 6): true = the bundle reads and writes its rows through a private entity manager created on the connection, mapping and events of database.entity_manager, so a TaskBoard write never flushes, clears or closes the application\'s manager. null (default) keeps the 2.14 behaviour, deprecated since 2.28 (a notice when the container is built, and one per application entity class whose pending changes a TaskBoard flush writes); false too, deprecated: true becomes the only mode in 3.0.')
+                            ->setDeprecated(self::PACKAGE, '3.0', 'The "%path%.%node%" option has no effect since 3.0 (the private entity manager is the only mode); remove it.')
+                            ->info('Since 3.0.0 the private entity manager is the only mode (REQ-ARCH-001 rule 6): the bundle reads and writes its rows through a private entity manager created on the connection, mapping and events of database.entity_manager, so a TaskBoard write never flushes, clears or closes the application\'s manager. true is accepted as a no-op (deprecated, removed in 4.0); false fails the build.')
                         ->end()
                     ->end()
                 ->end()
@@ -934,7 +965,7 @@ final class Configuration implements ConfigurationInterface
                         ->end()
                         ->scalarNode('first_board_provisioner')
                             ->defaultNull()
-                            ->info('Since 2.0.0: service id of a Nowo\\TaskBoardBundle\\Tenancy\\FirstBoardProvisionerInterface, called on a tenant\'s empty index for a user the create check and the quota event accept. null = the empty index.')
+                            ->info('Since 2.0.0: service id of a Nowo\\TaskBoardBundle\\Tenancy\\FirstBoardProvisioningInterface, called on a tenant\'s empty index for a user the create check and the quota event accept. null = the empty index.')
                         ->end()
                         ->scalarNode('resolver')
                             ->defaultNull()
@@ -1022,7 +1053,7 @@ final class Configuration implements ConfigurationInterface
                 ->end()
                 ->scalarNode('assignee_provider')
                     ->defaultNull()
-                    ->info('Service id of a Nowo\\TaskBoardBundle\\Assignee\\TaskAssigneeProviderInterface (since 1.10): who may be a member of a task on a board. null = every user of user_class.')
+                    ->info('Service id of a Nowo\\TaskBoardBundle\\Assignee\\TaskAssigneePolicyInterface (since 1.10): who may be a member of a task on a board. null = every user of user_class.')
                 ->end()
             ->end();
     }
@@ -1087,7 +1118,7 @@ final class Configuration implements ConfigurationInterface
                 ->end()
                 ->scalarNode('default_view_resolver')
                     ->defaultNull()
-                    ->info('Since 1.24: service id of a Nowo\\TaskBoardBundle\\View\\TaskBoardDefaultViewResolverInterface (the view a board opens in for a user: board, list, gantt or, with calendar.enabled, calendar). The plain board route redirects to that route; ?view=board, XHR and links from the same board keep the board view. null = always the board view.')
+                    ->info('Since 1.24: service id of a Nowo\\TaskBoardBundle\\View\\TaskBoardDefaultViewPolicyInterface (the view a board opens in for a user: board, list, gantt or, with calendar.enabled, calendar). The plain board route redirects to that route; ?view=board, XHR and links from the same board keep the board view. null = always the board view.')
                 ->end()
                 ->booleanNode('toolbar')->defaultTrue()->info('Since 2.0.0: false leaves the strip above the board out. The column-set dialogs stay; a host button opens them with data-nowo-task-board-open.')->end()
                 // Since 1.30.0 (spec 211).
@@ -1206,14 +1237,14 @@ final class Configuration implements ConfigurationInterface
                     ->addDefaultsIfNotSet()
                     ->info('Task comments and @mentions (since 1.16).')
                     ->children()
-                        ->scalarNode('cause_labeler')->defaultNull()->info('Since 2.10.0 (spec 216): service id of a Nowo\\TaskBoardBundle\\Comment\\TaskCommentCauseLabelerInterface: how a comment shows why it was written (TaskChangeContext, e.g. an automation rule). null = the cause is not shown.')->end()
+                        ->scalarNode('cause_labeler')->defaultNull()->info('Since 2.10.0 (spec 216): service id of a Nowo\\TaskBoardBundle\\Comment\\TaskCommentCauseTextInterface: how a comment shows why it was written (TaskChangeContext, e.g. an automation rule). null = the cause is not shown.')->end()
                         ->booleanNode('readers_can_comment')
                             ->defaultTrue()
                             ->info('People who may read a task but not edit it (read-only boards) may still comment (comment-only access). false = only editors comment.')
                         ->end()
                         ->scalarNode('mention_resolver')
                             ->defaultNull()
-                            ->info('Service id of a Nowo\\TaskBoardBundle\\Comment\\TaskMentionCandidatesResolverInterface: who may be @mentioned (the people who can read the task). null = the board\'s assignable users, else its creator and task members.')
+                            ->info('Service id of a Nowo\\TaskBoardBundle\\Comment\\TaskMentionCandidatesProviderInterface: who may be @mentioned (the people who can read the task). null = the board\'s assignable users, else its creator and task members.')
                         ->end()
                     ->end()
                 ->end()
@@ -1328,7 +1359,7 @@ final class Configuration implements ConfigurationInterface
                     ->addDefaultsIfNotSet()
                     ->info('Since 2.3.0 (spec 216).')
                     ->children()
-                        ->scalarNode('cause_labeler')->defaultNull()->info('Service id of a Nowo\\TaskBoardBundle\\History\\TaskChangeCauseLabelerInterface: how the history shows why a change happened (TaskChangeContext). null = the cause is not shown.')->end()
+                        ->scalarNode('cause_labeler')->defaultNull()->info('Service id of a Nowo\\TaskBoardBundle\\History\\TaskChangeCauseTextInterface: how the history shows why a change happened (TaskChangeContext). null = the cause is not shown.')->end()
                     ->end()
                 ->end()
                 ->arrayNode('recurrence')
@@ -1381,7 +1412,7 @@ final class Configuration implements ConfigurationInterface
                     ->children()
                         ->booleanNode('enabled')->defaultFalse()->end()
                         ->integerNode('max_subtasks')->defaultValue(200)->min(0)->max(10000)->info('The most subtasks a move or a duplicate carries; above it the action is refused with the count.')->end()
-                        ->scalarNode('targets')->defaultNull()->info('Service id of a Nowo\\TaskBoardBundle\\Move\\TaskBoardTargetsInterface: the boards offered as a target (any other answers 404). null = the active boards of the task\'s tenant the user may edit.')->end()
+                        ->scalarNode('targets')->defaultNull()->info('Service id of a Nowo\\TaskBoardBundle\\Move\\TaskBoardTargetIdsInterface: the boards offered as a target (any other answers 404). null = the active boards of the task\'s tenant the user may edit.')->end()
                     ->end()
                 ->end()
                 ->arrayNode('restructure')
@@ -1402,7 +1433,7 @@ final class Configuration implements ConfigurationInterface
         $sync
             ->children()
                 ->booleanNode('enabled')->defaultFalse()->end()
-                ->scalarNode('credential_resolver')->defaultNull()->info('Service id of a Nowo\\TaskBoardBundle\\Sync\\Hook\\ProviderCredentialResolverInterface. Required when enabled: the host keeps the tokens.')->end()
+                ->scalarNode('credential_resolver')->defaultNull()->info('Service id of a Nowo\\TaskBoardBundle\\Sync\\Hook\\ProviderCredentialSourceInterface. Required when enabled: the host keeps the tokens.')->end()
                 ->scalarNode('attachment_storage')->defaultNull()->info('Service id of a TaskAttachmentStorageInterface. null = files are counted as refused (storage_disabled).')->end()
                 ->scalarNode('inline_image_rewriter')->defaultNull()->info('Service id of an InlineImageRewriterInterface. null = MapInlineImageRewriter.')->end()
                 ->scalarNode('limit_checker')->defaultNull()->info('Service id of a SyncLimitCheckerInterface (host quotas). null = no host limit.')->end()
@@ -1546,12 +1577,12 @@ final class Configuration implements ConfigurationInterface
                 ->arrayNode('people')
                     ->addDefaultsIfNotSet()
                     ->children()
-                        ->scalarNode('resolver')->defaultNull()->info('Since 1.25: service id of a Nowo\\TaskBoardBundle\\Sync\\Hook\\SyncPersonResolverInterface (tenant scope, candidates, verified e-mail match). null = DefaultSyncPersonResolver (1.23 e-mail semantics, one directory per board).')->end()
+                        ->scalarNode('resolver')->defaultNull()->info('Since 1.25: service id of a Nowo\\TaskBoardBundle\\Sync\\Hook\\SyncPersonDirectoryInterface (tenant scope, candidates, verified e-mail match). null = DefaultSyncPersonResolver (1.23 e-mail semantics, one directory per board).')->end()
                         ->booleanNode('require_verified_email')->defaultTrue()->info('Since 1.25: an e-mail match is applied automatically only for a verified account; otherwise it is only suggested. false = 1.23 parity for users without isVerified().')->end()
                         ->integerNode('reassign_batch_size')->defaultValue(500)->min(50)->max(2000)->end()
                         // Since 1.27.0 (TB-SYNC-2): the People page / step.
                         ->booleanNode('step')->defaultFalse()->info('Since 1.27.0: true = linking a board does not start the first import: the people are scanned and the manager lands on the People page ("Save and start the import"). false = the import starts at once (1.26); the People page is reachable from the connection page either way.')->end()
-                        ->scalarNode('inviter')->defaultNull()->info('Since 1.27.0: service id of a Nowo\\TaskBoardBundle\\Sync\\Hook\\PeopleInviterInterface ("Invite by e-mail" on the People page). null = no invite option.')->end()
+                        ->scalarNode('inviter')->defaultNull()->info('Since 1.27.0: service id of a Nowo\\TaskBoardBundle\\Sync\\Hook\\PeopleInvitationInterface ("Invite by e-mail" on the People page). null = no invite option.')->end()
                         ->integerNode('page_size')->defaultValue(50)->min(10)->max(200)->info('Since 1.27.0: people per page of the People page.')->end()
                         ->integerNode('candidate_limit')->defaultValue(200)->min(1)->max(1000)->info('Since 1.27.0: the most host users offered in each People select (SyncPersonResolverInterface::candidates()).')->end()
                         ->floatNode('reapply_seconds')->defaultValue(10.0)->min(0.0)->max(60.0)->info('Since 1.27.0: seconds a People save (and the end of each sync) spends re-applying changed mappings to already imported tasks; the rest continues on the next save or sync.')->end()
@@ -1592,7 +1623,7 @@ final class Configuration implements ConfigurationInterface
                 ->arrayNode('time_entries')
                     ->addDefaultsIfNotSet()
                     ->children()
-                        ->scalarNode('sink')->defaultNull()->info('Since 1.25: service id of a Nowo\\TaskBoardBundle\\Sync\\Hook\\ImportedTimeEntrySinkInterface. null = the time_entries phase never runs (the bundle never writes time itself).')->end()
+                        ->scalarNode('sink')->defaultNull()->info('Since 1.25: service id of a Nowo\\TaskBoardBundle\\Sync\\Hook\\ImportedTimeEntryReceiverInterface. null = the time_entries phase never runs (the bundle never writes time itself).')->end()
                         ->integerNode('window_days')->defaultValue(30)->min(1)->max(30)->end()
                         ->integerNode('max_assignees_per_call')->defaultValue(25)->min(1)->max(100)->end()
                         ->integerNode('max_entries_per_window')->defaultValue(10_000)->min(10)->info('Above it the window is halved and read again (down to one hour).')->end()

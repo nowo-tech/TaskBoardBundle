@@ -17,7 +17,7 @@ use function method_exists;
 /**
  * Since 2.28.0: TimeTrack's team directory (TimeTrackBundle >= 1.23, the framework-free twin of its team context
  * provider; REQ-ARCH-001 rule 3). The service `nowo_task_board.team_context_provider` (TimeTrack's
- * `team_context_provider` option) is this class. Same answers as {@see TaskBoardTeamContextProvider}, keyed by the
+ * `team_context_provider` option) is this class. Same answers as the 1.x `TaskBoardTeamContextProvider` (removed in 3.0.0), keyed by the
  * reference's user id; a reference without an id belongs to no team and manages nobody.
  */
 final readonly class TaskBoardTeamDirectory implements TeamDirectoryInterface

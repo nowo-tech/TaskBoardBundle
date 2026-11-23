@@ -49,7 +49,7 @@ final class TaskByNumberRouteTest extends TaskNumberTestCase
         $this->em->flush();
         $this->login($this->owner);
         $this->dispatcher()->addListener(TaskBoardEvents::TASK_ACCESS_CHECK, static function (TaskAccessCheckEvent $event): void {
-            if ($event->getTask()->getTitle() === 'secret') {
+            if ($event->getTaskSnapshot()->title === 'secret') {
                 $event->deny();
             }
         });

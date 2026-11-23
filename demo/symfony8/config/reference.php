@@ -1266,7 +1266,6 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *     team_membership_resolver?: scalar|Param|null, // Default: null
  *     route_prefix?: scalar|Param|null, // Default: ""
  *     dashboard_route?: scalar|Param|null, // Default: null
- *     firewall?: scalar|Param|null, // Deprecated: The "firewall" option at path "nowo_task_board.firewall" is deprecated and has no effect; configure the firewall and access_control in your security.yaml instead. // Deprecated: never read by the bundle. Protect the manage routes with your own security.yaml firewall/access_control. // Default: "main"
  *     api?: array{ // Since 2.2.0 (spec 213): a REST API shaped like ClickUp API v2. Off: no route, service, listener or table. See docs/API.md.
  *         enabled?: bool|Param, // Default: false
  *         prefix?: scalar|Param|null, // Base path of the API. Not affected by route_prefix or the tenant copies. // Default: "/api/tasks"
@@ -1536,8 +1535,6 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         context_menus?: scalar|Param|null, // Since 2.22.0: the context menu of the board cards, list rows and column headers (right-click, Shift+F10 or the ContextMenu key, a long press) opens the items of their kebab (UiKit 2.54 context menus). null follows nowo_ui_kit.theme.context_menus; true or false forces it on or off for TaskBoard's pages. The kebab itself is always there. // Default: null
  *     },
  *     templates?: array{
- *         layout?: scalar|Param|null, // Deprecated: The "nowo_task_board.templates.layout.layout" option is deprecated, use "nowo_task_board.web_ui.layout_template" instead. // Deprecated since 2.0.0: use web_ui.layout_template. // Default: null
- *         css_framework?: null|"bootstrap"|"bootstrap4"|"bootstrap5"|"tailwind"|"foundation"|"custom"|"tabler"|"none"|Param, // Deprecated: The "nowo_task_board.templates.css_framework.css_framework" option is deprecated and ignored, set "nowo_ui_kit.css_framework" instead. // Deprecated since 2.0.0 and ignored: the pages take their classes from nowo_ui_kit. // Default: null
  *         index?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/index.html.twig"
  *         board?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/board.html.twig"
  *         list?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/list.html.twig"
@@ -1567,7 +1564,7 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         entity_manager?: scalar|Param|null, // Default: "default"
  *         mapping_type?: "attribute"|"xml"|Param, // Since 2.15.0 (REQ-ARCH-001 rule 2): how the TaskBoard entities are mapped. attribute (default) = the ORM attributes, as before; xml = the Doctrine XML files of Resources/config/doctrine-xml (same tables, columns, indexes and constraints), for a host that keeps its mapping out of PHP attributes. // Default: "attribute"
  *         user_reference?: "entity"|"id"|Param, // Since 2.15.0 (REQ-ARCH-001 rule 2): how the TaskBoard rows reference host users. entity (default) = a Doctrine relation to user_class, as before; id = the user's id in a string column (no relation: user_class need not be a Doctrine entity), found again through user_directory. // Default: "entity"
- *         private_entity_manager?: bool|Param|null, // Since 2.15.0 (REQ-ARCH-001 rule 6): true = the bundle reads and writes its rows through a private entity manager created on the connection, mapping and events of database.entity_manager, so a TaskBoard write never flushes, clears or closes the application's manager. null (default) keeps the 2.14 behaviour; false too, deprecated: true becomes the only mode in 3.0. // Default: null
+ *         private_entity_manager?: bool|Param|null, // Deprecated: The "nowo_task_board.database.private_entity_manager" option has no effect since 3.0 (the private entity manager is the only mode); remove it. // Since 3.0.0 the private entity manager is the only mode (REQ-ARCH-001 rule 6). // Default: null
  *     },
  *     tenancy?: array{ // Boards per host tenant (since 1.10): every manage route is copied under each `tenant_paths` entry (its {tenantSlug} names the tenant), a tenant sees only its boards and a board or task of another tenant answers 404.
  *         enabled?: bool|Param, // Default: false

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Tests\Functional\Api;
 
 use DateTimeImmutable;
-use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Api\Controller\TaskApiManagementController;
 use Nowo\TaskBoardBundle\Api\Operation\TaskApiAudit;
 use Nowo\TaskBoardBundle\Api\Operation\TaskApiBoardOperations;
@@ -150,7 +149,8 @@ final class ApiManagementTest extends ApiTestCase
                 return new DateTimeImmutable('@' . $this->now);
             }
         };
-        $eraser     = new TaskBoardEraser($this->service(EntityManagerInterface::class), $this->service(TaskBoardResourceAccessChecker::class), $this->dispatcher(), null, $clock, timeBudgetSeconds: 1, cursorSecret: 'test-secret');
+        // The bundle's private manager, as the container wires the eraser (since 3.0.0 the only mode).
+        $eraser     = new TaskBoardEraser($this->service('app.task_board_em'), $this->service(TaskBoardResourceAccessChecker::class), $this->dispatcher(), null, $clock, timeBudgetSeconds: 1, cursorSecret: 'test-secret');
         $operations = new TaskApiBoardOperations(
             $this->service(TaskApiGuard::class),
             $this->service(TaskApiAudit::class),

@@ -8,13 +8,13 @@ use Doctrine\ORM\EntityManagerInterface;
 use Normalizer;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
+use Nowo\TaskBoardBundle\Port\Internal\PeopleInviterInterface;
+use Nowo\TaskBoardBundle\Port\Internal\SyncPersonResolverInterface;
 use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncDirectory;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPerson;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPersonMapping;
 use Nowo\TaskBoardBundle\Sync\Event\PeopleMappingChangedEvent;
-use Nowo\TaskBoardBundle\Sync\Hook\PeopleInviterInterface;
-use Nowo\TaskBoardBundle\Sync\Hook\SyncPersonResolverInterface;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 use Throwable;
 

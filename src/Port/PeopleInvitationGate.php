@@ -6,11 +6,11 @@ namespace Nowo\TaskBoardBundle\Port;
 
 use Nowo\TaskBoardBundle\DependencyInjection\Compiler\TaskBoardPortsPass;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Port\Internal\PeopleInviterInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\PeopleInvitationInterface;
-use Nowo\TaskBoardBundle\Sync\Hook\PeopleInviterInterface;
 
 /**
- * Since 2.15.0: asks a host {@see PeopleInvitationInterface} where the bundle asks the deprecated
+ * Since 2.15.0: asks a host {@see PeopleInvitationInterface} where the bundle asks its internal seam
  * {@see PeopleInviterInterface}. Exceptions propagate. Stateless.
  *
  * @internal built by {@see Ports} / {@see TaskBoardPortsPass}

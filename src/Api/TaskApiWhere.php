@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Api;
 
-use Nowo\TaskBoardBundle\Entity\TaskBoard;
-
 use function in_array;
 
 /**
@@ -51,14 +49,6 @@ final readonly class TaskApiWhere
     public static function limitedTo(array $tenantKeys, array $boardIds): self
     {
         return new self(false, [], $tenantKeys, $boardIds);
-    }
-
-    /**
-     * @deprecated since 2.15.0, use {@see self::reachesBoardOf()} (ids, REQ-ARCH-001 rule 1); removed in 3.0
-     */
-    public function reachesBoard(TaskBoard $board): bool
-    {
-        return $this->reachesBoardOf($board->getId(), $board->getTenantKey());
     }
 
     /** Since 2.15.0: whether the board of this id and tenant is reached (its whole tenant, or the board by id). */

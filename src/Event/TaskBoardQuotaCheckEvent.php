@@ -37,8 +37,7 @@ final class TaskBoardQuotaCheckEvent extends Event
     public function __construct(
         public readonly string $action,
         public readonly ?string $tenantKey,
-        /** @deprecated since 2.15.0, use getBoardId() or getBoardSnapshot(); removed in 3.0 */
-        public readonly ?TaskBoard $board,
+        private readonly ?TaskBoard $board,
         public readonly int $count,
         public readonly object $actor,
     ) {

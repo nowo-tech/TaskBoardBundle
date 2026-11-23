@@ -74,7 +74,7 @@ final class ImportAuthorizationTest extends FunctionalTestCase
         $dispatcher = self::getContainer()->get('event_dispatcher');
         self::assertInstanceOf(EventDispatcherInterface::class, $dispatcher);
         $dispatcher->addListener(TaskBoardEvents::TASK_ACCESS_CHECK, static function (TaskAccessCheckEvent $event): void {
-            if ($event->getTask()->getTitle() === 'Payroll run') {
+            if ($event->getTaskSnapshot()->title === 'Payroll run') {
                 $event->grant();
                 $event->markReadOnly();
             }

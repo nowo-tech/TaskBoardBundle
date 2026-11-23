@@ -98,8 +98,11 @@ final class SyncPeopleViewTest extends PeopleFunctionalTestCase
         self::assertStringContainsString((string) $mallory, $html);
         self::assertStringNotContainsString('person:', $html);
 
-        // An unmatched comment author shows as "<name> (ClickUp)".
-        $people['author']->map(TaskSyncPersonMapping::External, null, null, new DateTimeImmutable());
+        // An unmatched comment author shows as "<name> (ClickUp)" (since 3.0.0 read again: the private manager was dropped
+        // at the request's end).
+        $author = $this->em->find(TaskSyncPerson::class, $people['author']->getId());
+        self::assertInstanceOf(TaskSyncPerson::class, $author);
+        $author->map(TaskSyncPersonMapping::External, null, null, new DateTimeImmutable());
         $this->em->flush();
         $this->client->request('GET', '/tools/task-board/task/' . $task->getId());
         self::assertStringContainsString('User 2 (ClickUp)', (string) $this->client->getResponse()->getContent());

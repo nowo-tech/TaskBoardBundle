@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Tests\Support\TwinPorts;
 
 use Nowo\TaskBoardBundle\Assignee\TaskAssigneePolicyInterface;
-use Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TaskAssigneeProviderInterface;
 use Nowo\TaskBoardBundle\ValueObject\TaskBoardSnapshot;
 
 final readonly class TwinAssigneePolicy implements TaskAssigneePolicyInterface

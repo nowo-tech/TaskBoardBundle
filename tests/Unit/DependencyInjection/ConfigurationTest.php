@@ -10,8 +10,6 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\Config\Definition\Exception\InvalidConfigurationException;
 use Symfony\Component\Config\Definition\Processor;
 
-use const E_USER_DEPRECATED;
-
 final class ConfigurationTest extends TestCase
 {
     public function testDefaults(): void
@@ -23,8 +21,9 @@ final class ConfigurationTest extends TestCase
         self::assertSame('task_board_', $config['table_prefix']);
         self::assertSame('/tools/task-board', $config['routes']['index']['path']);
         self::assertNull($config['web_ui']['layout_template']);
-        self::assertNull($config['templates']['layout']);
-        self::assertNull($config['templates']['css_framework']);
+        self::assertArrayNotHasKey('layout', $config['templates']);
+        self::assertArrayNotHasKey('css_framework', $config['templates']);
+        self::assertArrayNotHasKey('firewall', $config);
         self::assertFalse($config['security']['allow_unauthenticated']);
         self::assertSame(['ROLE_USER'], $config['security']['access_roles']);
         self::assertTrue($config['security']['resource_scoping']);
@@ -44,59 +43,18 @@ final class ConfigurationTest extends TestCase
         (new Processor())->processConfiguration(new Configuration(), [['user_class' => User::class, 'board' => ['max_tasks' => 0]]]);
     }
 
-    public function testCustomLayoutTemplate(): void
+    /** Since 3.0.0: the removed options fail, naming their replacement; their siblings and an array without them pass. */
+    public function testRemovedOptionsAreRefused(): void
     {
-        $config = (new Processor())->processConfiguration(new Configuration(), [[
-            'user_class' => User::class,
-            'templates'  => ['layout' => 'platform/admin/layout.html.twig'],
-        ]]);
-
-        self::assertSame('platform/admin/layout.html.twig', $config['templates']['layout']);
-    }
-
-    public function testCssFrameworkAcceptedValues(): void
-    {
-        foreach (Configuration::CSS_FRAMEWORKS as $framework) {
-            $config = (new Processor())->processConfiguration(new Configuration(), [[
-                'user_class' => User::class,
-                'templates'  => ['css_framework' => $framework],
-            ]]);
-
-            self::assertSame($framework, $config['templates']['css_framework']);
+        foreach ([['templates' => ['layout' => 'x.html.twig']], ['templates' => ['css_framework' => 'tabler']], ['firewall' => 'admin']] as $removed) {
+            try {
+                (new Processor())->processConfiguration(new Configuration(), [['user_class' => User::class] + $removed]);
+                self::fail('refused');
+            } catch (InvalidConfigurationException $failure) {
+                self::assertStringContainsString('was removed in 3.0', $failure->getMessage());
+            }
         }
-    }
-
-    public function testCssFrameworkRejectsInvalidValue(): void
-    {
-        $this->expectException(InvalidConfigurationException::class);
-
-        (new Processor())->processConfiguration(new Configuration(), [[
-            'user_class' => User::class,
-            'templates'  => ['css_framework' => 'invalid_framework'],
-        ]]);
-    }
-
-    public function testFirewallOptionIsDeprecated(): void
-    {
-        $deprecations = [];
-        set_error_handler(static function (int $level, string $message) use (&$deprecations): bool {
-            $deprecations[] = $message;
-
-            return true;
-        }, E_USER_DEPRECATED);
-
-        try {
-            $config = (new Processor())->processConfiguration(new Configuration(), [[
-                'user_class' => User::class,
-                'firewall'   => 'admin',
-            ]]);
-        } finally {
-            restore_error_handler();
-        }
-
-        self::assertSame('admin', $config['firewall']);
-        self::assertCount(1, $deprecations);
-        self::assertStringContainsString('"firewall"', $deprecations[0]);
-        self::assertStringContainsString('nowo-tech/task-board-bundle 1.7', $deprecations[0]);
+        self::assertSame(['templates' => ['index' => 'i.html.twig']], Configuration::refuseRemovedOptions(['templates' => ['index' => 'i.html.twig']]));
+        self::assertSame(['templates' => 'not an array'], Configuration::refuseRemovedOptions(['templates' => 'not an array']));
     }
 }

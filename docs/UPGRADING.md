@@ -4,7 +4,16 @@
 
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
-- [Preparing for 3.0](#preparing-for-30)
+- [Unreleased](#unreleased)
+  - [Before you upgrade](#before-you-upgrade)
+  - [Default flips](#default-flips)
+  - [Private manager only](#private-manager-only)
+  - [Host port interfaces](#host-port-interfaces)
+  - [Event members](#event-members)
+  - [Templates, Twig and layout](#templates-twig-and-layout)
+  - [Configuration](#configuration)
+  - [TimeTrack bridge](#timetrack-bridge)
+  - [2.x support](#2x-support)
 - [To 2.31.0](#to-2310)
   - [Dialogs load on demand](#dialogs-load-on-demand)
 - [To 2.29.0](#to-2290)
@@ -232,23 +241,205 @@ php bin/console cache:clear
 
 Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
-## Preparing for 3.0
+## Unreleased
 
-TaskBoard 3.0 contains only the deprecations announced in 2.x. Run 2.28 for a while and read your deprecation log for
-`nowo-tech/task-board-bundle` and the "flushed by NowoTaskBoardBundle" entries: together they are the list of what to
-change before 3.0. What 3.0 removes:
+```bash
+composer require nowo-tech/task-board-bundle:^3.0 -W
+```
 
-| 2.x | 3.0 | Notice in 2.28 |
+3.0 contains only changes that 2.x announced through deprecation notices: an application that runs the last 2.x
+minor without deprecation notices from this bundle upgrades without code changes. After 3.0.0 is released, the 2.x
+line receives security fixes for 6 months: fixes rated Moderate and above are backported to the last 2.x minor;
+Low ones are fixed in 3.x only.
+
+Unchanged in 3.0: the tables (no schema change, no migration), the routes, the pages, the Task API, the permissions,
+the sync, the import, the 409 / `CONFLICT_001` / `CONFLICT_002` answers, the locks and write units, and the PHP,
+Symfony and database ranges. TaskBoard 3.0 works with `nowo-tech/time-track-bundle` `^1.23 || ^2.0`.
+
+### Before you upgrade
+
+On the last 2.x, clear every deprecation of this bundle:
+
+1. The container-build notices (in the output or deprecation log of `cache:clear` / `cache:warmup`):
+   - > Not setting "nowo_task_board.database.private_entity_manager" is deprecated: every TaskBoard write then flushes
+     > your entity manager "default", including what your application left pending in it. In 3.0 the option is removed
+     > and the private entity manager is the only mode (as if true) […]
+   - > "nowo_task_board.database.private_entity_manager: false" is deprecated: TaskBoard writes then flush the
+     > application's entity manager, including its pending changes; the private entity manager becomes the only mode in
+     > 3.0. […]
+   - the 2.0 notices of `templates.layout` and `templates.css_framework` (`The "nowo_task_board.templates.layout"
+     option is deprecated, use "nowo_task_board.web_ui.layout_template" instead.`) and the 1.7 notice of `firewall`.
+2. Every host-flush probe line, `Your pending changes to App\X were flushed by NowoTaskBoardBundle; 2.0 no longer
+   does.` Each class listed is a change of yours that 3.0 no longer stores for you (see
+   [Private manager only](#private-manager-only)); [The host-flush probe: your migration list](#the-host-flush-probe-your-migration-list)
+   explains how to read them. Then set `database.private_entity_manager: true` on 2.x and run your suite once more.
+3. The runtime notices of the 2.0 layout bridge (`The layout "…" renders no UiKit canonical block: it goes through a
+   bridge removed in 3.0.`) and of `nowo_task_board_btn_class()`.
+4. What no runtime notice reports (Symfony's DebugClassLoader reports the `@deprecated` interfaces and methods in debug
+   mode, not the public properties):
+   - a class of yours that implements one of the entity-typed host interfaces of 2.14 ([Host port interfaces](#host-port-interfaces));
+   - reads of the entity getters and public entity properties of the events ([Event members](#event-members)): search
+     your listeners for `getTask()`, `getBoard()`, `getComment()`, `getMember()`, `getColumnSet()`,
+     `getFromColumn()`, `getToColumn()`, `getSubject()` (on `BoardListQueryEvent`), `->board`, `->task`, `->user`
+     (on `ColumnDeleteCheckEvent`), `->actor` (on the column events), `->person` / `->task` (on
+     `ImportedTimeEntryCandidate`);
+   - a host template that passes the 2.30 dialog forms or reads `restoreForms` / `columnSetDeleteForms` /
+     `card.answerForm` ([Templates](#templates-twig-and-layout)).
+
+### Default flips
+
+| Option | 2.x | 3.0 |
 |---|---|---|
-| `database.private_entity_manager` unset or `false` (TaskBoard writes flush your entity manager) | the private entity manager is the only mode; the option goes | at the container build (unset: 2.28, `false`: 2.15) |
-| your pending changes written by a TaskBoard flush | no longer written by TaskBoard: flush them yourself | host-flush probe, one per entity class and unit of work |
-| the 2.15 entity-typed host ports (`SyncLimitCheckerInterface`, `TaskAttachmentStorageInterface`, ...) | their framework-free twins (table in [To 2.15.0](#to-2150)) | `@deprecated` (Symfony's DebugClassLoader, in debug mode) |
-| entity getters and public entity properties of the events | the id getters and `get*Snapshot()` accessors | `@deprecated` (as above) |
-| a layout without UiKit canonical blocks (legacy layout bridge), `templates.*` and `css_framework` keys, `nowo_task_board_btn_class()` | `web_ui.layout_template`, `nowo_ui_kit.css_framework`, `nowo_ui_class()` | when used (since 2.0) |
-| the inline task dialogs of 2.30 (a host passing `memberForm`, `linkForm`, `priorityForm`, `dependencyForm`, `subtaskImportForm`, `timeEntryForm` to the partials), `restoreForms`, `columnSetDeleteForms`, `TaskQuestionView::section(withForms: true)` | the on-demand dialogs (dialog routes' GET), `restoreForm`, `columnSetDeleteForm` | CHANGELOG 2.31.0 |
-| `Bridge\TimeTrack\TaskBoardTaskProvider`, `TaskBoardTeamContextProvider` | `nowo_task_board.task_provider` / `team_context_provider` (the 1.23 twins) | `@deprecated` (as above) |
+| `database.private_entity_manager` | unset or `false`: every TaskBoard write flushes `database.entity_manager` (your manager); `true`: TaskBoard's private manager | TaskBoard's private manager always. `false` fails the build; `true` is accepted until 4.0 and logs "The "nowo_task_board.database.private_entity_manager" option has no effect since 3.0 (the private entity manager is the only mode); remove it." |
 
-**2.x security support.** After 3.0.0 is tagged, the 2.x line gets security fixes for 6 months: Moderate and higher are
+There is no option to keep the 2.x behaviour: flush your own pending changes yourself. The container parameter
+`nowo_task_board.database.private_entity_manager` stays and is always `true`. `database.entity_manager` keeps its
+meaning: the manager whose connection, mapping and listeners the private manager is created on (no schema change).
+
+`events.after_host_commit` keeps its default (`false`): 2.29 called it "planned as the 3.0 default", but no notice
+announced the flip (it stays opt-in, recommended for DDD hosts).
+
+### Private manager only
+
+Every TaskBoard service reads and writes through TaskBoard's private entity manager, as with
+`private_entity_manager: true` since 2.15 ([Private entity manager (opt-in)](#private-entity-manager-opt-in) lists what
+to check). What breaks in code that worked in 2.x without the option:
+
+- **Your pending changes are no longer flushed by TaskBoard.** A change of yours that was only stored because a
+  TaskBoard write flushed your manager is no longer stored: typically in a listener of a TaskBoard event, a port of
+  yours (an assignee policy, a sync quota policy, a time-entry receiver, ...), or code that changes an entity and then
+  calls a TaskBoard service. Flush it yourself. The 2.28 probe lines are the list.
+- **The reverse, which the probe cannot see:** host code that loads a TaskBoard row through TaskBoard's repository
+  services (now on the private manager), changes it and flushes its own manager saves nothing. Change TaskBoard rows
+  through TaskBoard's services (`TaskManager`, `TaskCommandsInterface`, ...), or through `nowo_task_board.entity_manager`
+  (`Nowo\TaskBoardBundle\Doctrine\TaskBoardEntityManager`) and flush that.
+- **A TaskBoard row you loaded through your own manager** (`$em->getRepository(Task::class)` when that is your manager,
+  a route `EntityValueResolver`, a query of yours) belongs to your manager:
+  - handed to a TaskBoard write that persists it, it fails with `TaskBoard: the … handed to TaskBoard was loaded
+    through the application's entity manager …` instead of a duplicate INSERT;
+  - set on a to-one association of a new TaskBoard row (a comment's task, a link's task), it is replaced by TaskBoard's
+    reference to the same id;
+  - changed by a TaskBoard service and flushed by TaskBoard, the change is not saved: load TaskBoard rows through
+    TaskBoard's services and repositories, or pass ids (`TaskCommandsInterface`, `TaskBoardQueryInterface`).
+- **Your users on TaskBoard rows.** The security user (or any user your manager holds) is referenced by id on the rows
+  TaskBoard writes, as since 2.15. Since 3.0 a user that is not saved yet (persisted but not flushed, or without an id)
+  fails before anything is written: `TaskBoard: the App\Entity\User on … is not saved yet …` — flush it first. Users you
+  read from TaskBoard rows (creator, author, member) are TaskBoard's instances: compare them by id, never with `===`.
+- **Your entities that point at TaskBoard rows** (a `ManyToOne` to `Task`, `TaskBoard`, ...): take the reference from
+  your manager by id, `$order->setTask($entityManager->getReference(Task::class, $taskId))`, and do not cascade persist
+  to TaskBoard rows.
+- **Your own port implementations commit their own changes.** A host port whose 2.x correctness depended on the
+  TaskBoard flush (it changed one of your managed rows and let TaskBoard's flush store it) must flush it itself.
+- The private manager is dropped at every request, Messenger message and console command boundary (also in FrankenPHP
+  worker mode with the kernel reset off): TaskBoard entities you keep across a boundary are detached.
+- Removed with the mode: the host-flush probe (`Doctrine\TaskBoardHostFlushProbe`, internal) and the 2.27 code that
+  detached only the unreferenced TaskBoard rows from your manager after a sync page, a dry run or a backfill batch
+  (`Doctrine\RolledBackHostRows`, internal): the private manager is cleared instead, as it was with the option on.
+  `Number\TaskNumberBackfiller` keeps its `$logger` argument, ignored (deprecated, removed in 4.0).
+
+### Host port interfaces
+
+The entity-typed host interfaces of 2.14 (deprecated since 2.15.0) are removed. Implement the framework-free interface
+instead and keep the configuration key as it is; the bundle asks it through its gate.
+
+| Removed (deprecated since 2.15.0) | Implement instead |
+|---|---|
+| `Api\Hook\TaskApiAuthenticatorInterface` | `Api\Hook\TaskApiRequestAuthenticatorInterface` |
+| `Api\Hook\TaskApiAttachmentsInterface` | `Api\Hook\TaskApiAttachmentStoreInterface` |
+| `Api\Hook\TaskApiTimeEntriesInterface` | `Api\Hook\TaskApiTimeStoreInterface` (+ `TaskApiTimeEntryBillableInterface`) |
+| `Assignee\TaskAssigneeProviderInterface` | `Assignee\TaskAssigneePolicyInterface` |
+| `Comment\TaskCommentCauseLabelerInterface` | `Comment\TaskCommentCauseTextInterface` |
+| `Comment\TaskMentionCandidatesResolverInterface` | `Comment\TaskMentionCandidatesProviderInterface` |
+| `History\TaskChangeCauseLabelerInterface` | `History\TaskChangeCauseTextInterface` |
+| `Import\BoardAwareTaskImportUserResolverInterface` | `Import\BoardScopedTaskImportUserResolverInterface` |
+| `Import\TaskImportLinkLookupInterface` | `Import\TaskImportLinkFinderInterface` |
+| `Move\TaskBoardTargetsInterface` | `Move\TaskBoardTargetIdsInterface` |
+| `View\TaskBoardDefaultViewResolverInterface` | `View\TaskBoardDefaultViewPolicyInterface` |
+| `Tenancy\FirstBoardProvisionerInterface` | `Tenancy\FirstBoardProvisioningInterface` |
+| `Sync\Hook\AttributionOnlyResolverInterface` | `Sync\Hook\AttributionOnlyPolicyInterface` |
+| `Sync\Hook\ImportedTimeEntrySinkInterface` | `Sync\Hook\ImportedTimeEntryReceiverInterface` |
+| `Sync\Hook\OwnerlessTimeEntrySinkInterface` | `Sync\Hook\OwnerlessTimeEntryReceiverInterface` |
+| `Sync\Hook\InlineImageRewriterInterface` | `Sync\Hook\SyncedImageRewriterInterface` |
+| `Sync\Hook\PeopleInviterInterface` | `Sync\Hook\PeopleInvitationInterface` |
+| `Sync\Hook\ProviderCredentialResolverInterface` | `Sync\Hook\ProviderCredentialSourceInterface` |
+| `Sync\Hook\SyncActorResolverInterface` | `Sync\Hook\SyncActorProviderInterface` |
+| `Sync\Hook\SyncLimitCheckerInterface` | `Sync\Hook\SyncQuotaPolicyInterface` |
+| `Sync\Hook\SyncPersonResolverInterface` | `Sync\Hook\SyncPersonDirectoryInterface` |
+| `Sync\Hook\TaskAttachmentStorageInterface` | `Sync\Hook\SyncedFileStorageInterface` |
+
+- A service of yours that still uses a removed interface **fails the container build**, naming the service, the
+  interface and its replacement: a service or alias under the removed id, a decorator of it (`#[AsDecorator]`,
+  `decorates:`, also with `on_invalid: ignore`), an autodiscovered class that implements it (which Symfony would
+  otherwise drop silently), and the service a configuration key names.
+- **Decorators:** the removed ids are no longer service ids. To restrict or extend a port, decorate the service your
+  configuration key names (your own implementation of the framework-free interface). To restrict the bundle's
+  default (for example the assignee rule), configure your own implementation of the framework-free interface under the
+  key.
+- **The import link lookup** has no configuration key: in 2.x a host aliased `Import\TaskImportLinkLookupInterface`
+  (removed) to its service; in 3.0 alias `Import\TaskImportLinkFinderInterface` to it instead
+  (`Nowo\TaskBoardBundle\Import\TaskImportLinkFinderInterface: '@App\Import\MyLinkFinder'`).
+- **Injecting a port:** code that injected a removed interface to ask it (for example `SyncActorResolverInterface` in
+  a sync handler) injects the framework-free one instead: `SyncActorProviderInterface` is a public alias that follows
+  `sync.actor_resolver`.
+- The bundle keeps internal entity-typed seams for its own defaults and gates (`Port\Internal\*`, `@internal`); a class
+  outside the bundle that implements one of them fails the build like the removed interfaces.
+
+### Event members
+
+| Removed (deprecated since) | Use instead |
+|---|---|
+| `getTask()` of every task event (`AbstractTaskEvent`: created, updated, moved, completed, reopened, member, comment, mention, ...) and of `TaskAccessCheckEvent` (2.15.0) | `getTaskId()`, `getBoardId()`, `getTenantKey()`, `getTaskNumber()`, `getTaskSnapshot()` |
+| `TaskMovedEvent::getFromColumn()` / `getToColumn()` (2.15.0) | `getFromColumnId()` / `getToColumnId()` |
+| `TaskMemberAddedEvent::getMember()` (2.15.0) | `getMemberId()`, `getUserId()`, `getRole()` |
+| `TaskCommentEvent::getComment()`, `TaskMentionEvent::getComment()` (2.15.0) | `getCommentId()`, `getCommentSnapshot()` |
+| `BoardAccessCheckEvent::getBoard()`, `ColumnSetQueryEvent::getBoard()` (2.15.0) | `getBoardId()`, `getTenantKey()`, `getBoardSnapshot()` |
+| `ColumnSetAccessCheckEvent::getColumnSet()` (2.15.0) | `getColumnSetId()`, `getColumnSetScopeKey()` |
+| `BoardListQueryEvent::getSubject()` (2.29.0) | `getSubjectId()` |
+| public `$board` of `BoardCreatedEvent`, `BoardUpdatedEvent`, `TaskBoardQuotaCheckEvent`, `Sync\Event\SyncStartedEvent`, `SyncPageDoneEvent`, `SyncFinishedEvent`, `SyncFailedEvent`, `BoardConnectionEvent` (2.15.0) | `getBoardId()`, `getTenantKey()`, `getBoardSnapshot()` |
+| public `$task` of `Sync\Event\TaskRemoteArchivedEvent`, `TaskRemoteRestoredEvent` (2.15.0) | `getTaskId()`, `getBoardId()`, `getTaskSnapshot()` |
+| public `$user` of `ColumnDeleteCheckEvent`, public `$actor` of the column events (`AbstractColumnEvent`) (2.29.0) | `getUserId()`, `getActorId()` |
+| public `$person` / `$task` of `Sync\Time\ImportedTimeEntryCandidate` (2.15.0) | `personId()`, `personProviderUserId()`, `personName()`, `user()`, `taskId()`, `boardId()` |
+| `TaskBoardEvents::BOARD_LIST_RESULT`, `TASK_LIST_QUERY`, `TASK_LIST_RESULT`, `TASK_READ_ONLY_RESOLVE`, `MEMBER_LIST_QUERY` (2.10.0, never dispatched) | nothing (no listener of them ever ran) |
+| `Api\TaskApiWhere::reachesBoard(TaskBoard)` (2.15.0) | `reachesBoardOf($boardId, $tenantKey)` |
+
+The properties are private now (the constructors are unchanged: code that creates these events keeps working); reading
+them fails with "Cannot access private property".
+
+### Templates, Twig and layout
+
+| Removed (deprecated since) | Replacement |
+|---|---|
+| A layout without the UiKit canonical blocks (the `manage/_legacy_layout.html.twig` bridge, 2.0.0) | a layout that renders `nowo_ui_page_header`, `nowo_ui_flashes`, `nowo_ui_content` and `nowo_ui_modals` (see [To 2.0.0](#to-200-uikit-page-contract)). Such a layout now fails when a page is rendered, naming the layout. The Twig functions `nowo_task_board_legacy_layout()` / `nowo_task_board_legacy_blocks()` of the bridge are gone. |
+| Twig `nowo_task_board_btn_class(slot)` (2.0.0) | `nowo_ui_class(slot, 'NowoTaskBoardBundle')` |
+| The 2.30 inline dialogs: a host override passing `memberForm`, `linkForm`, `linkRemoveForm`, `priorityForm`, `dependencyForm`, `subtaskImportForm` or `timeEntryForm` to the task page partials, `restoreForms`, `columnSetDeleteForms`, `TaskQuestionView::section(…, withForms: true)` and the cards' `answerForm` / `withdrawForm` / `publishForm` (2.31.0) | the on-demand dialogs ([Dialogs load on demand](#dialogs-load-on-demand)), `restoreForm`, `columnSetDeletable` + `columnSetDeleteForm`, the cards' `answerUrl` / `withdrawUrl` / `publishUrl` |
+
+A host template that still uses them fails when Twig renders the page ("Unknown function", "Key … does not exist"),
+not at build time; the partials ignore the 2.30 form variables.
+
+### Configuration
+
+| Removed key (deprecated since) | Replacement |
+|---|---|
+| `firewall` (1.7, no effect) | your own `firewall` / `access_control` in `security.yaml` |
+| `templates.layout` (2.0.0) | `web_ui.layout_template` |
+| `templates.css_framework` (2.0.0, ignored) | `nowo_ui_kit.css_framework` |
+
+Each fails the build with `The option "nowo_task_board.<key>" was removed in 3.0: …`. The container parameter
+`nowo_task_board.firewall` is gone. The page keys of `templates` (`templates.index`, `templates.task_time_before`,
+`templates.page_header`, ...) stay.
+
+### TimeTrack bridge
+
+`Bridge\TimeTrack\TaskBoardTaskProvider` and `Bridge\TimeTrack\TaskBoardTeamContextProvider` (deprecated since 2.28.0)
+are removed. Point TimeTrack at the services `nowo_task_board.task_provider` / `nowo_task_board.team_context_provider`
+(TimeTrack's 1.23 `TaskDirectoryInterface` / `TeamDirectoryInterface`), as the documented configuration already does.
+A TimeTrack configuration that names the removed classes fails the build (unknown service). The billable default and
+the period lock of manual entries keep asking TimeTrack's scope port: the 1.x `TimesheetScopeProviderInterface`
+service while TimeTrack has it, else `TimesheetScopePolicyInterface`.
+
+### 2.x support
+
+After 3.0.0 is released, the 2.x line receives security fixes for 6 months: fixes rated Moderate and above are
 backported to the last 2.x minor; Low ones are fixed in 3.x only, with the advice to upgrade. Advisories name both
 lines.
 

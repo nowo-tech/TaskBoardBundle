@@ -98,14 +98,14 @@ final readonly class TaskQuestionView implements TaskQuestionCountsInterface
      *
      * Since 2.31.0 (owner rule 2026-11-23, every dialog loads its content on demand) a card carries the URLs of its answer,
      * withdraw and publish dialogs (`answerUrl`, `withdrawUrl`, `publishUrl`: the GET of their write routes) and no
-     * forms; `$withForms` true builds the 2.30 forms per card (`answerForm`, `withdrawForm`, `publishForm`) for a host
-     * template that still renders them (deprecated, removed in 3.0).
+     * forms. Since 3.0.0 the 2.30 forms per card (`withForms: true`, `answerForm`, `withdrawForm`, `publishForm`) are
+     * gone.
      *
      * @param array<string, string> $routeExtra extra route parameters of the page (`_target_path` of a drawer)
      *
      * @return array{cards: list<array<string, mixed>>, askForm: FormView|null, open: int, total: int}|null
      */
-    public function section(Task $task, array $routeExtra = [], bool $withForms = false): ?array
+    public function section(Task $task, array $routeExtra = []): ?array
     {
         $user = $this->user();
         // Since 2.23.1: a viewer who may not see the task, or (with tenancy) whose tenant is not one they may open, gets no
@@ -118,7 +118,7 @@ final readonly class TaskQuestionView implements TaskQuestionCountsInterface
         $today     = $this->clock->now();
         $cards     = [];
         foreach ($questions as $question) {
-            $cards[] = $this->card($user, $question, $subjects, $today, $routeExtra, $withForms);
+            $cards[] = $this->card($user, $question, $subjects, $today, $routeExtra);
         }
         $askForm = null;
         if ($this->access->canAskQuestion($user, $task)) {
@@ -311,7 +311,7 @@ final readonly class TaskQuestionView implements TaskQuestionCountsInterface
      *
      * @return array<string, mixed>
      */
-    private function card(UserInterface $user, TaskQuestion $question, array $subjects, DateTimeImmutable $today, array $routeExtra, bool $withForms = false): array
+    private function card(UserInterface $user, TaskQuestion $question, array $subjects, DateTimeImmutable $today, array $routeExtra): array
     {
         $task    = $question->getTask();
         $params  = ['taskId' => $task->getId(), 'questionId' => $question->getId()] + $routeExtra;
@@ -321,19 +321,15 @@ final readonly class TaskQuestionView implements TaskQuestionCountsInterface
         foreach (self::DIALOG_ACTIONS as $action) {
             $allowed[$action] = $this->allows($user, $action, $question, $subjects);
         }
-        $form = fn (string $action): ?FormView => $withForms && $allowed[$action] ? $this->buildForm($action, $question, $routeExtra)->createView() : null;
         // The answer and withdraw dialogs carry the version this card shows: a write after a newer one is still refused,
         // however late the dialog was opened (REQ-RUNTIME-003).
         $url = fn (string $action): ?string => $allowed[$action] ? $this->url('task_question_' . $action, $params + ($action === self::ACTION_PUBLISH ? [] : ['version' => (string) $question->getVersion()])) : null;
 
         return [
-            'question'     => $question,
-            'answer'       => $question->getCurrentAnswer(),
-            'superseded'   => array_values(array_filter($question->getAnswers(), static fn (TaskQuestionAnswer $a): bool => $a->isSuperseded())),
-            'overdue'      => $question->isOverdue($today),
-            'answerForm'   => $form(self::ACTION_ANSWER),
-            'withdrawForm' => $form(self::ACTION_WITHDRAW),
-            'publishForm'  => $form(self::ACTION_PUBLISH),
+            'question'   => $question,
+            'answer'     => $question->getCurrentAnswer(),
+            'superseded' => array_values(array_filter($question->getAnswers(), static fn (TaskQuestionAnswer $a): bool => $a->isSuperseded())),
+            'overdue'    => $question->isOverdue($today),
             // Since 2.31.0: the on-demand dialogs (null when the viewer may not use them).
             'answerUrl'    => $url(self::ACTION_ANSWER),
             'withdrawUrl'  => $url(self::ACTION_WITHDRAW),

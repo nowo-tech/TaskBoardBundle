@@ -156,50 +156,23 @@ the commit (`TaskEventDeferral`).
 
 ## The application's entity manager
 
-With `database.private_entity_manager: true` the sync, the import and the backfill write through the bundle's private
-manager, which they may clear: the application's manager is never flushed, cleared or reset.
-
-Without it (the 2.x default, deprecated) they write through `database.entity_manager`, which is the application's.
-Since 2.27.0 (REQ-RUNTIME-003 rule 2) a long run keeps its memory flat with `BundleEntityDetacher`, after each sync
-page, after a dry-run rollback and after each backfill batch, and never clears, closes or resets the manager:
-
-- The application's entities stay managed, with their pending changes. This includes the application entities the sync
-  loaded itself, such as assignee users.
-- A TaskBoard row that a managed application entity references stays managed: a to-one value, an element of an
-  initialized collection, or an element added to a collection that was never loaded (`add()` and `set()` do not load
-  it; read without any database access, audit WA-6). So does every TaskBoard row it reaches through its TaskBoard
-  associations: a kept task keeps its board and its column. The sync then finds the same instances again.
-- Every other TaskBoard row is detached. If the rows to keep cannot be worked out, nothing is detached for that batch
-  and a warning is logged.
-- After a dry-run rollback, the kept TaskBoard rows are read again from the database. Application rows that the
-  rolled-back page inserted (for example from an application `onFlush` listener) are detached, and the ones it updated
-  are read again. The rows are matched by the manager's unit of work, so an application `EntityManagerDecorator` is
-  covered too (audit WA-7).
+The sync, the import and the backfill write through the bundle's private manager (since 3.0.0 the only mode), which
+they clear after each sync page, after a dry-run rollback and after each backfill batch to keep the memory of a long run
+flat (`BundleEntityDetacher`, REQ-RUNTIME-003 rule 2): the application's manager is never flushed, cleared or reset.
+Up to 2.x without `database.private_entity_manager` they wrote through the application's manager and detached only
+the TaskBoard rows no application entity referenced; that mode was removed in 3.0.
 
 A manager that a failed flush closed is replaced (`RecoveringFlusher`), as before. The import detaches its own batch
 classes only (1.22.2).
 
 ## Residual risks
 
-Accepted for 2.x. None of them leaks data or bypasses a permission.
+Accepted. None of them leaks data or bypasses a permission.
 
-- **Shared manager flushes the application's changes.** Without the private manager, a TaskBoard flush (sync, import,
-  any write) also writes what the application left pending in that manager. This is the deprecated 2.14 behaviour;
-  the private manager becomes the only mode in 3.0 (REQ-ARCH-001 rule 6). A dry run commits the application's pending
-  changes too, with the run row, before its pages are rolled back.
-- **TaskBoard rows the application holds only in a variable.** After a sync page or a backfill batch, a TaskBoard row
-  that no managed application entity references is detached, even if the application holds it in a variable. Load it
-  again by id before changing it.
-- **The application's pending changes to TaskBoard rows.** "Pending changes are kept" applies to the application's own
-  entities only. The backfill writes with plain SQL and never flushes, so a change the application left unflushed on a
-  detached TaskBoard row, or a new TaskBoard row it persisted without flushing, is dropped, as it was in 2.26.1. A task
-  that stays managed (an application entity references it) keeps the number it had in memory: load it again to read the
-  new number.
-- **More rows stay in memory.** Kept TaskBoard rows (and everything they reach through initialized collections) and
-  the application entities the sync loaded stay in the manager for the whole run.
-- **Dry run: application collections.** After a dry-run rollback, the rows the page wrote are forgotten in the manager
-  TaskBoard writes through. An application entity that holds one of them in a collection it has already loaded (and that
-  the page did not update) may still list it until it is loaded again.
+- **TaskBoard rows held across a batch.** After a sync page, a dry-run rollback or a backfill batch the private manager
+  is cleared: a TaskBoard row the application holds in a variable is detached. Load it again by id before changing it.
+  (Up to 2.x without the private manager, a shared manager also flushed the application's pending changes; that mode
+  was removed in 3.0.)
 - **Local edit during a sync page.** A sync page does not lock the task rows it updates. A local edit of the same field
   committed between the page's read and its commit is overwritten by the provider's value (last writer wins on that
   field only; other fields keep the local edit). The window is one page.
@@ -218,8 +191,6 @@ Accepted for 2.x. None of them leaks data or bypasses a permission.
 | `tests/Functional/Api/ApiTaskQuestionReplayTest.php`, `ApiWriteUnitReplayTest.php` | write-unit replays after a deadlock | all |
 | `tests/Functional/Api/ApiLockOrderTest.php`, `ApiLockConflictTest.php` | fixed lock order, conflict answers | all |
 | `tests/Functional/Question/TaskQuestionWorkerTest.php` | one kept-alive kernel, a forced failure, flat memory | all |
-| `tests/Functional/Sync/SyncHostEntityManagerTest.php`, `Number/BackfillHostEntityManagerTest.php` | a sync, a dry run and a backfill batch on the application's manager keep its entities managed and its pending changes | all |
-| `tests/Functional/Sync/SyncHostReferencesTest.php`, `Number/BackfillHostEntityManagerTest.php` | application entities that reference a board or a task (also with cascade persist) across a one-page and a two-page sync, a dry run and a backfill batch; application rows an `onFlush` listener wrote in a rolled-back dry-run page | SQLite, MySQL, MariaDB, PostgreSQL |
 | `tests/Functional/Sync/SyncPrivateEntityManagerHostTest.php` | a sync and a dry run with the private manager leave the application's manager untouched | all |
 | `tests/Functional/HostPorts/HostPortsConcurrencyTest.php` (group `host-ports-db`) | two processes adjusting one task's total (no lost adjustment); a task row another connection holds (lock wait timeout: transient failure, nothing written, the retry succeeds); a revision another connection committed (409, nothing written) | MySQL, MariaDB, PostgreSQL (two connections / processes; skipped on SQLite) |
 | `tests/Functional/HostPorts/HostPortsTest.php`, `EventsAfterHostCommitTest.php`, `HostPortsWorkerTest.php` | conflicts on one connection, events held until the host's commit and dropped on rollback, a kept-alive worker | all |

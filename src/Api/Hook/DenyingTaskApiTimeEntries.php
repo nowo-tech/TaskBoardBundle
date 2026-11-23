@@ -11,6 +11,7 @@ use Nowo\TaskBoardBundle\Api\Value\TaskApiTimeEntry;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiTimePage;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiTimeQuery;
 use Nowo\TaskBoardBundle\Entity\Task;
+use Nowo\TaskBoardBundle\Port\Internal\TaskApiTimeEntriesInterface;
 
 /**
  * Since 2.2.0 (spec 213): the default time store: none, until the host sets `api.hooks.time_entries`.

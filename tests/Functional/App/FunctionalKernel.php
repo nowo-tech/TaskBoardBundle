@@ -44,7 +44,9 @@ use Symfony\Component\Routing\Loader\Configurator\RoutingConfigurator;
 use Twig\Extra\TwigExtraBundle\TwigExtraBundle;
 
 use function class_exists;
+use function dirname;
 use function getenv;
+use function is_array;
 use function is_string;
 use function md5;
 use function serialize;
@@ -107,7 +109,7 @@ final class FunctionalKernel extends Kernel
 
     public function getCacheDir(): string
     {
-        return sys_get_temp_dir() . '/nowo-task-board-functional/' . md5(serialize([$this->taskBoard, self::databaseUrl(), $this->debug, $this->realHttpClient, TwinPortAdapters::enabled(), PrivateEntityManagerReplay::enabled()])) . '/cache';
+        return sys_get_temp_dir() . '/nowo-task-board-functional/' . md5(serialize([$this->taskBoard, self::databaseUrl(), $this->debug, $this->realHttpClient, TwinPortAdapters::enabled(), getenv('TASK_BOARD_TEST_XML_MAPPING') === '1'])) . '/cache';
     }
 
     public function getLogDir(): string
@@ -214,8 +216,18 @@ final class FunctionalKernel extends Kernel
             $container->services()->set('app.timer', ScriptedTimerStarter::class);
             $container->services()->alias(TaskTimerStarterInterface::class, 'app.timer');
         }
-        $taskBoard = PrivateEntityManagerReplay::configure(array_diff_key($this->taskBoard, ['__ui_kit' => true, '__worker' => true, '__timer' => true, '__search_kit_counter' => true]));
-        PrivateEntityManagerReplay::alias($container, $taskBoard);
+        // Since 3.0.0 (W1-1): an application that autodiscovers its services from one directory of
+        // tests/Fixtures/RemovedPorts (`__autodiscover`), or registers classes of it by hand (`__register`).
+        $fixtures = is_string($this->taskBoard['__autodiscover'] ?? null) ? $this->taskBoard['__autodiscover'] : null;
+        if ($fixtures !== null) {
+            $container->services()->load('Nowo\\TaskBoardBundle\\Tests\\Fixtures\\RemovedPorts\\' . $fixtures . '\\', dirname(__DIR__, 2) . '/Fixtures/RemovedPorts/' . $fixtures . '/*')
+                ->autowire()->autoconfigure();
+        }
+        foreach (is_array($this->taskBoard['__register'] ?? null) ? $this->taskBoard['__register'] : [] as $class) {
+            $container->services()->set((string) $class, (string) $class);
+        }
+        $taskBoard = PrivateEntityManagerReplay::configure(array_diff_key($this->taskBoard, ['__ui_kit' => true, '__worker' => true, '__timer' => true, '__search_kit_counter' => true, '__autodiscover' => true, '__register' => true]));
+        PrivateEntityManagerReplay::alias($container);
         // Since 2.15.0: TASK_BOARD_TEST_PORTS=twin runs the suite through the framework-free twins of the host ports.
         $container->extension('nowo_task_board', ['user_class' => AppUser::class] + (TwinPortAdapters::enabled() ? TwinPortAdapters::rewrite($taskBoard) : $taskBoard));
         // Since 1.30.0: the host's scopes and tenant labels (used when a test sets board.scope_provider).

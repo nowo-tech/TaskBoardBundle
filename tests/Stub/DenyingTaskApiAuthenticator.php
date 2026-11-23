@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Tests\Stub;
 
-use Nowo\TaskBoardBundle\Api\Hook\TaskApiAuthenticatorInterface;
 use Nowo\TaskBoardBundle\Api\TaskApiAuthFailure;
+use Nowo\TaskBoardBundle\Port\Internal\TaskApiAuthenticatorInterface;
 use Symfony\Component\HttpFoundation\Request;
 
 /**

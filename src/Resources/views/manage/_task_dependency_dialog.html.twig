@@ -1,7 +1,7 @@
 {#
     Since 2.31.0: the "Add dependency" dialog of a task (was inline in _task_dependencies_section.html.twig). Loaded on
-    demand from the GET of task_dependency (dialog_fragment: body and actions only); a host that passes dependencyForm
-    to the section still gets it inline (deprecated, removed in 3.0). Variables: task, dependencyForm.
+    demand from the GET of task_dependency (dialog_fragment: body and actions only) (since 3.0.0 only there: the inline dialog of 2.30
+    is gone). Variables: task, dependencyForm.
 #}
         {% set _body %}
             {# Since 1.26 (dialog rule v2): the actions in the footer, outside the scrolling form. #}

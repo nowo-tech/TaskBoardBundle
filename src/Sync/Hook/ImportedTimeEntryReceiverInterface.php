@@ -11,13 +11,12 @@ use Nowo\TaskBoardBundle\ValueObject\TaskBoardSnapshot;
 use Nowo\TaskBoardBundle\ValueObject\TaskSyncDirectorySnapshot;
 
 /**
- * Since 2.15.0 (REQ-ARCH-001 rule 1): the framework-free twin of {@see ImportedTimeEntrySinkInterface}: where the time
+ * Since 2.15.0 (REQ-ARCH-001 rule 1): the framework-free twin of `ImportedTimeEntrySinkInterface` (the 2.14 interface, removed in 3.0): where the time
  * phase hands tracked time, with the board and the people directory as snapshots. Read each candidate through its id
  * accessors ({@see ImportedTimeEntryCandidate::personId()}, `taskId()`, `user()`, ...). Implement
  * {@see OwnerlessTimeEntryReceiverInterface} to receive the hours of people with no host user too.
  *
- * Set `sync.time_entries.sink` to a service implementing it. A service that also implements the deprecated interface is
- * asked through that one until 3.0.
+ * Set `sync.time_entries.sink` to a service implementing it.
  */
 interface ImportedTimeEntryReceiverInterface
 {

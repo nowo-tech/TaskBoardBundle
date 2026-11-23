@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\Sync\Hook;
 
 use LogicException;
 use Nowo\TaskBoardBundle\Entity\Task;
+use Nowo\TaskBoardBundle\Port\Internal\TaskAttachmentStorageInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteAttachment;
 
 /**

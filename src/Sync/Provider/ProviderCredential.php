@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Sync\Provider;
 
 use LogicException;
-use Nowo\TaskBoardBundle\Sync\Hook\ProviderCredentialResolverInterface;
+use Nowo\TaskBoardBundle\Port\Internal\ProviderCredentialResolverInterface;
 use SensitiveParameter;
 
 use function mb_substr;

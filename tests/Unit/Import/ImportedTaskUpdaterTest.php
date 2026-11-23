@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Tests\Unit\Import;
 
 use DateTimeImmutable;
-use Nowo\TaskBoardBundle\Assignee\TaskAssigneeProviderInterface;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
@@ -19,6 +18,7 @@ use Nowo\TaskBoardBundle\Import\ImportAssigneeResolver;
 use Nowo\TaskBoardBundle\Import\ImportedTaskUpdater;
 use Nowo\TaskBoardBundle\Import\NullTaskImportUserResolver;
 use Nowo\TaskBoardBundle\Import\TaskImportUserResolverInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TaskAssigneeProviderInterface;
 use Nowo\TaskBoardBundle\Tests\Stub\TestUser;
 use PHPUnit\Framework\TestCase;
 

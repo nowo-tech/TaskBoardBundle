@@ -21,7 +21,6 @@ use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Service\TaskManager;
 use Nowo\TaskBoardBundle\Tests\Functional\App\FunctionalKernel;
 use Nowo\TaskBoardBundle\Tests\Functional\App\ScriptedTransitionPolicy;
-use Nowo\TaskBoardBundle\Tests\Support\PrivateEntityManagerReplay;
 
 require dirname(__DIR__, 3) . '/vendor/autoload.php';
 
@@ -31,7 +30,7 @@ if ($mode === 'subtask') {
     $kernel                           = new FunctionalKernel(['max_subtask_depth' => 7, 'column_transition_policy' => 'app.transition_policy']);
     $kernel->boot();
     $container = $kernel->getContainer()->get('test.service_container');
-    $em        = $container->get(PrivateEntityManagerReplay::enabled() && $container->has('app.task_board_em') ? 'app.task_board_em' : 'doctrine.orm.entity_manager');
+    $em        = $container->get('app.task_board_em');
     assert($em instanceof EntityManagerInterface);
     $manager = $container->get(TaskManager::class);
     assert($manager instanceof TaskManager);
@@ -57,7 +56,7 @@ if ($mode === 'move') {
 $kernel = new FunctionalKernel();
 $kernel->boot();
 $container = $kernel->getContainer()->get('test.service_container');
-$em        = $container->get(PrivateEntityManagerReplay::enabled() && $container->has('app.task_board_em') ? 'app.task_board_em' : 'doctrine.orm.entity_manager');
+$em        = $container->get('app.task_board_em');
 assert($em instanceof EntityManagerInterface);
 $manager = $container->get(TaskManager::class);
 assert($manager instanceof TaskManager);

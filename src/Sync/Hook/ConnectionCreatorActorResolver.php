@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\Sync\Hook;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Port\Internal\SyncActorResolverInterface;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
 use Nowo\TaskBoardBundle\User\TaskBoardUsers;
 use Nowo\TaskBoardBundle\ValueObject\TaskBoardSnapshot;

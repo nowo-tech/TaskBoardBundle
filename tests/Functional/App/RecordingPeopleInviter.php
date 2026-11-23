@@ -6,7 +6,7 @@ namespace Nowo\TaskBoardBundle\Tests\Functional\App;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
-use Nowo\TaskBoardBundle\Sync\Hook\PeopleInviterInterface;
+use Nowo\TaskBoardBundle\Port\Internal\PeopleInviterInterface;
 use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\AppUser;
 
 /**

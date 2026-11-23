@@ -15,7 +15,6 @@ use Nowo\TaskBoardBundle\Question\TaskQuestionView;
 use Nowo\TaskBoardBundle\Tests\Functional\App\PredictableCsrfTokenManager;
 use Nowo\TaskBoardBundle\Tests\Functional\App\ScriptedQuestionPublisher;
 use RuntimeException;
-use Symfony\Component\Form\FormView;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
 use Symfony\Component\Security\Core\Authentication\Token\UsernamePasswordToken;
 use Twig\Environment;
@@ -166,7 +165,7 @@ final class TaskQuestionPortsTest extends QuestionTestCase
      * Since 2.31.0: the card has dialog URLs and no forms; withForms (deprecated) builds the 2.30 forms; dialogForm()
      * makes the card's decision for one action and needs a signed-in viewer.
      */
-    public function testTheCardsDialogsAndTheDeprecatedForms(): void
+    public function testTheCardsAndTheirDialogForms(): void
     {
         $question = $this->manager()->ask($this->owner, $this->task, new TaskQuestionInput('Budget?', [$this->subject($this->bob)], [new TaskQuestionOptionInput('Yes'), new TaskQuestionOptionInput('No')]));
         $view     = self::getContainer()->get(TaskQuestionView::class);
@@ -177,21 +176,16 @@ final class TaskQuestionPortsTest extends QuestionTestCase
         self::assertInstanceOf(TokenStorageInterface::class, $tokens);
         $tokens->setToken(new UsernamePasswordToken($this->bob, 'main', $this->bob->getRoles()));
         $card = $view->section($this->task)['cards'][0] ?? [];
-        self::assertNull($card['answerForm']);
+        self::assertArrayNotHasKey('answerForm', $card, 'since 3.0.0 the cards carry no form');
         self::assertStringEndsWith('/answer?version=1', (string) $card['answerUrl']);
         self::assertNull($card['withdrawUrl']);
         self::assertNull($card['publishUrl']);
-        $card = $view->section($this->task, withForms: true)['cards'][0] ?? [];
-        self::assertInstanceOf(FormView::class, $card['answerForm']);
-        self::assertNull($card['withdrawForm']);
         self::assertNull($view->dialogForm('unknown', $question));
         self::assertNull($view->dialogForm(TaskQuestionView::ACTION_WITHDRAW, $question), 'bob may not withdraw');
         self::assertSame('7', $view->dialogForm(TaskQuestionView::ACTION_ANSWER, $question, [], 7)?->createView()->children['version']->vars['value']);
 
         $tokens->setToken(new UsernamePasswordToken($this->owner, 'main', $this->owner->getRoles()));
-        $card = $view->section($this->task, withForms: true)['cards'][0] ?? [];
-        self::assertInstanceOf(FormView::class, $card['withdrawForm']);
-        self::assertSame('1', $card['withdrawForm']->children['version']->vars['value']);
+        self::assertSame('1', $view->dialogForm(TaskQuestionView::ACTION_WITHDRAW, $question)?->createView()->children['version']->vars['value']);
     }
 
     private function expectForbidden(callable $call): void

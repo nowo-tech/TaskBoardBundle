@@ -48,7 +48,7 @@ final class FrameworkFreeEventAccessorsTest extends TestCase
 
         $boardCheck = new BoardAccessCheckEvent($user, $board);
         self::assertSame([$board->getId(), 'acme', $board->getId(), 'u-7'], [$boardCheck->getBoardId(), $boardCheck->getTenantKey(), $boardCheck->getBoardSnapshot()->id, $boardCheck->getSubjectId()]);
-        self::assertSame($board, $boardCheck->getBoard());
+        self::assertSame($board->getId(), $boardCheck->getBoardId());
         self::assertNull((new BoardAccessCheckEvent(new stdClass(), $board))->getSubjectId());
 
         $taskCheck = new TaskAccessCheckEvent($user, $task);

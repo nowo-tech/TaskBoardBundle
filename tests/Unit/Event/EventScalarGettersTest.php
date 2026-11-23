@@ -39,7 +39,7 @@ final class EventScalarGettersTest extends TestCase
         $created = new TaskCreatedEvent($task, $ana);
         $board->setTenantKey('other');
         self::assertSame([$task->getId(), $board->getId(), 'acme', null, '7'], [$created->getTaskId(), $created->getBoardId(), $created->getTenantKey(), $created->getTaskNumber(), $created->getActorId()]);
-        self::assertSame($task, $created->getTask());
+        self::assertSame($task->getId(), $created->getTaskId());
         self::assertNull((new TaskCreatedEvent($task, new stdClass()))->getActorId());
 
         $moved = new TaskMovedEvent($task, $ana, $todo, $done);

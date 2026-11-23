@@ -7,19 +7,19 @@ namespace Nowo\TaskBoardBundle\Twig;
 use DateTimeImmutable;
 use Nowo\TaskBoardBundle\Avatar\TaskMemberAvatars;
 use Nowo\TaskBoardBundle\Board\BoardTenantLabelProviderInterface;
-use Nowo\TaskBoardBundle\Comment\TaskCommentCauseLabelerInterface;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskChangeHistory;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\Entity\TaskCustomField;
 use Nowo\TaskBoardBundle\Entity\TaskLink;
-use Nowo\TaskBoardBundle\History\TaskChangeCauseLabelerInterface;
 use Nowo\TaskBoardBundle\Import\ImportHelpLinkResolver;
 use Nowo\TaskBoardBundle\Link\TaskObjectBadge;
 use Nowo\TaskBoardBundle\Link\TaskObjectLinkResolver;
 use Nowo\TaskBoardBundle\Member\MemberBadge;
 use Nowo\TaskBoardBundle\Member\MemberBadges;
+use Nowo\TaskBoardBundle\Port\Internal\TaskChangeCauseLabelerInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TaskCommentCauseLabelerInterface;
 use Nowo\TaskBoardBundle\Question\Entity\TaskQuestion;
 use Nowo\TaskBoardBundle\Question\TaskQuestionView;
 use Nowo\TaskBoardBundle\Recurrence\Entity\TaskRecurrence;
@@ -40,7 +40,6 @@ use Nowo\TaskBoardBundle\Text\ReservedAttributeStripper;
 use Nowo\TaskBoardBundle\Text\TaskTextRendererInterface;
 use Nowo\TaskBoardBundle\Ui\TaskBoardPages;
 use Nowo\TaskBoardBundle\User\TaskBoardUsers;
-use Nowo\UiKitBundle\Twig\ThemeExtension;
 use Nowo\UiKitBundle\View\Column;
 use Nowo\UiKitBundle\View\Label;
 use Nowo\UiKitBundle\View\PageHeader;
@@ -48,8 +47,6 @@ use Nowo\UiKitBundle\View\Table;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
-use Twig\DeprecatedCallableInfo;
-use Twig\Environment;
 use Twig\Extension\AbstractExtension;
 use Twig\Extension\GlobalsInterface;
 use Twig\TwigFilter;
@@ -76,7 +73,6 @@ use function sprintf;
 use function str_replace;
 use function strtolower;
 use function strtr;
-use function trigger_deprecation;
 use function trim;
 use function usort;
 
@@ -407,11 +403,8 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
             new TwigFunction('nowo_task_board_member_avatar_url', $this->memberAvatarUrl(...)),
             // Since 2.15.0 (database.user_reference: id): the host user behind a user reference.
             new TwigFunction('nowo_task_board_user', $this->user(...)),
-            new TwigFunction('nowo_task_board_btn_class', $this->buttonClass(...), ['needs_environment' => true, 'needs_context' => true, 'deprecation_info' => new DeprecatedCallableInfo('nowo-tech/task-board-bundle', '2.0', 'nowo_ui_class')]),
             // Since 2.0.0: the UiKit page contract.
             new TwigFunction('nowo_task_board_page_layout', $this->pages->layout(...), ['needs_environment' => true]),
-            new TwigFunction('nowo_task_board_legacy_layout', $this->pages->legacyLayout(...), ['needs_environment' => true]),
-            new TwigFunction('nowo_task_board_legacy_blocks', $this->pages->legacyBlocks(...), ['needs_environment' => true]),
             new TwigFunction('nowo_task_board_header', $this->pageHeader(...), ['needs_context' => true]),
             new TwigFunction('nowo_task_board_subtask_nodes', $this->subtaskNodes(...)),
             new TwigFunction('nowo_task_board_list_table', $this->listTable(...)),
@@ -445,20 +438,6 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
             new TwigFunction('nowo_task_board_my_questions', $this->myQuestions(...)),
             new TwigFunction('nowo_task_board_my_questions_count', $this->myQuestionsCount(...)),
         ];
-    }
-
-    /**
-     * The classes of a theme slot of the bundle.
-     *
-     * @deprecated since 2.0.0, use `nowo_ui_class(slot, 'NowoTaskBoardBundle')`. Removed in 3.0.
-     *
-     * @param array<string, mixed> $context
-     */
-    public function buttonClass(Environment $env, array $context, string $slot): string
-    {
-        trigger_deprecation('nowo-tech/task-board-bundle', '2.0', 'The Twig function "nowo_task_board_btn_class" is deprecated, use "nowo_ui_class(slot, \'%s\')".', self::THEME_BUNDLE);
-
-        return $env->getExtension(ThemeExtension::class)->slotClass($context, $slot, self::THEME_BUNDLE);
     }
 
     /**

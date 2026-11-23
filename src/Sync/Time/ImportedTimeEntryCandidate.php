@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Sync\Time;
 
 use Nowo\TaskBoardBundle\Entity\Task;
+use Nowo\TaskBoardBundle\Port\Internal\OwnerlessTimeEntrySinkInterface;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPerson;
-use Nowo\TaskBoardBundle\Sync\Hook\OwnerlessTimeEntrySinkInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteTimeEntry;
 
 /**
@@ -15,16 +15,14 @@ use Nowo\TaskBoardBundle\Sync\Provider\RemoteTimeEntry;
  *
  * Since 2.15.0 (REQ-ARCH-001 rule 1) read it through the id accessors ({@see self::personId()},
  * {@see self::personProviderUserId()}, {@see self::taskId()}, {@see self::boardId()}, {@see self::user()},
- * {@see self::personName()}); `$person` and `$task` (entities) are deprecated, removed in 3.0.
+ * {@see self::personName()}). Since 3.0.0 `$person` and `$task` (entities, deprecated since 2.15.0) are no longer public.
  */
 final readonly class ImportedTimeEntryCandidate
 {
     public function __construct(
         public RemoteTimeEntry $entry,
-        /** @deprecated since 2.15.0, use {@see self::personId()} and the other accessors; removed in 3.0 */
-        public TaskSyncPerson $person,
-        /** @deprecated since 2.15.0, use {@see self::taskId()} / {@see self::boardId()}; removed in 3.0 */
-        public ?Task $task,
+        private TaskSyncPerson $person,
+        private ?Task $task,
     ) {
     }
 

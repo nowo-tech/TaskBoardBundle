@@ -11,17 +11,12 @@ use function getenv;
 use function is_array;
 
 /**
- * Since 2.15.0: TASK_BOARD_TEST_PRIVATE_EM=1 runs the functional suite with `database.private_entity_manager: true`
- * (unless a test sets the option itself), and with TASK_BOARD_TEST_XML_MAPPING=1 `database.mapping_type: xml`. With the
- * option on, the kernels expose the private manager as the public `app.task_board_em`.
+ * The test kernels' access to the bundle's private entity manager (since 3.0.0 the only mode): they expose it as the
+ * public `app.task_board_em`, the manager the fixtures are written through. TASK_BOARD_TEST_XML_MAPPING=1 runs the
+ * suite with `database.mapping_type: xml` (unless a test sets the option itself).
  */
 final class PrivateEntityManagerReplay
 {
-    public static function enabled(): bool
-    {
-        return getenv('TASK_BOARD_TEST_PRIVATE_EM') === '1';
-    }
-
     /**
      * @param array<mixed> $taskBoard
      *
@@ -29,28 +24,18 @@ final class PrivateEntityManagerReplay
      */
     public static function configure(array $taskBoard): array
     {
-        if (!self::enabled()) {
+        if (getenv('TASK_BOARD_TEST_XML_MAPPING') !== '1') {
             return $taskBoard;
         }
         $database = is_array($taskBoard['database'] ?? null) ? $taskBoard['database'] : [];
-        $database += ['private_entity_manager' => true];
-        // Since 2.15.0: TASK_BOARD_TEST_XML_MAPPING=1 maps the entities from the XML files too.
-        if (getenv('TASK_BOARD_TEST_XML_MAPPING') === '1') {
-            $database += ['mapping_type' => 'xml'];
-        }
+        $database += ['mapping_type' => 'xml'];
         $taskBoard['database'] = $database;
 
         return $taskBoard;
     }
 
-    /**
-     * @param array<mixed> $taskBoard
-     */
-    public static function alias(ContainerConfigurator $container, array $taskBoard): void
+    public static function alias(ContainerConfigurator $container): void
     {
-        $database = is_array($taskBoard['database'] ?? null) ? $taskBoard['database'] : [];
-        if (($database['private_entity_manager'] ?? null) === true) {
-            $container->services()->alias('app.task_board_em', TaskBoardEntityManager::class)->public();
-        }
+        $container->services()->alias('app.task_board_em', TaskBoardEntityManager::class)->public();
     }
 }

@@ -118,7 +118,7 @@ final class DddHostKernel extends Kernel
             'assignee_provider' => 'app.users',
             'history'           => ['cause_labeler' => 'app.cause_text'],
             'comments'          => ['cause_labeler' => 'app.cause_text'],
-            'database'          => ['mapping_type' => 'xml', 'private_entity_manager' => true, 'user_reference' => 'id'],
+            'database'          => ['mapping_type' => 'xml', 'user_reference' => 'id'],
             'multi_board'       => ['enabled' => true, 'scope_provider' => 'app.multi_scope'],
         ] + $this->taskBoard);
         $services->alias('app.task_board_em', TaskBoardEntityManager::class)->public();

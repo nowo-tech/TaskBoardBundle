@@ -90,10 +90,12 @@ final class FormerPeopleTest extends SyncPeopleFunctionalTestCase
         self::assertNull($delivered['e2']->user());
         self::assertSame('Gone Person', $delivered['e2']->personName());
         // The reference TimeTrackBundle 1.15 ImportedTimeEntryPerson::REF_PATTERN accepts.
-        self::assertMatchesRegularExpression('/^[A-Za-z0-9._:#-]{1,64}$/D', $delivered['e2']->person->getId());
+        self::assertMatchesRegularExpression('/^[A-Za-z0-9._:#-]{1,64}$/D', $delivered['e2']->personId());
 
-        $delivered['e2']->person->anonymise(new DateTimeImmutable());
-        self::assertNull($delivered['e2']->personName(), 'an anonymised person hands over no name');
+        $person = $this->em->find(TaskSyncPerson::class, $delivered['e2']->personId());
+        self::assertInstanceOf(TaskSyncPerson::class, $person);
+        $person->anonymise(new DateTimeImmutable());
+        self::assertNull((new ImportedTimeEntryCandidate($delivered['e2']->entry, $person, null))->personName(), 'an anonymised person hands over no name');
     }
 
     public function testTheBulkActionMarksOnlyUndecidedPeopleAndStaysChangeable(): void

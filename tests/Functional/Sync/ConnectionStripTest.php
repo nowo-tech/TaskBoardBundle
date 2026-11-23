@@ -55,7 +55,7 @@ final class ConnectionStripTest extends SyncFunctionalTestCase
         $dispatcher = self::getContainer()->get('event_dispatcher');
         self::assertInstanceOf(EventDispatcherInterface::class, $dispatcher);
         $dispatcher->addListener(TaskBoardEvents::BOARD_ACCESS_CHECK, static function (BoardAccessCheckEvent $event) use ($reader): void {
-            if ($event->getSubject() === $reader && $event->getAction() === BoardAccessCheckEvent::ACTION_VIEW) {
+            if ($event->getSubjectId() === (string) $reader->getId() && $event->getAction() === BoardAccessCheckEvent::ACTION_VIEW) {
                 $event->grant();
             }
         });

@@ -3,10 +3,11 @@ name: CI
 
 on:
   push:
-    branches: [main, master]
+    # 2.x: the maintenance line after 3.0.0 (security fixes for 6 months).
+    branches: [main, master, 2.x]
   pull_request:
     # feat/** too: the 2.15.0 REQ-ARCH-001 track is a stack of PRs whose bases are feature branches.
-    branches: [main, master, 'feat/**']
+    branches: [main, master, 2.x, 'feat/**']
 
 # Superseded PR runs are cancelled. Push runs (main/master) get their own group (run_id), so a main run is never
 # cancelled, not even while pending: tag_when_green.sh needs a completed run on every release commit.
@@ -426,10 +427,12 @@ jobs:
       - name: Install dependencies (Symfony 7.4)
         run: bash .github/ci/composer-install.sh 7.4 '^2.10'
 
-      # Since 2.15.0 (REQ-ARCH-001 rule 6): database.private_entity_manager: true for every test kernel, fixtures
-      # written through the bundle's private manager (see phpunit.private-em.xml.dist for the excluded tests).
-      - name: Run the functional suite with the private entity manager
-        run: php -d memory_limit=1G vendor/bin/phpunit -c phpunit.private-em.xml.dist
+      # Since 3.0.0 the private entity manager is the only mode (every suite runs with it); this job keeps its name for
+      # the branch protection and replays the functional suite with database.mapping_type: xml (the DDD host's mapping).
+      - name: Run the functional suite with the XML mapping
+        env:
+          TASK_BOARD_TEST_XML_MAPPING: '1'
+        run: composer test -- --testsuite functional
 
   code-style:
     name: Code Style
