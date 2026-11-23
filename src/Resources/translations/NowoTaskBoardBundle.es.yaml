@@ -967,6 +967,7 @@ task_board.custom_field.operator.set: "tiene valor"
 task_board.custom_field.operator.not_set: "no tiene valor"
 task_board.custom_field.operator.in: "es uno de"
 task_board.custom_field.refused: "El valor de «%field%» no se guardó: no encaja en el campo."
+task_board.custom_field.changed_meanwhile: "«%field%» no se guardó: alguien lo cambió mientras tanto. Revisa su valor e inténtalo de nuevo."
 # Since 2.22.0: the task and column menus (context menus).
 task_board.menu.label: "Acciones de «%task%»"
 task_board.menu.column_label: "Acciones de la columna «%column%»"

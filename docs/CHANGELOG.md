@@ -8,7 +8,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
-- [[2.30.3] - 2026-11-22](#2303---2026-11-22)
 - [[2.30.2] - 2026-11-22](#2302---2026-11-22)
 - [[2.30.1] - 2026-11-22](#2301---2026-11-22)
 - [[2.30.0] - 2026-11-22](#2300---2026-11-22)
@@ -148,11 +147,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (implemented by `DoctrineOrmOrderedRowLock`). No schema change. Tests: `tests/Functional/TaskEditFormRaceTest`
   (stale form, a save committed between load and lock, a second process holding the row, a lock wait, a deleted task;
   the two-connection cases on MySQL 8.4 / 9, MariaDB 11.4 and PostgreSQL 16).
-
-## [2.30.3] - 2026-11-22
-
-### Fixed
-
+- REQ-RUNTIME-003 (lost update, since 2.19): the task edit form's custom fields compared the posted value with the
+  stored one, so a form left open wrote its old value back over a change someone made meanwhile. The edit form now
+  posts the values it showed (hidden, unmapped `customFieldBase`; no template change). A field the person did not
+  touch is never written; a field the person changed that someone else changed too refuses the whole save before
+  anything is written ("The task changed meanwhile: nothing was saved. Try again."); a change committed between those
+  checks and the field's write is not overwritten (the field is skipped with the new warning
+  `task_board.custom_field.changed_meanwhile`, all 7 locales). Every custom field write
+  (`TaskCustomFieldManager::setField()`, the Task API's `POST /v2/task/{id}/field/{field_id}`, the form) now locks the
+  task's row before reading the value, so two writes of one field run one after the other (no lost update, no
+  duplicate first value on the unique key). New `TaskCustomFieldManager::setFieldUnlessChanged()`. Host forms without
+  the shown values keep the 2.30 behaviour. No schema change. Tests: `tests/Functional/Field/CustomFieldEditRaceTest`
+  (a second process holding the task's row on MySQL 8.4 / 9, MariaDB 11.4 and PostgreSQL 16).
 - The board import form showed the raw key `task_board.import.form.file_invalid` instead of "Upload a valid CSV or JSON export (max 20 MB)." when the uploaded file had a wrong type: Symfony translates constraint messages in the `validators` domain, and the text only existed in `NowoTaskBoardBundle.<locale>.yaml`. The same key-as-text applied to `task_board.sync.browser.pick_list` ("Choose a list.", the link form's list field), which is not shown today because the connection controller turns an invalid link form into the `task_board.sync.flash.pick_list` flash. Both now ship in `validators.<locale>.yaml` (de, en, es, fr, it, nl, pt; text unchanged) and are removed from the bundle domain. **Overrides:** a host that overrode these two keys in `NowoTaskBoardBundle.<locale>.yaml` never took effect on them; put them in `validators.<locale>.yaml`.
 
 ### Tests
@@ -3486,7 +3492,7 @@ First stable release of **TaskBoard Bundle**.
 - Doctrine ORM ^2.15 || ^3.0
 - `nowo-tech/time-track-bundle` ^1.0 (required in 1.0.x; optional from 1.1.0)
 
-[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v2.30.3...HEAD
+[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v2.30.2...HEAD
 [1.9.0]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.4...v1.9.0
 [1.8.4]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.3...v1.8.4
 [1.8.3]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.2...v1.8.3

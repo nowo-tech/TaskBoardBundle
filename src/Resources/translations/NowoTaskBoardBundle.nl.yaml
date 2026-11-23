@@ -967,6 +967,7 @@ task_board.custom_field.operator.set: "is ingevuld"
 task_board.custom_field.operator.not_set: "is niet ingevuld"
 task_board.custom_field.operator.in: "is een van"
 task_board.custom_field.refused: "De waarde van „%field%” is niet opgeslagen: ze past niet bij het veld."
+task_board.custom_field.changed_meanwhile: "„%field%” is niet opgeslagen: iemand heeft het intussen gewijzigd. Controleer de waarde en probeer het opnieuw."
 # Since 2.22.0: the task and column menus (context menus).
 task_board.menu.label: "Acties voor ‘%task%’"
 task_board.menu.column_label: "Acties voor de kolom ‘%column%’"

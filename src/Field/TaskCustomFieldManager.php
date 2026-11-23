@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Field;
 
+use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
@@ -17,6 +18,7 @@ use Nowo\TaskBoardBundle\Entity\TaskCustomFieldValue;
 use Nowo\TaskBoardBundle\Enum\CustomFieldOperator;
 use Nowo\TaskBoardBundle\Enum\CustomFieldType;
 use Nowo\TaskBoardBundle\Enum\TaskChangeType;
+use Nowo\TaskBoardBundle\Exception\TaskChangedException;
 use Nowo\TaskBoardBundle\Folder\TaskBoardRestructurePolicyInterface;
 use Nowo\TaskBoardBundle\Port\Snapshots;
 use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
@@ -258,11 +260,48 @@ final readonly class TaskCustomFieldManager
      */
     public function setField(Task $task, string $fieldId, mixed $value, object $actor): void
     {
+        $this->writeValue($task, $fieldId, $value, $actor, null);
+    }
+
+    /**
+     * Since 2.31.0 (REQ-RUNTIME-003 rule 4): {@see self::setField()} only while the task's value is still the one the
+     * caller's form showed: `$unchanged` gets the current value (read under the task's row lock) and answers whether it
+     * is still that one; when it answers false nothing is written.
+     *
+     * @param callable(TaskCustomFieldValue|null): bool $unchanged
+     *
+     * @throws TaskChangedException when the value changed meanwhile (nothing written)
+     * @throws TaskCustomFieldRefusedException as setField()
+     */
+    public function setFieldUnlessChanged(Task $task, string $fieldId, mixed $value, object $actor, callable $unchanged): void
+    {
+        $this->writeValue($task, $fieldId, $value, $actor, $unchanged);
+    }
+
+    /**
+     * Since 2.31.0 (REQ-RUNTIME-003 rule 4): the task's row is locked before its value is read, so two writes of one
+     * task's field (two forms, the Task API) run one after the other: the second one reads what the first one stored
+     * (no lost update, no duplicate first value on the unique key).
+     *
+     * @param (callable(TaskCustomFieldValue|null): bool)|null $unchanged
+     */
+    private function writeValue(Task $task, string $fieldId, mixed $value, object $actor, ?callable $unchanged): void
+    {
         $field           = $this->fieldOfBoard($task->getBoard(), $fieldId) ?? throw new TaskCustomFieldRefusedException(TaskCustomFieldRefusedException::NOT_FOUND);
         [$text, $number] = $this->normalize($field, $value);
-        $this->write(function () use ($task, $field, $text, $number, $actor): void {
+        $this->write(function () use ($task, $field, $text, $number, $actor, $unchanged): void {
+            $this->entityManager->createQuery('SELECT t.id FROM ' . Task::class . ' t WHERE t.id = :id')
+                ->setParameter('id', $task->getId())
+                ->setLockMode(LockMode::PESSIMISTIC_WRITE)
+                ->getSingleColumnResult();
             $current = $this->entityManager->getRepository(TaskCustomFieldValue::class)->findOneBy(['task' => $task, 'field' => $field]);
-            $before  = $current instanceof TaskCustomFieldValue ? $this->display($current) : null;
+            if ($current instanceof TaskCustomFieldValue) {
+                $this->entityManager->refresh($current);
+            }
+            if ($unchanged !== null && !$unchanged($current)) {
+                throw new TaskChangedException($task->getRevision());
+            }
+            $before = $current instanceof TaskCustomFieldValue ? $this->display($current) : null;
             if ($text === null && $number === null) {
                 if ($current instanceof TaskCustomFieldValue) {
                     $this->entityManager->remove($current);

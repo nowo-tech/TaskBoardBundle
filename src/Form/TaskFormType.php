@@ -10,6 +10,7 @@ use Nowo\TagInputBundle\Form\TagType;
 use Nowo\TaskBoardBundle\DependencyInjection\TaskBoardExtension;
 use Nowo\TaskBoardBundle\Dto\TaskFormData;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
+use Nowo\TaskBoardBundle\Field\TaskCustomFieldForm;
 use Nowo\TaskBoardBundle\Form\DataTransformer\MinutesToDurationTransformer;
 use Nowo\TaskBoardBundle\Form\DataTransformer\TagsToStringTransformer;
 use Nowo\TaskBoardBundle\TaskBoardBundle;
@@ -177,6 +178,11 @@ final class TaskFormType extends AbstractType
 
         // Since 2.19.0 (Beacon spec 234, FR-028): one row per native custom field (`custom_fields`, from TaskCustomFieldForm),
         // unmapped; TaskCustomFieldForm::save() writes them through TaskCustomFieldManager::setField().
+        // Since 2.31.0 (REQ-RUNTIME-003 rule 4): the custom field values the edit form showed, so TaskCustomFieldForm
+        // writes only what the person changed and refuses a field someone else changed meanwhile.
+        if ((bool) $options['base_digest'] && $options['custom_fields'] !== []) {
+            $builder->add(TaskCustomFieldForm::BASE_FIELD, HiddenType::class, ['mapped' => false, 'required' => false, 'label' => false, 'data' => TaskCustomFieldForm::encodeBase($options['custom_fields'])]);
+        }
         foreach ($options['custom_fields'] as $definition) {
             $common = ['label' => $definition['name'], 'translation_domain' => false, 'mapped' => false, 'required' => false, 'data' => $definition['value']];
             match ($definition['type']) {
