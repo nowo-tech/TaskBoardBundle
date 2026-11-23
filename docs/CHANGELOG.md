@@ -132,6 +132,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Beacon request, **a cheap *to answer* count for a menu badge**: `TaskQuestionView::countToAnswer()` answers how many
+  rows *My open questions* lists in its `to_answer` tab (`mine()`) for the signed-in viewer, with the same rules: the
+  viewer's subject ids (compared byte for byte, REQ-SEC-006), the tenant rule (deny by default: 0 on a tenant URL that
+  does not resolve for the viewer; outside one, boards of tenants the resolver opens to them by key) and
+  `canViewTask()`. It reads no question, checks no task one by one and builds no URL: one query reads the boards of the
+  viewer's open questions, each passes the board rule (BOARD_ACCESS_CHECK, the viewer's teams read once), and one query
+  counts — every task of a visible board, else the tasks the viewer created or is a member of. With a TASK_ACCESS_CHECK
+  listener, one query reads the candidate tasks (with their members) for the event, then one query counts. The number of
+  queries does not grow with the number of open questions (tested at 5 and 300). Unlike the list, the count is not cut at
+  `TaskQuestionQuery::MY_QUESTIONS_CAP` (500) candidates.
+  - `Question\TaskQuestionCountsInterface` (public alias of the view, with `task_questions.enabled`) for a DDD host's
+    badge; the bundle implements it, hosts do not.
+  - Twig: `nowo_task_board_my_questions_count()` (0 with the feature off).
+  - `TaskQuestionQuery::boardsOpenForSubjects()`, `tasksOpenForSubjects()`, `countOpenForSubjects()`,
+    `countOpenOnTasks()` and `TaskBoardResourceAccessChecker::taskListenersMayDecide()`.
+
 ## [2.31.0] - 2026-11-23
 
 ### Changed
