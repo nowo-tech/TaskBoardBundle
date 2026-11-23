@@ -44,7 +44,7 @@ use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantResolverInterface;
 use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 use Nowo\TimeTrackBundle\Event\TimeEntryCreatedEvent;
-use Nowo\TimeTrackBundle\Integration\TaskProviderInterface;
+use Nowo\TimeTrackBundle\Integration\TaskDirectoryInterface;
 use Nowo\TimeTrackBundle\Timesheet\TimesheetScopePolicyInterface;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -84,7 +84,7 @@ final class TaskBoardExtensionTest extends TestCase
         self::assertSame(ContainerInterface::NULL_ON_INVALID_REFERENCE, $managerRegistry->getInvalidBehavior());
         self::assertArrayNotHasKey('$managerRegistry', $container->getDefinition(DoctrineOrmTeamMemberRepository::class)->getArguments());
 
-        if (interface_exists(TaskProviderInterface::class)) {
+        if (interface_exists(TaskDirectoryInterface::class)) {
             // Since 2.28.0: the 1.23 interfaces answer TimeTrack; since 3.0.0 the 1.x classes are gone.
             self::assertSame(TaskBoardTaskDirectory::class, (string) $container->getAlias('nowo_task_board.task_provider'));
             self::assertSame(TaskBoardTeamDirectory::class, (string) $container->getAlias('nowo_task_board.team_context_provider'));
@@ -177,8 +177,11 @@ final class TaskBoardExtensionTest extends TestCase
         $with->setParameter('kernel.environment', 'test');
         $with->setParameter('kernel.bundles', ['SecurityBundle' => SecurityBundle::class]);
         (new TaskBoardExtension())->load([['user_class' => User::class]], $with);
+        // TimeTrack 1.x: its 1.x scope id; TimeTrack 2.0: the framework-free id (null-on-invalid: timesheets off).
+        $installed = interface_exists(TaskBoardExtension::TIME_TRACK_LEGACY_SCOPE_PROVIDER) ? TaskBoardExtension::TIME_TRACK_LEGACY_SCOPE_PROVIDER : TimesheetScopePolicyInterface::class;
         foreach ([TimeTrackTaskTimeBillableDefaultProvider::class, TimeTrackTaskTimePeriodLock::class] as $id) {
-            self::assertSame(TaskBoardExtension::TIME_TRACK_LEGACY_SCOPE_PROVIDER, (string) $with->getDefinition($id)->getArgument('$scopes'), $id);
+            self::assertSame($installed, (string) $with->getDefinition($id)->getArgument('$scopes'), $id);
+            self::assertSame(ContainerInterface::NULL_ON_INVALID_REFERENCE, $with->getDefinition($id)->getArgument('$scopes')->getInvalidBehavior(), $id);
         }
 
         $without = new ContainerBuilder();

@@ -101,8 +101,16 @@ final class RemovedPortsPass implements CompilerPassInterface
      */
     public static function message(string $service, string $removed): string
     {
-        return sprintf('nowo_task_board: the service "%1$s" uses %2$s, which was deprecated in 2.15.0 and removed in 3.0. Implement %3$s instead and keep the configuration key that names your service (a decorator decorates your own service, not the removed id); see UPGRADING.md "To 3.0.0", "Host port interfaces".', $service, $removed, self::REMOVED[$removed]);
+        // The import link lookup has no configuration key: a host aliases the framework-free interface itself.
+        $wiring = $removed === self::IMPORT_LINK_LOOKUP
+            ? sprintf('alias "%s" to your service (this port has no configuration key)', self::REMOVED[$removed])
+            : 'keep the configuration key that names your service';
+
+        return sprintf('nowo_task_board: the service "%1$s" uses %2$s, which was deprecated in 2.15.0 and removed in 3.0. Implement %3$s instead and %4$s (a decorator decorates your own service, not the removed id); see UPGRADING.md "To 3.0.0", "Host port interfaces".', $service, $removed, self::REMOVED[$removed], $wiring);
     }
+
+    /** The removed import link lookup interface (no configuration key: hosts aliased it). */
+    public const IMPORT_LINK_LOOKUP = 'Nowo\\TaskBoardBundle\\Import\\TaskImportLinkLookupInterface';
 
     /**
      * The removed interface an error message names exactly (quoted, as Symfony and PHP quote class names), or null.

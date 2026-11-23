@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Service;
 use Closure;
 use DateTimeImmutable;
 use InvalidArgumentException;
+use Nowo\TaskBoardBundle\Doctrine\TaskBoardEntityManager;
 use Nowo\TaskBoardBundle\Dto\TaskColumnNavigation;
 use Nowo\TaskBoardBundle\Dto\TaskFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
@@ -81,6 +82,9 @@ final readonly class TaskManager implements TaskManagerInterface
         private TaskTreeLimits $treeLimits = new TaskTreeLimits(),
         // Since 2.21.0 (Beacon spec 239, FR-013): the fixed lock order of a move's rows; none: written as before.
         private ?OrderedRowLockInterface $rowLock = null,
+        // Since 3.0.0 (audit ZAS-1 / ZAS-2): TaskBoard rows the application's manager holds are read again by id at
+        // each write entry (none: a service built by hand works on the rows it is given, as in 2.x).
+        private ?TaskBoardEntityManager $rows = null,
     ) {
     }
 
@@ -97,6 +101,8 @@ final readonly class TaskManager implements TaskManagerInterface
      */
     public function create(TaskBoard $board, TaskFormData $data, object $creator, ?Task $parent = null, ?string $context = null, ?ColumnTransitionVia $via = null): Task
     {
+        $board  = $this->rows?->attach($board) ?? $board;
+        $parent = $parent instanceof Task ? $this->rows?->attach($parent) ?? $parent : (null);
         if ($parent instanceof Task && $this->treeLimits->maxSubtaskDepth !== null) {
             if (!$this->tree instanceof TaskTreeStoreInterface) {
                 // No store (a hand-built manager): the loaded tree decides.
@@ -214,6 +220,7 @@ final readonly class TaskManager implements TaskManagerInterface
      */
     public function update(Task $task, TaskFormData $data, object $user, ?ColumnTransitionVia $via = null): void
     {
+        $task                = $this->rows?->attach($task) ?? $task;
         $oldTitle            = $task->getTitle();
         $oldDescription      = $task->getDescription();
         $oldPriority         = $task->getPriority();
@@ -327,6 +334,7 @@ final readonly class TaskManager implements TaskManagerInterface
      */
     public function reschedule(Task $task, ?DateTimeImmutable $startAt, ?DateTimeImmutable $dueAt, object $user): void
     {
+        $task = $this->rows?->attach($task) ?? $task;
         if ($startAt instanceof DateTimeImmutable && $dueAt instanceof DateTimeImmutable && $startAt->format('Y-m-d') > $dueAt->format('Y-m-d')) {
             throw new InvalidTaskScheduleException('The start date is after the due date.');
         }
@@ -366,6 +374,7 @@ final readonly class TaskManager implements TaskManagerInterface
 
     public function updatePriority(Task $task, TaskPriority $priority, object $user): void
     {
+        $task        = $this->rows?->attach($task) ?? $task;
         $oldPriority = $task->getPriority();
         $task->setPriority($priority);
         $this->changeRecorder->recordIfChanged($task, $user, TaskChangeType::Priority, $oldPriority, $priority);
@@ -388,6 +397,7 @@ final readonly class TaskManager implements TaskManagerInterface
      */
     public function addTag(Task $task, string $tag, object $user, ?ColumnTransitionVia $via = null): bool
     {
+        $task    = $this->rows?->attach($task) ?? $task;
         $tag     = trim($tag);
         $oldTags = $task->getTags();
         if ($tag === '' || in_array($tag, $oldTags, true)) {
@@ -428,6 +438,7 @@ final readonly class TaskManager implements TaskManagerInterface
      */
     public function move(Task $task, ?string $columnId, int $position, object $user, ?ColumnTransitionVia $via = null): void
     {
+        $task = $this->rows?->attach($task) ?? $task;
         $this->applyMove($task, $columnId, $position, $user, true, $via);
     }
 
@@ -720,6 +731,7 @@ final readonly class TaskManager implements TaskManagerInterface
      */
     public function moveToPreviousColumn(Task $task, object $user, ?ColumnTransitionVia $via = null): bool
     {
+        $task    = $this->rows?->attach($task) ?? $task;
         $columns = $this->orderedColumns($task->getBoard());
         $index   = $this->currentColumnIndex($task, $columns);
 
@@ -742,6 +754,7 @@ final readonly class TaskManager implements TaskManagerInterface
      */
     public function moveToNextColumn(Task $task, object $user, ?ColumnTransitionVia $via = null): bool
     {
+        $task    = $this->rows?->attach($task) ?? $task;
         $columns = $this->orderedColumns($task->getBoard());
         $index   = $this->currentColumnIndex($task, $columns);
         $target  = $index < 0 ? ($columns[0] ?? null) : ($columns[$index + 1] ?? null);
@@ -764,6 +777,7 @@ final readonly class TaskManager implements TaskManagerInterface
      */
     public function moveToDone(Task $task, object $user, ?ColumnTransitionVia $via = null): bool
     {
+        $task    = $this->rows?->attach($task) ?? $task;
         $columns = $this->orderedColumns($task->getBoard());
         if ($columns === []) {
             return false;
@@ -787,6 +801,7 @@ final readonly class TaskManager implements TaskManagerInterface
      */
     public function complete(Task $task, object $user, ?ColumnTransitionVia $via = null): bool
     {
+        $task = $this->rows?->attach($task) ?? $task;
         if ($task->isCompleted()) {
             return false;
         }
@@ -815,6 +830,7 @@ final readonly class TaskManager implements TaskManagerInterface
      */
     public function moveToColumn(Task $task, string $columnId, object $user, ?ColumnTransitionVia $via = null): bool
     {
+        $task = $this->rows?->attach($task) ?? $task;
         if ($columnId === '') {
             return false;
         }
@@ -956,6 +972,7 @@ final readonly class TaskManager implements TaskManagerInterface
      */
     public function restore(Task $task, object $user): bool
     {
+        $task = $this->rows?->attach($task) ?? $task;
         if (!$task->isArchived()) {
             return false;
         }
@@ -984,6 +1001,7 @@ final readonly class TaskManager implements TaskManagerInterface
      */
     public function archive(Task $task, object $user): bool
     {
+        $task = $this->rows?->attach($task) ?? $task;
         if ($task->isArchived()) {
             return false;
         }
@@ -1002,6 +1020,7 @@ final readonly class TaskManager implements TaskManagerInterface
      */
     public function recordRestored(Task $task, object $user): void
     {
+        $task = $this->rows?->attach($task) ?? $task;
         $this->changeRecorder->record($task, $user, TaskChangeType::Restored, null, 'manual');
         $this->taskRepository->save($task);
         $this->dispatch(TaskRestoredEvent::of($task, $user, $this->changeRecorder->currentCause()), TaskBoardEvents::TASK_RESTORED);

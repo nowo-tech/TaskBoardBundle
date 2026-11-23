@@ -4,18 +4,41 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Tests\Functional\PrivateEntityManager;
 
+use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use LogicException;
 use Nowo\TaskBoardBundle\Doctrine\TaskBoardEntityManager;
+use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
 use Nowo\TaskBoardBundle\Dto\TaskBoardFormData;
+use Nowo\TaskBoardBundle\Dto\TaskFormData;
+use Nowo\TaskBoardBundle\Dto\TaskLinkFormData;
+use Nowo\TaskBoardBundle\Dto\TaskMemberFormData;
+use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Entity\TaskChangeHistory;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
+use Nowo\TaskBoardBundle\Entity\TaskDependency;
+use Nowo\TaskBoardBundle\Entity\TaskLink;
+use Nowo\TaskBoardBundle\Entity\TaskMember;
+use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
+use Nowo\TaskBoardBundle\Enum\TaskDependencyType;
+use Nowo\TaskBoardBundle\Enum\TaskLinkType;
+use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
+use Nowo\TaskBoardBundle\Service\BoardColumnManagerInterface;
 use Nowo\TaskBoardBundle\Service\TaskBoardCreatorInterface;
 use Nowo\TaskBoardBundle\Service\TaskCommentManagerInterface;
+use Nowo\TaskBoardBundle\Service\TaskDependencyManager;
+use Nowo\TaskBoardBundle\Service\TaskLinkAttacher;
+use Nowo\TaskBoardBundle\Service\TaskManagerInterface;
+use Nowo\TaskBoardBundle\Service\TaskMemberAssigner;
+use Nowo\TaskBoardBundle\Service\TaskTimeLoggerInterface;
 use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\AppUser;
 use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\HostProject;
 use Nowo\TaskBoardBundle\Tests\Functional\FunctionalTestCase;
+use PHPUnit\Framework\Attributes\DataProvider;
+
+use function count;
 
 /**
  * Since 3.0.0 (REQ-ARCH-001 rule 6, audit lessons XS / W1-2): the private manager is the only mode, so both directions
@@ -151,6 +174,94 @@ final class HostEntitiesAcrossManagersTest extends FunctionalTestCase
         $this->host->flush();
 
         self::assertSame(1, $this->rows(HostProject::class, 'id = ? AND task_id = ?', [$project->id, $task->getId()]));
+    }
+
+    /**
+     * Since 3.0.0 (audit ZAS-1 / ZAS-2): each write service reads a board or task the application's manager holds again
+     * by id at its entry. TaskBoard's row is written once; the application's instance and its collections are never
+     * changed, so the application's next flush neither fails ("A new entity was found through ...") nor writes a row
+     * TaskBoard wrote or refused, and the application's own pending change is still written by it.
+     *
+     * @return iterable<string, array{string}>
+     */
+    public static function writesOnHostHeldRows(): iterable
+    {
+        yield 'add a column' => ['column'];
+        yield 'add a member' => ['member'];
+        yield 'log time' => ['time'];
+        yield 'attach a link' => ['link'];
+        yield 'add a dependency' => ['dependency'];
+        yield 'update (history)' => ['history'];
+    }
+
+    #[DataProvider('writesOnHostHeldRows')]
+    public function testAWriteOnARowTheApplicationHoldsLeavesTheApplicationsInstanceAlone(string $write): void
+    {
+        $board    = $this->board();
+        $task     = $this->task($board, 'Held');
+        $other    = $this->task($board, 'Other');
+        $hostTask = $this->host->find(Task::class, $task->getId());
+        $owner    = $this->host->find(AppUser::class, $this->owner->getId());
+        self::assertInstanceOf(Task::class, $hostTask);
+        self::assertInstanceOf(AppUser::class, $owner);
+        $hostBoard = $hostTask->getBoard();
+        $before    = [count($hostBoard->getColumns()), count($hostTask->getMembers()), count($hostTask->getTimeEntries()), count($hostTask->getLinks()), count($hostTask->getOutgoingDependencies()), count($hostTask->getChangeHistory())];
+        $owner->setDisplayName('Pending application change');
+
+        [$table, $where] = match ($write) {
+            'column'     => $this->write(BoardColumnManagerInterface::class, static fn (BoardColumnManagerInterface $s): object => $s->add($hostBoard, new BoardColumnFormData('Review'), $owner), BoardColumn::class, 'name = ?', ['Review']),
+            'member'     => $this->write(TaskMemberAssigner::class, static fn (TaskMemberAssigner $s): object => $s->assign($hostTask, new TaskMemberFormData($owner, TaskMemberRole::Watcher), $owner), TaskMember::class, 'task_id = ?', [$task->getId()]),
+            'time'       => $this->write(TaskTimeLoggerInterface::class, static fn (TaskTimeLoggerInterface $s): object => $s->log($hostTask, $owner, 30, new DateTimeImmutable('2026-11-20')), TaskTimeEntry::class, 'task_id = ?', [$task->getId()]),
+            'link'       => $this->write(TaskLinkAttacher::class, static fn (TaskLinkAttacher $s): object => $s->attach($hostTask, new TaskLinkFormData(TaskLinkType::Url, 'https://example.com/spec'), $owner), TaskLink::class, 'task_id = ?', [$task->getId()]),
+            'dependency' => $this->write(TaskDependencyManager::class, fn (TaskDependencyManager $s): object => $s->add($hostTask, $this->host->find(Task::class, $other->getId()) ?? $other, TaskDependencyType::Blocks, $owner), TaskDependency::class, 'source_task_id = ?', [$task->getId()]),
+            'history'    => $this->write(TaskManagerInterface::class, static function (TaskManagerInterface $s) use ($hostTask, $owner): object {
+                $s->update($hostTask, new TaskFormData('Renamed'), $owner);
+
+                return $hostTask;
+            }, TaskChangeHistory::class, 'task_id = ? AND change_type = ?', [$task->getId(), 'title']),
+        };
+
+        self::assertSame(1, $this->rows($table, $where[0], $where[1]), 'TaskBoard wrote its row once');
+        self::assertSame($before, [count($hostBoard->getColumns()), count($hostTask->getMembers()), count($hostTask->getTimeEntries()), count($hostTask->getLinks()), count($hostTask->getOutgoingDependencies()), count($hostTask->getChangeHistory())], 'the application\'s instance is unchanged');
+        self::assertSame('Held', $hostTask->getTitle());
+
+        $this->host->flush();
+        self::assertSame(1, $this->rows($table, $where[0], $where[1]), 'the application\'s flush wrote no TaskBoard row');
+        self::assertSame('Pending application change', $this->connectionValue('SELECT display_name FROM ' . $this->table(AppUser::class) . ' WHERE id = ?', [$owner->getId()]));
+    }
+
+    /** A row the application's manager holds that no longer exists is refused clearly. */
+    public function testARowTheApplicationHoldsThatIsGoneIsRefused(): void
+    {
+        $task     = $this->task($this->board(), 'Gone');
+        $hostTask = $this->host->find(Task::class, $task->getId());
+        self::assertInstanceOf(Task::class, $hostTask);
+        $this->host->getConnection()->executeStatement('DELETE FROM ' . $this->table(Task::class) . ' WHERE id = ?', [$task->getId()]);
+        $this->privateManager()->clear();
+
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage('no longer exists');
+
+        $this->privateManager()->attach($hostTask);
+    }
+
+    /**
+     * @template S of object
+     *
+     * @param class-string<S> $service
+     * @param callable(S): object $call
+     * @param class-string $rowClass
+     * @param list<mixed> $parameters
+     *
+     * @return array{class-string, array{string, list<mixed>}}
+     */
+    private function write(string $service, callable $call, string $rowClass, string $where, array $parameters): array
+    {
+        $instance = self::getContainer()->get($service);
+        self::assertInstanceOf($service, $instance);
+        $call($instance);
+
+        return [$rowClass, [$where, $parameters]];
     }
 
     private function creator(): TaskBoardCreatorInterface

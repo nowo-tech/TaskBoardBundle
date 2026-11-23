@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Service;
 
 use InvalidArgumentException;
+use Nowo\TaskBoardBundle\Doctrine\TaskBoardEntityManager;
 use Nowo\TaskBoardBundle\Dto\TaskMemberFormData;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
@@ -44,6 +45,9 @@ final readonly class TaskMemberAssigner
         private ?EventDispatcherInterface $eventDispatcher = null,
         // Since 2.29.0: finds the user of `TaskMemberFormData::$userId`.
         private ?TaskBoardUserLocator $users = null,
+        // Since 3.0.0 (audit ZAS-1 / ZAS-2): TaskBoard rows the application's manager holds are read again by id at
+        // each write entry (none: a service built by hand works on the rows it is given, as in 2.x).
+        private ?TaskBoardEntityManager $rows = null,
     ) {
     }
 
@@ -70,6 +74,7 @@ final readonly class TaskMemberAssigner
      */
     public function assign(Task $task, TaskMemberFormData $data, object $actor): TaskMember
     {
+        $task = $this->rows?->attach($task) ?? $task;
         if (!is_object($data->user) && $data->userId !== null) {
             // Since 2.29.0: the user by id, looked up again (exact id); nobody behind it is refused like an unassignable user.
             $found = UserRef::isValid($data->userId) ? $this->users?->find(new UserRef($data->userId)) : null;
@@ -114,6 +119,7 @@ final readonly class TaskMemberAssigner
 
     public function unassign(Task $task, string $memberId, object $actor): bool
     {
+        $task = $this->rows?->attach($task) ?? $task;
         foreach ($task->getMembers() as $member) {
             if ($member->getId() !== $memberId) {
                 continue;

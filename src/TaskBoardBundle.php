@@ -8,6 +8,7 @@ use Nowo\TaskBoardBundle\DependencyInjection\Compiler\PrivateEntityManagerPass;
 use Nowo\TaskBoardBundle\DependencyInjection\Compiler\PrivateEntityManagerReferencesPass;
 use Nowo\TaskBoardBundle\DependencyInjection\Compiler\RemovedPortsPass;
 use Nowo\TaskBoardBundle\DependencyInjection\Compiler\TaskBoardPortsPass;
+use Nowo\TaskBoardBundle\DependencyInjection\Compiler\TimeTrackScopePortPass;
 use Nowo\TaskBoardBundle\DependencyInjection\Compiler\TwigPathsPass;
 use Nowo\TaskBoardBundle\DependencyInjection\TaskBoardExtension;
 use Symfony\Component\DependencyInjection\Compiler\PassConfig;
@@ -32,6 +33,8 @@ final class TaskBoardBundle extends Bundle
         // and the bundle services moved onto the private manager once autowiring is done.
         $container->addCompilerPass(new PrivateEntityManagerPass(), PassConfig::TYPE_BEFORE_OPTIMIZATION, 10);
         $container->addCompilerPass(new PrivateEntityManagerReferencesPass(), PassConfig::TYPE_BEFORE_REMOVING);
+        // Since 3.0.0 (audit ZAS-3): TimeTrack 2.0 must serve its scope port under the id the bridge asks for.
+        $container->addCompilerPass(new TimeTrackScopePortPass(), PassConfig::TYPE_BEFORE_OPTIMIZATION, -100);
     }
 
     public function getContainerExtension(): ExtensionInterface

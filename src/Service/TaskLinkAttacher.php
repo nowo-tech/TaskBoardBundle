@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Service;
 
+use Nowo\TaskBoardBundle\Doctrine\TaskBoardEntityManager;
 use Nowo\TaskBoardBundle\Dto\TaskLinkFormData;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskLink;
@@ -31,11 +32,15 @@ final readonly class TaskLinkAttacher
         private TaskChangeRecorder $changeRecorder,
         // Since 2.11.0 (DDD audit G3): dispatches TASK_LINK_ADDED / TASK_LINK_UPDATED / TASK_LINK_REMOVED (none: no event).
         private ?EventDispatcherInterface $eventDispatcher = null,
+        // Since 3.0.0 (audit ZAS-1 / ZAS-2): TaskBoard rows the application's manager holds are read again by id at
+        // each write entry (none: a service built by hand works on the rows it is given, as in 2.x).
+        private ?TaskBoardEntityManager $rows = null,
     ) {
     }
 
     public function attach(Task $task, TaskLinkFormData $data, object $user): TaskLink
     {
+        $task                            = $this->rows?->attach($task) ?? $task;
         [$linkType, $label, $externalId] = $this->resolveLinkMeta($data);
 
         $link = new TaskLink(
@@ -67,6 +72,7 @@ final readonly class TaskLinkAttacher
      */
     public function attachObject(Task $task, string $objectType, string $objectId, object $user, ?string $label = null): TaskLink
     {
+        $task = $this->rows?->attach($task) ?? $task;
         foreach ($task->getLinks() as $existing) {
             if ($existing->isHostObjectOf($objectType, $objectId)) {
                 return $existing;
@@ -94,6 +100,7 @@ final readonly class TaskLinkAttacher
      */
     public function detachObject(Task $task, string $objectType, string $objectId, object $user): bool
     {
+        $task = $this->rows?->attach($task) ?? $task;
         foreach ($task->getLinks() as $link) {
             if ($link->isHostObjectOf($objectType, $objectId)) {
                 return $this->remove($task, $link->getId(), $user);
@@ -105,6 +112,7 @@ final readonly class TaskLinkAttacher
 
     public function update(Task $task, string $linkId, TaskLinkFormData $data, object $user): bool
     {
+        $task = $this->rows?->attach($task) ?? $task;
         $link = $this->findLink($task, $linkId);
         if (!$link instanceof TaskLink) {
             return false;
@@ -139,6 +147,7 @@ final readonly class TaskLinkAttacher
 
     public function remove(Task $task, string $linkId, object $user): bool
     {
+        $task = $this->rows?->attach($task) ?? $task;
         $link = $this->findLink($task, $linkId);
         if (!$link instanceof TaskLink) {
             return false;

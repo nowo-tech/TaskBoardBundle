@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\Service;
 
 use InvalidArgumentException;
 use Nowo\TaskBoardBundle\Comment\MentionCandidate;
+use Nowo\TaskBoardBundle\Doctrine\TaskBoardEntityManager;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
@@ -43,6 +44,9 @@ final readonly class TaskCommentManager implements TaskCommentManagerInterface
         private ?TaskChangeContext $changeContext = null,
         // Since 2.18.0 (Beacon spec 234): the host's provenance of the comments added and edited.
         private ?WriteProvenanceProviderInterface $provenance = null,
+        // Since 3.0.0 (audit ZAS-1 / ZAS-2): TaskBoard rows the application's manager holds are read again by id at
+        // each write entry (none: a service built by hand works on the rows it is given, as in 2.x).
+        private ?TaskBoardEntityManager $rows = null,
     ) {
     }
 
@@ -53,6 +57,7 @@ final readonly class TaskCommentManager implements TaskCommentManagerInterface
      */
     public function add(Task $task, object $author, string $body, array $mentionIds = []): TaskComment
     {
+        $task                   = $this->rows?->attach($task) ?? $task;
         $body                   = $this->normalize($body);
         [$mentions, $mentioned] = $this->resolveMentions($task, $body, $mentionIds);
 
@@ -71,6 +76,7 @@ final readonly class TaskCommentManager implements TaskCommentManagerInterface
      */
     public function edit(TaskComment $comment, object $editor, string $body, array $mentionIds = []): void
     {
+        $comment                = $this->rows?->attach($comment) ?? $comment;
         $body                   = $this->normalize($body);
         $before                 = $comment->getMentionedIds();
         [$mentions, $mentioned] = $this->resolveMentions($comment->getTask(), $body, $mentionIds);
@@ -86,6 +92,7 @@ final readonly class TaskCommentManager implements TaskCommentManagerInterface
      */
     public function delete(TaskComment $comment, ?object $actor = null): void
     {
+        $comment = $this->rows?->attach($comment) ?? $comment;
         $comment->markDeleted();
         $this->comments->save($comment);
         $this->dispatch(TaskCommentDeletedEvent::of($comment, $actor, $this->changeContext?->current()), TaskBoardEvents::TASK_COMMENT_DELETED);

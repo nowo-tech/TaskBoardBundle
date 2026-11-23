@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Service;
 
+use Nowo\TaskBoardBundle\Doctrine\TaskBoardEntityManager;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoardFolder;
 use Nowo\TaskBoardBundle\Entity\TaskDependency;
@@ -42,6 +43,9 @@ final readonly class TaskDependencyManager
         private ?TaskBoardFolderManager $folders = null,
         // Since 2.16.0 (spec 234): the reverse lookup of blocked_by (none: the task's loaded relations).
         private ?TaskDependentsLookupInterface $dependents = null,
+        // Since 3.0.0 (audit ZAS-1 / ZAS-2): TaskBoard rows the application's manager holds are read again by id at
+        // each write entry (none: a service built by hand works on the rows it is given, as in 2.x).
+        private ?TaskBoardEntityManager $rows = null,
     ) {
     }
 
@@ -75,6 +79,8 @@ final readonly class TaskDependencyManager
      */
     public function add(Task $task, Task $other, TaskDependencyType $type, object $user): TaskDependency
     {
+        $task  = $this->rows?->attach($task) ?? $task;
+        $other = $this->rows?->attach($other) ?? $other;
         if ($task->getId() === $other->getId()) {
             throw InvalidTaskDependencyException::self();
         }
@@ -115,6 +121,7 @@ final readonly class TaskDependencyManager
      */
     public function remove(Task $task, string $dependencyId, object $user): bool
     {
+        $task = $this->rows?->attach($task) ?? $task;
         foreach ([...$task->getOutgoingDependencies(), ...$task->getIncomingDependencies()] as $dependency) {
             if ($dependency->getId() !== $dependencyId) {
                 continue;

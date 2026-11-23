@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Service;
 
 use DateTimeImmutable;
+use Nowo\TaskBoardBundle\Doctrine\TaskBoardEntityManager;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
 use Nowo\TaskBoardBundle\Enum\TaskChangeType;
@@ -33,6 +34,9 @@ final readonly class TaskTimeLogger implements TaskTimeLoggerInterface
         private ?EventDispatcherInterface $eventDispatcher = null,
         // Since 2.12.0: the default `billable` of an entry logged without one (none: the flag stays unset).
         private TaskTimeBillableDefaultProviderInterface $billableDefaults = new NullTaskTimeBillableDefaultProvider(),
+        // Since 3.0.0 (audit ZAS-1 / ZAS-2): TaskBoard rows the application's manager holds are read again by id at
+        // each write entry (none: a service built by hand works on the rows it is given, as in 2.x).
+        private ?TaskBoardEntityManager $rows = null,
     ) {
     }
 
@@ -42,6 +46,7 @@ final readonly class TaskTimeLogger implements TaskTimeLoggerInterface
      */
     public function log(Task $task, object $user, int $minutes, DateTimeImmutable $date, ?string $note = null, ?bool $billable = null): TaskTimeEntry
     {
+        $task  = $this->rows?->attach($task) ?? $task;
         $note  = $note !== null && trim($note) !== '' ? trim($note) : null;
         $entry = new TaskTimeEntry($task, $user, $minutes, $date, $note);
         $entry->markBillable($billable ?? $this->billableDefaults->defaultFor($user, $task->getId(), $task->getBoard()->getId()));
@@ -60,6 +65,7 @@ final readonly class TaskTimeLogger implements TaskTimeLoggerInterface
      */
     public function remove(Task $task, string $entryId, object $user): bool
     {
+        $task = $this->rows?->attach($task) ?? $task;
         foreach ($task->getTimeEntries() as $entry) {
             if ($entry->getId() !== $entryId) {
                 continue;
