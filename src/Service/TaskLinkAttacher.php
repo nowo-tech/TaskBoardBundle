@@ -40,7 +40,7 @@ final readonly class TaskLinkAttacher
 
     public function attach(Task $task, TaskLinkFormData $data, object $user): TaskLink
     {
-        $task                            = $this->rows?->attach($task) ?? $task;
+        $task                            = $this->own($task);
         [$linkType, $label, $externalId] = $this->resolveLinkMeta($data);
 
         $link = new TaskLink(
@@ -51,6 +51,7 @@ final readonly class TaskLinkAttacher
             externalId: $externalId,
         );
 
+        // @igor-ignore - Request data: the row the caller passed, or TaskBoard's own copy of it (own(), audit ZAS-1); not service state.
         $task->addLink($link);
         $this->changeRecorder->record(
             $task,
@@ -72,7 +73,7 @@ final readonly class TaskLinkAttacher
      */
     public function attachObject(Task $task, string $objectType, string $objectId, object $user, ?string $label = null): TaskLink
     {
-        $task = $this->rows?->attach($task) ?? $task;
+        $task = $this->own($task);
         foreach ($task->getLinks() as $existing) {
             if ($existing->isHostObjectOf($objectType, $objectId)) {
                 return $existing;
@@ -80,6 +81,7 @@ final readonly class TaskLinkAttacher
         }
 
         $link = TaskLink::forHostObject($task, $objectType, $objectId, $label);
+        // @igor-ignore - Request data: the row the caller passed, or TaskBoard's own copy of it (own(), audit ZAS-1); not service state.
         $task->addLink($link);
         $this->changeRecorder->record(
             $task,
@@ -100,7 +102,7 @@ final readonly class TaskLinkAttacher
      */
     public function detachObject(Task $task, string $objectType, string $objectId, object $user): bool
     {
-        $task = $this->rows?->attach($task) ?? $task;
+        $task = $this->own($task);
         foreach ($task->getLinks() as $link) {
             if ($link->isHostObjectOf($objectType, $objectId)) {
                 return $this->remove($task, $link->getId(), $user);
@@ -112,7 +114,7 @@ final readonly class TaskLinkAttacher
 
     public function update(Task $task, string $linkId, TaskLinkFormData $data, object $user): bool
     {
-        $task = $this->rows?->attach($task) ?? $task;
+        $task = $this->own($task);
         $link = $this->findLink($task, $linkId);
         if (!$link instanceof TaskLink) {
             return false;
@@ -147,7 +149,7 @@ final readonly class TaskLinkAttacher
 
     public function remove(Task $task, string $linkId, object $user): bool
     {
-        $task = $this->rows?->attach($task) ?? $task;
+        $task = $this->own($task);
         $link = $this->findLink($task, $linkId);
         if (!$link instanceof TaskLink) {
             return false;
@@ -157,6 +159,7 @@ final readonly class TaskLinkAttacher
         $url     = $link->isHostObject() ? $link->getObjectType() . ':' . $link->getObjectId() : $link->getUrl();
 
         $event = TaskLinkRemovedEvent::of($link, $user, $this->changeRecorder->currentCause());
+        // @igor-ignore - Request data: the row the caller passed, or TaskBoard's own copy of it (own(), audit ZAS-1); not service state.
         $task->removeLink($link);
         $this->changeRecorder->record(
             $task,
@@ -221,5 +224,20 @@ final readonly class TaskLinkAttacher
             return;
         }
         $this->eventDispatcher?->dispatch($event, $eventName);
+    }
+
+    /**
+     * Since 3.0.0 (audit ZAS-1 / ZAS-2): TaskBoard's own copy of a row the application's manager holds (read again by id),
+     * else the row itself. The row is request data handed in by the caller, never service state.
+     *
+     * @template T of object
+     *
+     * @param T $row
+     *
+     * @return T
+     */
+    private function own(object $row): object
+    {
+        return $this->rows instanceof TaskBoardEntityManager ? $this->rows->attach($row) : $row;
     }
 }

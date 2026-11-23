@@ -57,7 +57,7 @@ final readonly class TaskCommentManager implements TaskCommentManagerInterface
      */
     public function add(Task $task, object $author, string $body, array $mentionIds = []): TaskComment
     {
-        $task                   = $this->rows?->attach($task) ?? $task;
+        $task                   = $this->own($task);
         $body                   = $this->normalize($body);
         [$mentions, $mentioned] = $this->resolveMentions($task, $body, $mentionIds);
 
@@ -76,7 +76,7 @@ final readonly class TaskCommentManager implements TaskCommentManagerInterface
      */
     public function edit(TaskComment $comment, object $editor, string $body, array $mentionIds = []): void
     {
-        $comment                = $this->rows?->attach($comment) ?? $comment;
+        $comment                = $this->own($comment);
         $body                   = $this->normalize($body);
         $before                 = $comment->getMentionedIds();
         [$mentions, $mentioned] = $this->resolveMentions($comment->getTask(), $body, $mentionIds);
@@ -92,7 +92,7 @@ final readonly class TaskCommentManager implements TaskCommentManagerInterface
      */
     public function delete(TaskComment $comment, ?object $actor = null): void
     {
-        $comment = $this->rows?->attach($comment) ?? $comment;
+        $comment = $this->own($comment);
         $comment->markDeleted();
         $this->comments->save($comment);
         $this->dispatch(TaskCommentDeletedEvent::of($comment, $actor, $this->changeContext?->current()), TaskBoardEvents::TASK_COMMENT_DELETED);
@@ -172,5 +172,20 @@ final readonly class TaskCommentManager implements TaskCommentManagerInterface
     private function dispatch(object $event, string $name): void
     {
         $this->eventDispatcher?->dispatch($event, $name);
+    }
+
+    /**
+     * Since 3.0.0 (audit ZAS-1 / ZAS-2): TaskBoard's own copy of a row the application's manager holds (read again by id),
+     * else the row itself. The row is request data handed in by the caller, never service state.
+     *
+     * @template T of object
+     *
+     * @param T $row
+     *
+     * @return T
+     */
+    private function own(object $row): object
+    {
+        return $this->rows instanceof TaskBoardEntityManager ? $this->rows->attach($row) : $row;
     }
 }

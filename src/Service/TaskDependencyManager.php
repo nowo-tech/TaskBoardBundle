@@ -79,8 +79,8 @@ final readonly class TaskDependencyManager
      */
     public function add(Task $task, Task $other, TaskDependencyType $type, object $user): TaskDependency
     {
-        $task  = $this->rows?->attach($task) ?? $task;
-        $other = $this->rows?->attach($other) ?? $other;
+        $task  = $this->own($task);
+        $other = $this->own($other);
         if ($task->getId() === $other->getId()) {
             throw InvalidTaskDependencyException::self();
         }
@@ -108,6 +108,7 @@ final readonly class TaskDependencyManager
         }
 
         $dependency = new TaskDependency($task, $other, $type);
+        // @igor-ignore - Request data: the row the caller passed, or TaskBoard's own copy of it (own(), audit ZAS-1); not service state.
         $task->addOutgoingDependency($dependency);
         $this->changeRecorder->record($task, $user, TaskChangeType::DependencyAdded, null, $other->getTitle(), $type->relation());
         $this->taskRepository->save($task);
@@ -121,7 +122,7 @@ final readonly class TaskDependencyManager
      */
     public function remove(Task $task, string $dependencyId, object $user): bool
     {
-        $task = $this->rows?->attach($task) ?? $task;
+        $task = $this->own($task);
         foreach ([...$task->getOutgoingDependencies(), ...$task->getIncomingDependencies()] as $dependency) {
             if ($dependency->getId() !== $dependencyId) {
                 continue;
@@ -132,6 +133,7 @@ final readonly class TaskDependencyManager
             $relation = $dependency->getDependencyType()->relation(!$outgoing);
 
             $event = TaskDependencyRemovedEvent::of($task, $dependency, $user, $this->changeRecorder->currentCause());
+            // @igor-ignore - Request data: the row the caller passed, or TaskBoard's own copy of it (own(), audit ZAS-1); not service state.
             $task->removeDependency($dependency);
             $this->changeRecorder->record($task, $user, TaskChangeType::DependencyRemoved, $other->getTitle(), null, $relation);
             $this->taskRepository->save($task);
@@ -287,5 +289,20 @@ final readonly class TaskDependencyManager
         }
 
         return $tasks;
+    }
+
+    /**
+     * Since 3.0.0 (audit ZAS-1 / ZAS-2): TaskBoard's own copy of a row the application's manager holds (read again by id),
+     * else the row itself. The row is request data handed in by the caller, never service state.
+     *
+     * @template T of object
+     *
+     * @param T $row
+     *
+     * @return T
+     */
+    private function own(object $row): object
+    {
+        return $this->rows instanceof TaskBoardEntityManager ? $this->rows->attach($row) : $row;
     }
 }

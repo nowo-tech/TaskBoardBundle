@@ -74,7 +74,7 @@ final readonly class TaskMemberAssigner
      */
     public function assign(Task $task, TaskMemberFormData $data, object $actor): TaskMember
     {
-        $task = $this->rows?->attach($task) ?? $task;
+        $task = $this->own($task);
         if (!is_object($data->user) && $data->userId !== null) {
             // Since 2.29.0: the user by id, looked up again (exact id); nobody behind it is refused like an unassignable user.
             $found = UserRef::isValid($data->userId) ? $this->users?->find(new UserRef($data->userId)) : null;
@@ -109,6 +109,7 @@ final readonly class TaskMemberAssigner
             memberRole: $data->memberRole,
         );
 
+        // @igor-ignore - Request data: the row the caller passed, or TaskBoard's own copy of it (own(), audit ZAS-1); not service state.
         $task->addMember($member);
         $this->changeRecorder->recordMember($task, $actor, TaskChangeType::MemberAdded, $data->user, $data->memberRole->value, $this->userLabel($data->user));
         $this->taskRepository->save($task);
@@ -119,7 +120,7 @@ final readonly class TaskMemberAssigner
 
     public function unassign(Task $task, string $memberId, object $actor): bool
     {
-        $task = $this->rows?->attach($task) ?? $task;
+        $task = $this->own($task);
         foreach ($task->getMembers() as $member) {
             if ($member->getId() !== $memberId) {
                 continue;
@@ -127,6 +128,7 @@ final readonly class TaskMemberAssigner
 
             $event = TaskMemberRemovedEvent::of($task, $member, $actor, $this->changeRecorder->currentCause());
             $this->changeRecorder->recordMember($task, $actor, TaskChangeType::MemberRemoved, $member->getUser(), $member->getMemberRole()->value, $this->userLabel($member->getUser()));
+            // @igor-ignore - Request data: the row the caller passed, or TaskBoard's own copy of it (own(), audit ZAS-1); not service state.
             $task->removeMember($member);
             $this->taskRepository->save($task);
             $this->dispatchSaved($event, TaskBoardEvents::TASK_MEMBER_REMOVED);
@@ -168,5 +170,20 @@ final readonly class TaskMemberAssigner
             return;
         }
         $this->eventDispatcher?->dispatch($event, $eventName);
+    }
+
+    /**
+     * Since 3.0.0 (audit ZAS-1 / ZAS-2): TaskBoard's own copy of a row the application's manager holds (read again by id),
+     * else the row itself. The row is request data handed in by the caller, never service state.
+     *
+     * @template T of object
+     *
+     * @param T $row
+     *
+     * @return T
+     */
+    private function own(object $row): object
+    {
+        return $this->rows instanceof TaskBoardEntityManager ? $this->rows->attach($row) : $row;
     }
 }

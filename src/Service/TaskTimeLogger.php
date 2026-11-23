@@ -46,11 +46,12 @@ final readonly class TaskTimeLogger implements TaskTimeLoggerInterface
      */
     public function log(Task $task, object $user, int $minutes, DateTimeImmutable $date, ?string $note = null, ?bool $billable = null): TaskTimeEntry
     {
-        $task  = $this->rows?->attach($task) ?? $task;
+        $task  = $this->own($task);
         $note  = $note !== null && trim($note) !== '' ? trim($note) : null;
         $entry = new TaskTimeEntry($task, $user, $minutes, $date, $note);
         $entry->markBillable($billable ?? $this->billableDefaults->defaultFor($user, $task->getId(), $task->getBoard()->getId()));
 
+        // @igor-ignore - Request data: the row the caller passed, or TaskBoard's own copy of it (own(), audit ZAS-1); not service state.
         $task->addTimeEntry($entry);
         $this->changeRecorder->record($task, $user, TaskChangeType::TimeLogged, null, (string) $minutes, $date->format('Y-m-d'));
         $this->taskRepository->save($task);
@@ -65,13 +66,14 @@ final readonly class TaskTimeLogger implements TaskTimeLoggerInterface
      */
     public function remove(Task $task, string $entryId, object $user): bool
     {
-        $task = $this->rows?->attach($task) ?? $task;
+        $task = $this->own($task);
         foreach ($task->getTimeEntries() as $entry) {
             if ($entry->getId() !== $entryId) {
                 continue;
             }
 
             $event = TaskTimeRemovedEvent::of($task, $entry, $user, $this->changeRecorder->currentCause());
+            // @igor-ignore - Request data: the row the caller passed, or TaskBoard's own copy of it (own(), audit ZAS-1); not service state.
             $task->removeTimeEntry($entry);
             // @igor-ignore - Repository write of this request's entry; the repository keeps no state of its own.
             $this->timeEntryRepository->remove($entry);
@@ -94,5 +96,20 @@ final readonly class TaskTimeLogger implements TaskTimeLoggerInterface
             return;
         }
         $this->eventDispatcher?->dispatch($event, $eventName);
+    }
+
+    /**
+     * Since 3.0.0 (audit ZAS-1 / ZAS-2): TaskBoard's own copy of a row the application's manager holds (read again by id),
+     * else the row itself. The row is request data handed in by the caller, never service state.
+     *
+     * @template T of object
+     *
+     * @param T $row
+     *
+     * @return T
+     */
+    private function own(object $row): object
+    {
+        return $this->rows instanceof TaskBoardEntityManager ? $this->rows->attach($row) : $row;
     }
 }
