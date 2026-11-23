@@ -132,13 +132,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- A `_target_path` with dot segments (`/tools/task-board/../x`, `%2e`) no longer turns a committed dialog write into a 500 (audit TB-L1). `safeTargetPath()` (manage and menu controllers) and `TaskQuestionController::targetPath()` validate the target with UiKit's `RemoteDialogTarget::tryPath()` (same rules as the dialog redirect); a refused target falls back to the default task URL, so the dialog closes normally and the user is not invited to submit a second time (a duplicate time entry).
-
 ### Added
 
+- Beacon request, **a cheap *to answer* count for a menu badge**: `TaskQuestionView::countToAnswer()` answers how many
+  rows *My open questions* lists in its `to_answer` tab (`mine()`) for the signed-in viewer, with the same rules: the
+  viewer's subject ids (compared byte for byte, REQ-SEC-006), the tenant rule (deny by default: 0 on a tenant URL that
+  does not resolve for the viewer; outside one, boards of tenants the resolver opens to them by key) and
+  `canViewTask()`. It reads no question and builds no URL: one query reads the boards of the viewer's open questions,
+  each passes the board rule (BOARD_ACCESS_CHECK, the viewer's teams read once); without a TASK_ACCESS_CHECK listener one
+  query counts on the boards the viewer may see. On the other boards (on every board with such a listener) one query
+  reads the candidate tasks with their members, each is decided in PHP exactly as `canViewTask()` decides it
+  (TASK_ACCESS_CHECK, the board, then the participants compared byte for byte: audit ZAK-1), then one query counts on
+  the visible ones. The number of queries does not grow with the number of open questions (tested at 5 and 300). Unlike
+  the list, the count is not cut at `TaskQuestionQuery::MY_QUESTIONS_CAP` (500) candidates.
+  - `Question\TaskQuestionCountsInterface` (public alias of the view, with `task_questions.enabled`) for a DDD host's
+    badge; the bundle implements it, hosts do not.
+  - Twig: `nowo_task_board_my_questions_count()` (0 with the feature off).
+  - `TaskQuestionQuery::boardsOpenForSubjects()`, `tasksOpenForSubjects()`, `countOpenForSubjects()`,
+    `countOpenOnTasks()` and `TaskBoardResourceAccessChecker::taskListenersMayDecide()`.
 - **Console**: `task-board.js` (the same build time is still stamped on `<html data-task-board-build>`) logs one line on load, `📦 [task-board] script loaded, build: 2026-11-23 14:05 UTC`, with the house `createBundleLogger`. The build time is read from the committed `build-info.json` (`{sourceHash, builtAt}`): it is reused while the sources are unchanged and renewed only when they change, so rebuilding unchanged sources never rewrites the committed assets (no wall-clock stamp, no user data). Quiet switch: `<html data-nowo-console="quiet">` or `globalThis.NOWO_CONSOLE = 'quiet'` prints nothing; the default is unchanged.
+
+### Fixed
+
+- *My open questions*, tab *Asked* (`TaskQuestionQuery::openAskedBy()`, the page, the widget and `mine('asked')`):
+  the asker is bound as `TaskBoardUsers::parameter()` (the user entity in relation mode, so Doctrine converts its id with
+  the id's own type) instead of its id as a string. With `database.user_reference: entity` and a user key stored as
+  binary (a binary Uuid), the tab listed none of the viewer's questions (audit ZAK-2; fails closed, no leak). The rows
+  are still compared exactly in PHP.
+- A `_target_path` with dot segments (`/tools/task-board/../x`, `%2e`) no longer turns a committed dialog write into a 500 (audit TB-L1). `safeTargetPath()` (manage and menu controllers) and `TaskQuestionController::targetPath()` validate the target with UiKit's `RemoteDialogTarget::tryPath()` (same rules as the dialog redirect); a refused target falls back to the default task URL, so the dialog closes normally and the user is not invited to submit a second time (a duplicate time entry).
 
 ## [2.31.0] - 2026-11-23
 

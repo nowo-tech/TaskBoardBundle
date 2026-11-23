@@ -150,6 +150,8 @@ final class FunctionalKernel extends Kernel
         $container->services()->set('app.question_publisher', ScriptedQuestionPublisher::class)->public();
         $container->services()->set('app.question_links', ScriptedQuestionLinks::class)->public();
         $container->services()->set('app.question_recipients', ScriptedQuestionRecipients::class)->autowire()->public();
+        // Since 2.32.0: the user directory of a test with `database.user_reference: id`.
+        $container->services()->set('app.no_user_directory', NoUserDirectory::class);
         $container->services()->set('app.switchable_provenance', SwitchableWriteProvenance::class);
         // Since 2.23.1: a tenant resolver that opens a tenant to its members only (My open questions under tenancy).
         $container->services()->set('app.member_tenant_resolver', MemberTenantResolver::class);

@@ -29,6 +29,11 @@ services:
             $tokenStorage: '@?security.token_storage'
             $tenantContext: '@?Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext'
 
+    # Since 2.32.0: the viewer's question counts (a host's menu badge). Public: a host may fetch it in process.
+    Nowo\TaskBoardBundle\Question\TaskQuestionCountsInterface:
+        alias: Nowo\TaskBoardBundle\Question\TaskQuestionView
+        public: true
+
     Nowo\TaskBoardBundle\Controller\TaskQuestionController:
         public: true
         # REQ-SF-004 rule 7: #[Route] attributes, read by the route loader; not autoconfigured.

@@ -9,6 +9,7 @@ use Nowo\TaskBoardBundle\Dto\TaskQuestionAnswerFormData;
 use Nowo\TaskBoardBundle\Dto\TaskQuestionFormData;
 use Nowo\TaskBoardBundle\Dto\TaskQuestionWithdrawFormData;
 use Nowo\TaskBoardBundle\Entity\Task;
+use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Form\CsrfActionType;
 use Nowo\TaskBoardBundle\Form\TaskQuestionAnswerFormType;
 use Nowo\TaskBoardBundle\Form\TaskQuestionFormType;
@@ -29,7 +30,9 @@ use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
 
+use function array_diff;
 use function array_filter;
+use function array_keys;
 use function array_map;
 use function array_slice;
 use function array_values;
@@ -38,6 +41,7 @@ use function in_array;
 use function parse_url;
 use function str_replace;
 use function strtolower;
+use function strval;
 
 use const PHP_URL_SCHEME;
 
@@ -49,7 +53,7 @@ use const PHP_URL_SCHEME;
  *
  * Stateless (worker mode): every call reads what it needs; nothing is kept for later calls.
  */
-final readonly class TaskQuestionView
+final readonly class TaskQuestionView implements TaskQuestionCountsInterface
 {
     /** The tabs of *my open questions*. */
     public const TAB_TO_ANSWER = 'to_answer';
@@ -186,25 +190,101 @@ final readonly class TaskQuestionView
         $tenants = [];
         $visible = array_values(array_filter($candidates, function (TaskQuestion $question) use ($user, $context, $tenant, &$tenants): bool {
             $task = $question->getTask();
-            $key  = $task->getBoard()->getTenantKey();
-            if ($tenant instanceof TaskBoardTenant) {
-                if ($key !== $tenant->key) {
-                    return false;
-                }
-            } elseif ($context instanceof TaskBoardTenantContext) {
-                if ($key === null) {
-                    return false;
-                }
-                $tenants[$key] ??= $context->tenantOfKey($key, $user) instanceof TaskBoardTenant;
-                if (!$tenants[$key]) {
-                    return false;
-                }
-            }
 
-            return $this->access->canViewTask($user, $task);
+            return $this->tenantCounts($task->getBoard()->getTenantKey(), $user, $context, $tenant, $tenants) && $this->access->canViewTask($user, $task);
         }));
 
         return $limit === null ? $visible : array_slice($visible, 0, $limit);
+    }
+
+    /**
+     * Since 2.32.0 (Beacon request, a menu badge on every page): how many rows {@see self::mine()} lists in the
+     * `to_answer` tab, without reading them. The same rules — the viewer's subject ids, the tenant rule (deny by default),
+     * {@see TaskBoardResourceAccessChecker::canViewTask()} — in a constant number of queries whatever the number of
+     * questions: no question is read, no task access is checked one by one and no URL is built.
+     *
+     * 1. One query reads the boards of the viewer's open questions; each passes the tenant rule and the board rule
+     *    ({@see TaskBoardResourceAccessChecker::boardViewDecider()}: BOARD_ACCESS_CHECK per board, the viewer's teams read
+     *    once).
+     * 2. Without a TASK_ACCESS_CHECK listener, one query counts the open questions on the boards the viewer may see.
+     * 3. On the other boards (on every board with such a listener), one query reads the candidate tasks with their
+     *    members and each passes {@see TaskBoardResourceAccessChecker::taskViewDecider()} — TASK_ACCESS_CHECK, then the
+     *    board, then the participants compared exactly in PHP, as in `mine()` (audit ZAK-1) — then one query counts on
+     *    the visible tasks.
+     *
+     * A subject id is compared byte for byte (REQ-SEC-006). Unlike the list, the count is not cut at
+     * {@see TaskQuestionQuery::MY_QUESTIONS_CAP} candidates. 0 without a signed-in viewer, and on a tenant URL whose
+     * tenant does not resolve for them. Stateless (worker mode): nothing is kept between calls.
+     */
+    public function countToAnswer(): int
+    {
+        $user = $this->user();
+        if (!$user instanceof UserInterface) {
+            return 0;
+        }
+        $context = $this->tenantContext?->isEnabled() === true ? $this->tenantContext : null;
+        $tenant  = $context?->current($user);
+        if ($context instanceof TaskBoardTenantContext && $context->isTenantRequest() && !$tenant instanceof TaskBoardTenant) {
+            return 0;
+        }
+        $subjects = $this->manager->subjectIdsOf($user, $tenant?->key);
+        if ($subjects === []) {
+            return 0;
+        }
+        $boardViewable = $this->access->boardViewDecider($user);
+        /** @var array<string, bool> $tenants the decision per tenant key, for this call only */
+        $tenants = [];
+        /** @var array<string, bool> $boards board id => whether the viewer may see the board (only boards whose tenant counts) */
+        $boards = [];
+        foreach ($this->query->boardsOpenForSubjects($subjects, $tenant?->key) as $board) {
+            if ($this->tenantCounts($board->getTenantKey(), $user, $context, $tenant, $tenants)) {
+                $boards[$board->getId()] = $boardViewable($board);
+            }
+        }
+        if ($boards === []) {
+            return 0;
+        }
+        // Boards the viewer may see whole: counted in SQL when no TASK_ACCESS_CHECK listener may decide a task.
+        $whole = $this->access->taskListenersMayDecide() ? [] : array_map(strval(...), array_keys(array_filter($boards)));
+        $count = $this->query->countOpenForSubjects($subjects, $whole);
+        // Every other board (all of them with a listener): its candidate tasks in one query, each decided in PHP exactly as
+        // canViewTask() decides it (TASK_ACCESS_CHECK, then the board, then the participants compared byte for byte; audit
+        // ZAK-1), then one count on the visible ones.
+        $rest = array_values(array_diff(array_map(strval(...), array_keys($boards)), $whole));
+        if ($rest === []) {
+            return $count;
+        }
+        $taskViewable = $this->access->taskViewDecider($user, static fn (TaskBoard $board): bool => $boards[$board->getId()] ?? false);
+        $tasks        = [];
+        foreach ($this->query->tasksOpenForSubjects($subjects, $rest) as $task) {
+            if ($taskViewable($task)) {
+                $tasks[] = $task->getId();
+            }
+        }
+
+        return $count + $this->query->countOpenOnTasks($subjects, $tasks);
+    }
+
+    /**
+     * The tenant rule of *my open questions* for a board's tenant key: with a resolved request tenant, that tenant's key
+     * exactly; with tenancy outside a tenant URL, a key the resolver opens to the viewer (asked once per key and call,
+     * `$tenants`); without tenancy, every board.
+     *
+     * @param array<string, bool> $tenants
+     */
+    private function tenantCounts(?string $key, UserInterface $user, ?TaskBoardTenantContext $context, ?TaskBoardTenant $tenant, array &$tenants): bool
+    {
+        if ($tenant instanceof TaskBoardTenant) {
+            return $key === $tenant->key;
+        }
+        if (!$context instanceof TaskBoardTenantContext) {
+            return true;
+        }
+        if ($key === null) {
+            return false;
+        }
+
+        return $tenants[$key] ??= $context->tenantOfKey($key, $user) instanceof TaskBoardTenant;
     }
 
     /**

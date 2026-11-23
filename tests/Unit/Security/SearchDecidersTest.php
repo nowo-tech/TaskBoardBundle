@@ -145,6 +145,21 @@ final class SearchDecidersTest extends TestCase
         self::assertTrue($decide(new TaskBoard('Team', 'team', new TestUser('1', 'o@example.com'), team: $team)), 'the given reach, no query');
     }
 
+    public function testTaskListenersMayDecideOnlyWhenTheDispatcherCannotRuleThemOut(): void
+    {
+        $repository = $this->createMock(TeamMemberRepositoryInterface::class);
+        $dispatcher = new EventDispatcher();
+        self::assertFalse((new TaskBoardResourceAccessChecker($repository, $this->noResolver()))->taskListenersMayDecide(), 'no dispatcher');
+        self::assertFalse((new TaskBoardResourceAccessChecker($repository, $this->noResolver(), null, $dispatcher))->taskListenersMayDecide());
+        $dispatcher->addListener(TaskBoardEvents::BOARD_ACCESS_CHECK, static function (): void {
+        });
+        self::assertFalse((new TaskBoardResourceAccessChecker($repository, $this->noResolver(), null, $dispatcher))->taskListenersMayDecide(), 'a board listener is not a task listener');
+        $dispatcher->addListener(TaskBoardEvents::TASK_ACCESS_CHECK, static function (): void {
+        });
+        self::assertTrue((new TaskBoardResourceAccessChecker($repository, $this->noResolver(), null, $dispatcher))->taskListenersMayDecide());
+        self::assertTrue((new TaskBoardResourceAccessChecker($repository, $this->noResolver(), null, $this->createMock(EventDispatcherInterface::class)))->taskListenersMayDecide(), 'a dispatcher that cannot say: assume a listener');
+    }
+
     private function noTeams(): TeamMemberRepositoryInterface
     {
         $repository = $this->createMock(TeamMemberRepositoryInterface::class);

@@ -2022,8 +2022,31 @@ A dashboard includes the same list:
 {{ include('@NowoTaskBoardBundle/manage/_my_questions.html.twig', {limit: 5}) }}   {# tab: 'asked' for the other list; an empty list is UiKit's `empty` (one sentence), on the page and in the component #}
 ```
 
+**Badge.** Since 2.32.0 a menu badge counts the `to_answer` rows without reading them:
+`TaskQuestionView::countToAnswer()` (or `Question\TaskQuestionCountsInterface`, its public alias) gives the same number
+as `count(mine())` under the same rules, in a constant number of queries (no question read, no URL built). In Twig:
+
+```twig
+{% set to_answer = nowo_task_board_questions_enabled() ? nowo_task_board_my_questions_count() : 0 %}
+{% if to_answer > 0 %}<span class="badge" aria-label="{{ to_answer }} questions to answer">{{ to_answer }}</span>{% endif %}
+```
+
+From a DDD host's menu (the signed-in viewer; register it only with `task_questions.enabled`):
+
+```php
+use Nowo\TaskBoardBundle\Question\TaskQuestionCountsInterface;
+
+final readonly class QuestionsBadge
+{
+    public function __construct(private TaskQuestionCountsInterface $questions) {}
+
+    public function count(): int { return $this->questions->countToAnswer(); }
+}
+```
+
 Twig functions: `nowo_task_board_questions_enabled()`, `nowo_task_board_questions(task)`,
-`nowo_task_board_open_questions(tasks)`, `nowo_task_board_my_questions(limit, tab)`. Templates:
+`nowo_task_board_open_questions(tasks)`, `nowo_task_board_my_questions(limit, tab)`,
+`nowo_task_board_my_questions_count()` (since 2.32.0). Templates:
 `manage/_task_questions_section.html.twig`, `manage/_task_question_card.html.twig`, `manage/my_questions.html.twig`
 (`web_ui.templates.my_questions`), `manage/_my_questions.html.twig`.
 

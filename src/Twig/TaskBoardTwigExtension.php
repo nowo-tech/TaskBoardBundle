@@ -192,6 +192,15 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
     }
 
     /**
+     * Since 2.32.0 (Beacon request): how many open questions the viewer has to answer ({@see TaskQuestionView::countToAnswer()},
+     * a constant number of queries), for a menu badge; 0 with the feature off.
+     */
+    public function myQuestionsCount(): int
+    {
+        return $this->questions?->countToAnswer() ?? 0;
+    }
+
+    /**
      * Since 2.18.0 (Beacon spec 234): the host's badges of a member (none without `member_badge_provider`). Values, never
      * HTML: the templates print them escaped.
      *
@@ -434,6 +443,7 @@ final class TaskBoardTwigExtension extends AbstractExtension implements GlobalsI
             new TwigFunction('nowo_task_board_questions', $this->questions(...)),
             new TwigFunction('nowo_task_board_open_questions', $this->openQuestions(...)),
             new TwigFunction('nowo_task_board_my_questions', $this->myQuestions(...)),
+            new TwigFunction('nowo_task_board_my_questions_count', $this->myQuestionsCount(...)),
         ];
     }
 
