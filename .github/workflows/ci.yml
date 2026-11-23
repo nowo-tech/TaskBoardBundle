@@ -779,5 +779,6 @@ jobs:
         run: composer phpstan
 
       - name: Tests at the floor
-        timeout-minutes: 20
+        # The whole suite (unit + functional) at the lowest dependencies already took 19m59s on main (2.32.0): 30 minutes.
+        timeout-minutes: 30
         run: composer test
