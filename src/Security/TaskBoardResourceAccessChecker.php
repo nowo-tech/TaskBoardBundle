@@ -308,6 +308,18 @@ final readonly class TaskBoardResourceAccessChecker
     }
 
     /**
+     * Since 2.32.0 (Beacon request, `countToAnswer()`): whether a TASK_ACCESS_CHECK listener could decide a task's view
+     * access (true unless the dispatcher says it has none). Without one, {@see self::canViewTask()} is the board rule or
+     * the task's participants, which a count may apply in SQL; with one, every task must go through the event.
+     */
+    public function taskListenersMayDecide(): bool
+    {
+        $dispatcher = $this->eventDispatcher;
+
+        return $dispatcher instanceof EventDispatcherInterface && (!$dispatcher instanceof SymfonyEventDispatcherInterface || $dispatcher->hasListeners(TaskBoardEvents::TASK_ACCESS_CHECK));
+    }
+
+    /**
      * Since 2.25.0 (header search): {@see self::canViewTask()} for many tasks at once. TASK_ACCESS_CHECK is dispatched
      * for each task (a deny hides it, a grant shows it); with no answer the task is visible when its board is, by
      * `$boardViewable` (for instance {@see self::boardViewDecider()}), or when the user takes part in it. Each board is

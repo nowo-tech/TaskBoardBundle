@@ -8,8 +8,11 @@ use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
 use Nowo\TaskBoardBundle\Entity\Task;
+use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Entity\TaskMember;
 use Nowo\TaskBoardBundle\Question\Entity\TaskQuestion;
 use Nowo\TaskBoardBundle\Question\Entity\TaskQuestionRecipient;
+use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Support\ActorId;
 use Nowo\TaskBoardBundle\User\TaskBoardUsers;
 use SortDirection;
@@ -19,6 +22,10 @@ use function array_filter;
 use function array_intersect;
 use function array_map;
 use function array_values;
+use function count;
+use function implode;
+use function in_array;
+use function is_string;
 use function max;
 use function min;
 
@@ -163,6 +170,158 @@ final readonly class TaskQuestionQuery
         $this->hydrate($questions);
 
         return $questions;
+    }
+
+    /**
+     * Since 2.32.0 (Beacon request, *to answer* badge): the boards of the open questions addressed to one of the subject
+     * ids, each once; `$tenantKey` narrows them to that tenant (the caller compares the key exactly). One query that reads
+     * boards only, never a question or a task: the caller decides which boards the viewer may see.
+     *
+     * @param list<string> $subjectIds
+     *
+     * @return list<TaskBoard>
+     */
+    public function boardsOpenForSubjects(array $subjectIds, ?string $tenantKey = null): array
+    {
+        if ($subjectIds === []) {
+            return [];
+        }
+        $builder = $this->entityManager->createQueryBuilder()
+            ->select('b')->from(TaskBoard::class, 'b')
+            ->where('b.id IN (SELECT IDENTITY(bt.board) FROM ' . TaskQuestionRecipient::class . ' br JOIN br.question bq JOIN bq.task bt WHERE bq.state = :open AND br.subjectId IN (:subjects))')
+            ->setParameter('open', TaskQuestionState::Open->value)
+            ->setParameter('subjects', array_values($subjectIds));
+        if ($tenantKey !== null) {
+            $builder->andWhere('b.tenantKey = :tenant')->setParameter('tenant', $tenantKey);
+        }
+        /** @var list<TaskBoard> $boards */
+        $boards = $builder->getQuery()->getResult();
+
+        return $boards;
+    }
+
+    /**
+     * Since 2.32.0: the tasks of `$boardIds` with an open question addressed to one of the subject ids, with their members
+     * (one query), for a host whose TASK_ACCESS_CHECK listener decides each task. The questions are not read.
+     *
+     * @param list<string> $subjectIds
+     * @param list<string> $boardIds
+     *
+     * @return list<Task>
+     */
+    public function tasksOpenForSubjects(array $subjectIds, array $boardIds): array
+    {
+        if ($subjectIds === [] || $boardIds === []) {
+            return [];
+        }
+        $builder = $this->entityManager->createQueryBuilder()
+            ->select('t', 'm')->from(Task::class, 't')->leftJoin('t.members', 'm')
+            ->where('t.id IN (SELECT IDENTITY(tq.task) FROM ' . TaskQuestionRecipient::class . ' tr JOIN tr.question tq WHERE tq.state = :open AND tr.subjectId IN (:subjects))')
+            ->setParameter('open', TaskQuestionState::Open->value)
+            ->setParameter('subjects', array_values($subjectIds));
+        $builder->andWhere($this->inLists($builder, 'IDENTITY(t.board)', $boardIds, 'boards'));
+        /** @var list<Task> $tasks */
+        $tasks = $builder->getQuery()->getResult();
+
+        return $tasks;
+    }
+
+    /**
+     * Since 2.32.0: how many open questions are addressed to one of the subject ids on `$boardIds`, counting on a board of
+     * `$viewableBoardIds` every task and on the others only the tasks `$participantId` created or is a member of (the
+     * default rule of {@see TaskBoardResourceAccessChecker::canViewTask()}). One query
+     * whatever the number of questions, no entity read.
+     *
+     * @param list<string> $subjectIds
+     * @param list<string> $boardIds
+     * @param list<string> $viewableBoardIds
+     */
+    public function countOpenForSubjects(array $subjectIds, array $boardIds, array $viewableBoardIds, ?string $participantId): int
+    {
+        if ($subjectIds === [] || $boardIds === []) {
+            return 0;
+        }
+        $builder = $this->countQuery($subjectIds);
+        $builder->andWhere($this->inLists($builder, 'IDENTITY(ct.board)', $boardIds, 'boards'));
+        $reach = [$this->inLists($builder, 'IDENTITY(ct.board)', $viewableBoardIds, 'viewable')];
+        if ($participantId !== null) {
+            $reach[] = ($this->users?->identity('ct.creator') ?? 'IDENTITY(ct.creator)') . ' = :participant';
+            $reach[] = 'EXISTS (SELECT cm.id FROM ' . TaskMember::class . ' cm WHERE cm.task = ct AND ' . ($this->users?->identity('cm.user') ?? 'IDENTITY(cm.user)') . ' = :participant)';
+            // @igor-ignore - A query builder of this call (countQuery()), not a shared service.
+            $builder->setParameter('participant', $participantId);
+        }
+        $builder->andWhere('(' . implode(' OR ', $reach) . ')');
+
+        return $this->exactCount($builder, $subjectIds);
+    }
+
+    /**
+     * Since 2.32.0: how many open questions are addressed to one of the subject ids on `$taskIds`: one query (the ids
+     * in IN lists of {@see self::CHUNK}), no entity read.
+     *
+     * @param list<string> $subjectIds
+     * @param list<string> $taskIds
+     */
+    public function countOpenOnTasks(array $subjectIds, array $taskIds): int
+    {
+        if ($subjectIds === [] || $taskIds === []) {
+            return 0;
+        }
+        $builder = $this->countQuery($subjectIds);
+        $builder->andWhere($this->inLists($builder, 'ct.id', $taskIds, 'tasks'));
+
+        return $this->exactCount($builder, $subjectIds);
+    }
+
+    /**
+     * The recipient rows of the open questions whose subject id SQL matched: their question id and subject id only.
+     *
+     * @param list<string> $subjectIds
+     */
+    private function countQuery(array $subjectIds): QueryBuilder
+    {
+        return $this->entityManager->createQueryBuilder()
+            ->select('IDENTITY(cr.question) AS questionId', 'cr.subjectId AS subjectId')
+            ->from(TaskQuestionRecipient::class, 'cr')->join('cr.question', 'cq')->join('cq.task', 'ct')
+            ->where('cq.state = :open AND cr.subjectId IN (:subjects)')
+            ->setParameter('open', TaskQuestionState::Open->value)
+            ->setParameter('subjects', array_values($subjectIds));
+    }
+
+    /**
+     * The distinct questions of the rows whose subject id is exactly one of `$subjectIds` (REQ-SEC-006: a folding collation
+     * matches `User:1` for `user:1`, so SQL cannot count them alone; the rows are two short scalars each).
+     *
+     * @param list<string> $subjectIds
+     */
+    private function exactCount(QueryBuilder $builder, array $subjectIds): int
+    {
+        /** @var list<array{questionId: mixed, subjectId: mixed}> $rows */
+        $rows      = $builder->getQuery()->getScalarResult();
+        $questions = [];
+        foreach ($rows as $row) {
+            if (is_string($row['subjectId']) && in_array($row['subjectId'], $subjectIds, true)) {
+                $questions[(string) $row['questionId']] = true;
+            }
+        }
+
+        return count($questions);
+    }
+
+    /**
+     * `expr IN (...)` over lists of at most {@see self::CHUNK} values (one bound parameter each); `1 = 0` for none.
+     *
+     * @param list<string> $values
+     */
+    private function inLists(QueryBuilder $builder, string $expression, array $values, string $name): string
+    {
+        $parts = [];
+        foreach (array_chunk(array_values($values), self::CHUNK) as $index => $chunk) {
+            $parts[] = "{$expression} IN (:{$name}{$index})";
+            $builder->setParameter($name . $index, $chunk);
+        }
+
+        return $parts === [] ? '1 = 0' : '(' . implode(' OR ', $parts) . ')';
     }
 
     private function openQuery(): QueryBuilder
