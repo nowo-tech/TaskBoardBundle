@@ -163,6 +163,20 @@ final class TaskQuestionPagesTest extends QuestionTestCase
         self::assertResponseStatusCodeSame(403);
     }
 
+    /** TB-L1: a dot-segment `_target_path` on a dialog post falls back to the task URL (204), never a 500. */
+    public function testADotSegmentTargetPathFallsBackToTheTaskUrl(): void
+    {
+        $question = $this->ask();
+        $name     = 'qa_' . str_replace('-', '', $question->getId());
+        $this->login($this->bob);
+        $dialog = ['HTTP_X_NOWO_DIALOG' => '1', 'HTTP_X_REQUESTED_WITH' => 'XMLHttpRequest'];
+        foreach (['/tools/task-board/../x', '/tools/task-board/%2e%2e/x'] as $bad) {
+            $this->client->request('POST', '/tools/task-board/task/' . $this->task->getId() . '/question/' . $question->getId() . '/answer?_target_path=' . $bad, [$name => ['options' => $question->getOptions()[0]->getId(), 'version' => '99', '_token' => PredictableCsrfTokenManager::value(TaskQuestionView::csrfId('answer', $question->getId()))]], [], $dialog);
+            self::assertResponseStatusCodeSame(204, $bad);
+            self::assertSame('/tools/task-board/task/' . $this->task->getId(), $this->client->getResponse()->headers->get('X-Nowo-Redirect'), $bad);
+        }
+    }
+
     public function testSomeoneWhoIsNotARecipientIsRefusedAndAnotherTasksQuestionIsNotFound(): void
     {
         $question = $this->ask();

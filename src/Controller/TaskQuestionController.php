@@ -24,6 +24,7 @@ use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext;
 use Nowo\TaskBoardBundle\Ui\TaskBoardPages;
 use Nowo\UiKitBundle\Dialog\RemoteDialogResponder;
+use Nowo\UiKitBundle\Dialog\RemoteDialogTarget;
 use Nowo\UiKitBundle\View\Column;
 use Nowo\UiKitBundle\View\EmptyState;
 use Nowo\UiKitBundle\View\ListPage;
@@ -305,7 +306,8 @@ final class TaskQuestionController extends AbstractController
     {
         $target = $request->query->get('_target_path', $request->request->get('_target_path'));
 
-        return is_string($target) && str_starts_with($target, '/') && preg_match('#^//|\\\\|[\x00-\x1f]#', $target) !== 1 ? $target : null;
+        // TB-L1: UiKit's rules (no `.` / `..` / `%2e` segments), so the dialog redirect cannot throw after a commit.
+        return is_string($target) && str_starts_with($target, '/') && preg_match('#^//|\\\\|[\x00-\x1f]#', $target) !== 1 ? RemoteDialogTarget::tryPath($target, null) : null;
     }
 
     private function remoteDialog(): RemoteDialogResponder
