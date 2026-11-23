@@ -6,7 +6,6 @@ namespace Nowo\TaskBoardBundle\Tests\Fixtures\RemovedPorts\AliasOfAuthenticator;
 
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiRequestAuthenticatorInterface;
 use Nowo\TaskBoardBundle\Api\TaskApiAuthFailure;
-use Nowo\TaskBoardBundle\Api\TaskApiPrincipal;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiRequestContext;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 
@@ -17,7 +16,7 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 #[AsAlias('Nowo\TaskBoardBundle\Api\Hook\TaskApiAuthenticatorInterface')]
 final class HostTokens implements TaskApiRequestAuthenticatorInterface
 {
-    public function authenticate(TaskApiRequestContext $request): TaskApiPrincipal|TaskApiAuthFailure
+    public function authenticate(TaskApiRequestContext $request): TaskApiAuthFailure
     {
         return TaskApiAuthFailure::Invalid;
     }

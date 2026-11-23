@@ -103,7 +103,7 @@ abstract class FunctionalTestCase extends WebTestCase
         // Since 3.0.0 the private manager is dropped at every request boundary: a board or parent created before a request
         // is read again (the instances the test holds are detached).
         $board  = $this->em->contains($board) ? $board : ($this->em->find(TaskBoard::class, $board->getId()) ?? $board);
-        $parent = $parent === null || $this->em->contains($parent) ? $parent : ($this->em->find(Task::class, $parent->getId()) ?? $parent);
+        $parent = !$parent instanceof Task || $this->em->contains($parent) ? $parent : ($this->em->find(Task::class, $parent->getId()) ?? $parent);
         $task   = new Task(board: $board, title: $title, creator: $this->owner, column: $board->getColumns()->get($column), parent: $parent, position: $position);
         $this->em->persist($task);
         $this->em->flush();

@@ -17,6 +17,7 @@ use Nowo\TaskBoardBundle\Repository\TeamMemberRepositoryInterface;
 use Nowo\TaskBoardBundle\Service\TaskAccessGuard;
 use Nowo\TaskBoardBundle\Tests\Stub\TestUser;
 use Nowo\TimeTrackBundle\Dto\TaskListQuery;
+use Nowo\TimeTrackBundle\Dto\TaskReference;
 use Nowo\TimeTrackBundle\Port\TimeTrackUserRefFactory;
 use Nowo\TimeTrackBundle\Timesheet\TimesheetScopePolicyInterface;
 use Nowo\TimeTrackBundle\Timesheet\TimesheetScopeProviderInterface;
@@ -47,7 +48,7 @@ final class TimeTrackTwinBridgeTest extends TestCase
         self::assertSame('API', $directory->findTaskFor($task->getId(), $me)?->title);
         self::assertTrue($directory->canTrackTask($me, $task->getId()));
         self::assertCount(1, $directory->listTrackableFor($me, new TaskListQuery()));
-        self::assertSame($directory->canTrackTask($them, $task->getId()), $directory->findTaskFor($task->getId(), $them) !== null, 'one access decision');
+        self::assertSame($directory->canTrackTask($them, $task->getId()), $directory->findTaskFor($task->getId(), $them) instanceof TaskReference, 'one access decision');
         self::assertSame([], $directory->listTrackableFor($them, new TaskListQuery()));
         foreach ([$me, $them] as $who) {
             self::assertNull($directory->findTaskFor('missing', $who));

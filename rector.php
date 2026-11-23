@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Rector\Config\RectorConfig;
 use Rector\DeadCode\Rector\Cast\RecastingRemovalRector;
+use Rector\DeadCode\Rector\ClassMethod\RemoveUnusedConstructorParamRector;
 use Rector\DeadCode\Rector\ClassMethod\RemoveUnusedPublicMethodParameterRector;
 use Rector\TypeDeclaration\Rector\ClassMethod\NarrowObjectReturnTypeRector;
 
@@ -27,6 +28,9 @@ return RectorConfig::configure()
         // Public signatures: narrowing the private attempt() to RedirectResponse cascades to the public actions
         // (ask/answer/withdraw/publish: Response -> RedirectResponse); public return types stay as they are in a minor.
         NarrowObjectReturnTypeRector::class => [__DIR__ . '/src/Controller/TaskQuestionController.php'],
+        // Since 3.0.0: the $logger argument (the removed application's-manager mode) stays, ignored, for positional
+        // callers of this public service until 4.0.
+        RemoveUnusedConstructorParamRector::class => [__DIR__ . '/src/Number/TaskNumberBackfiller.php'],
     ])
     ->withPhpSets(php82: true)
     ->withPreparedSets(

@@ -83,8 +83,6 @@ use Symfony\Bridge\Twig\Extension\TranslationExtension;
 use Symfony\Bridge\Twig\Form\TwigRendererEngine;
 use Symfony\Component\Config\Definition\Processor;
 use Symfony\Component\DomCrawler\Crawler;
-use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
-use Symfony\Component\Form\Extension\Core\Type\EnumType;
 use Symfony\Component\Form\Extension\Core\Type\FormType;
 use Symfony\Component\Form\Extension\Core\Type\HiddenType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
@@ -93,7 +91,6 @@ use Symfony\Component\Form\FormFactoryInterface;
 use Symfony\Component\Form\FormInterface;
 use Symfony\Component\Form\FormRenderer;
 use Symfony\Component\Form\Forms;
-use Symfony\Component\Form\FormView;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\Session\Session;
@@ -1272,18 +1269,6 @@ final class ManageTemplatesRenderingTest extends TestCase
             'priorityForm'      => $this->factory()->createNamed('', TaskPriorityFormType::class, ['priority' => $task->getPriority()->value])->createView(),
             'memberRemoveForms' => $memberRemoveForms,
         ];
-    }
-
-    /**
-     * Stand-in for TaskMemberFormType, whose user field is a Doctrine EntityType.
-     */
-    private function memberForm(): FormView
-    {
-        return $this->factory()->createNamedBuilder('task_member_form', FormType::class)
-            ->add('user', ChoiceType::class, ['choices' => ['owner@example.com' => '1']])
-            ->add('memberRole', EnumType::class, ['class' => TaskMemberRole::class])
-            ->getForm()
-            ->createView();
     }
 
     private function factory(): FormFactoryInterface
