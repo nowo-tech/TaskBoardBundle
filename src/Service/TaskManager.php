@@ -27,11 +27,13 @@ use Nowo\TaskBoardBundle\Event\TaskUpdatedEvent;
 use Nowo\TaskBoardBundle\Exception\ColumnNotFoundException;
 use Nowo\TaskBoardBundle\Exception\ColumnTransitionRefusedException;
 use Nowo\TaskBoardBundle\Exception\InvalidTaskScheduleException;
+use Nowo\TaskBoardBundle\Exception\TaskChangedException;
 use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
 use Nowo\TaskBoardBundle\Port\Snapshots;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Support\ActorId;
 use Nowo\TaskBoardBundle\Support\ColumnTypes;
+use Nowo\TaskBoardBundle\Support\TaskContentDigest;
 use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
 use Nowo\TaskBoardBundle\Transition\ColumnTransitionPolicyInterface;
@@ -48,6 +50,7 @@ use function array_flip;
 use function array_intersect_key;
 use function array_keys;
 use function count;
+use function hash_equals;
 use function in_array;
 use function mb_strlen;
 use function sprintf;
@@ -203,6 +206,8 @@ final readonly class TaskManager implements TaskManagerInterface
      * @throws TaskReopenRefusedException when the column change would reopen a completed task over the host's limit: nothing changes
      * @throws ColumnNotFoundException since 2.2.1, when `columnId` is not a column of the task's board: nothing changes
      * @throws TaskTreeRefusedException since 2.21.0, `conflict` when a column change finds the task changed meanwhile: nothing changes
+     * @throws TaskChangedException since 2.31.0, when `$data->baseDigest` is set and someone saved the task's content since the
+     *                              form was built: nothing changes
      * @throws ColumnTransitionRefusedException since 2.16.0, when the column transition policy refuses the column change, or
      *                                          (audit PC-L2) the new tags of a task that stays in its column (operation
      *                                          `retag`): nothing changes
@@ -275,17 +280,22 @@ final readonly class TaskManager implements TaskManagerInterface
         };
         // Since 2.21.0 (Beacon spec 239, FR-013, audits SF-L1 / SF-L3): a column change locks the column, reads it and the
         // task as committed, and takes the next free position from there, as a move does.
-        if ($moves) {
-            // @igor-ignore - The closure runs once, now (inside transactional() or directly), and is never stored.
-            $this->lockedColumnWrite($task, $newColumn, $checked, false, $newColumn instanceof BoardColumn, static function (array $siblings, int $next) use ($task, $newColumn, $write): void {
-                if ($newColumn instanceof BoardColumn) {
-                    $task->setPosition($next);
-                }
+        // @igor-ignore - The closure runs once, now (inside transactional() or directly), and is never stored.
+        $save = function () use ($moves, $task, $newColumn, $checked, $write): void {
+            if ($moves) {
+                // @igor-ignore - The closure runs once, now (inside transactional() or directly), and is never stored.
+                $this->lockedColumnWrite($task, $newColumn, $checked, false, $newColumn instanceof BoardColumn, static function (array $siblings, int $next) use ($task, $newColumn, $write): void {
+                    if ($newColumn instanceof BoardColumn) {
+                        $task->setPosition($next);
+                    }
+                    $write();
+                });
+            } else {
                 $write();
-            });
-        } else {
-            $write();
-        }
+            }
+        };
+        // Since 2.31.0 (REQ-RUNTIME-003 rule 4): the edit form's content digest, then the revision under the row lock.
+        $this->atBaseContent($task, $data->baseDigest, $moves ? $newColumn : null, $save);
 
         $changed = array_keys(array_filter([
             'title'            => $oldTitle !== $task->getTitle(),
@@ -511,6 +521,46 @@ final readonly class TaskManager implements TaskManagerInterface
             }
             usort($siblings, static fn (Task $a, Task $b): int => [$a->getPosition(), $a->getId()] <=> [$b->getPosition(), $b->getId()]);
             $write($siblings, $next);
+        });
+    }
+
+    /**
+     * Since 2.31.0 (REQ-RUNTIME-003 rule 4): runs `$save` only while the task still has the content its edit form showed
+     * (`$baseDigest`, {@see TaskContentDigest}). A loaded task whose content differs (someone else saved the title, the
+     * description, a date…) is refused at once. Then the column the write enters and the task's row are locked (fixed
+     * order) and the committed revision must still be the loaded one, so a save committed between this request's load and
+     * its lock is refused too: of two people saving the same edit form, the second one is told, instead of silently
+     * overwriting the first one's changes. Without a digest (null), or without the bundle's row lock, it runs as before.
+     *
+     * @throws TaskChangedException when the task changed (or was deleted) meanwhile: nothing is written
+     */
+    private function atBaseContent(Task $task, ?string $baseDigest, ?BoardColumn $column, Closure $save): void
+    {
+        if ($baseDigest === null || $baseDigest === '') {
+            $save();
+
+            return;
+        }
+        if (!hash_equals(TaskContentDigest::of($task), $baseDigest)) {
+            throw new TaskChangedException($task->getRevision());
+        }
+        $rowLock = $this->rowLock;
+        if (!$rowLock instanceof OrderedRowLockInterface || !$rowLock instanceof TaskRevisionLockInterface) {
+            $save();
+
+            return;
+        }
+        $loaded = $task->getRevision();
+        // @igor-ignore - The closure runs once, now, inside transactional(); the stateless lock keeps no reference to it.
+        $rowLock->transactional(static function () use ($rowLock, $task, $loaded, $column, $save): void {
+            if ($column instanceof BoardColumn) {
+                $rowLock->lockColumns([$column->getId()]);
+            }
+            $revision = $rowLock->lockedTaskRevision($task->getId());
+            if ($revision !== $loaded) {
+                throw new TaskChangedException($revision ?? 0);
+            }
+            $save();
         });
     }
 

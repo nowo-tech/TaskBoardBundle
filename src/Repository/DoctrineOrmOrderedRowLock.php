@@ -18,6 +18,7 @@ use Nowo\TaskBoardBundle\Doctrine\TransactionRollback;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Service\OrderedRowLockInterface;
+use Nowo\TaskBoardBundle\Service\TaskRevisionLockInterface;
 use Nowo\TaskBoardBundle\Tree\TaskTreeRefusedException;
 use SortDirection;
 use Throwable;
@@ -43,7 +44,7 @@ use const SORT_STRING;
  *
  * @internal the bundle's implementation; depend on {@see OrderedRowLockInterface}
  */
-final readonly class DoctrineOrmOrderedRowLock implements OrderedRowLockInterface
+final readonly class DoctrineOrmOrderedRowLock implements OrderedRowLockInterface, TaskRevisionLockInterface
 {
     /** Ids per locking statement: far below every platform's parameter limit. */
     private const CHUNK = 500;
@@ -84,6 +85,17 @@ final readonly class DoctrineOrmOrderedRowLock implements OrderedRowLockInterfac
     public function lockTasks(array $taskIds): void
     {
         $this->lock(Task::class, $taskIds);
+    }
+
+    public function lockedTaskRevision(string $taskId): ?int
+    {
+        /** @var list<int|string> $revisions */
+        $revisions = $this->entityManager->createQuery('SELECT t.revision FROM ' . Task::class . ' t WHERE t.id = :id')
+            ->setParameter('id', $taskId)
+            ->setLockMode(LockMode::PESSIMISTIC_WRITE)
+            ->getSingleColumnResult();
+
+        return $revisions === [] ? null : (int) $revisions[0];
     }
 
     public function lockedColumnTasks(string $boardId, ?string $columnId, array $alsoTaskIds = [], bool $withArchived = false): array

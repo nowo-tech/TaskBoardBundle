@@ -57,6 +57,7 @@ use Nowo\TaskBoardBundle\Exception\ColumnNotFoundException;
 use Nowo\TaskBoardBundle\Exception\ColumnTransitionRefusedException;
 use Nowo\TaskBoardBundle\Exception\InvalidTaskDependencyException;
 use Nowo\TaskBoardBundle\Exception\InvalidTaskScheduleException;
+use Nowo\TaskBoardBundle\Exception\TaskChangedException;
 use Nowo\TaskBoardBundle\Exception\TaskReopenRefusedException;
 use Nowo\TaskBoardBundle\Exception\TaskTimeBillableRefusedException;
 use Nowo\TaskBoardBundle\Exception\UnassignableUserException;
@@ -116,6 +117,7 @@ use Nowo\TaskBoardBundle\Service\TaskMemberAssigner;
 use Nowo\TaskBoardBundle\Service\TaskTimeBillableDefaultProviderInterface;
 use Nowo\TaskBoardBundle\Service\TaskTimeBillableService;
 use Nowo\TaskBoardBundle\Service\TaskTimeLogger;
+use Nowo\TaskBoardBundle\Support\TaskContentDigest;
 use Nowo\TaskBoardBundle\Support\TaskDeviation;
 use Nowo\TaskBoardBundle\Support\TaskNavigator;
 use Nowo\TaskBoardBundle\Support\TaskTree;
@@ -1480,9 +1482,9 @@ final class TaskBoardManageController extends AbstractController
                 // Since 2.2.1: a column change in the form is a move, so the host's limit refuses it as on the board; nothing is saved.
                 $this->logRefused('task_reopen_limit');
                 $this->addFlash('error', 'task_board.flash.task_reopen_refused');
-            } catch (TaskTreeRefusedException) {
+            } catch (TaskTreeRefusedException|TaskChangedException) {
                 // Since 2.21.1 (audit SF3-L1): a column change in the form found the task changed meanwhile, as a move does;
-                // nothing is saved.
+                // since 2.31.0 (REQ-RUNTIME-003 rule 4) also a save of a form whose task someone else saved meanwhile. Nothing is saved; the page shows the task as it is now.
                 $this->logRefused('task_changed_meanwhile');
                 $this->addFlash('error', 'task_board.flash.task_changed_meanwhile');
             }
@@ -2357,7 +2359,7 @@ final class TaskBoardManageController extends AbstractController
      */
     private function createTaskEditForm(Task $task): FormInterface
     {
-        return $this->createForm(TaskFormType::class, new TaskFormData(
+        $data = new TaskFormData(
             title: $task->getTitle(),
             description: $task->getDescription(),
             priority: $task->getPriority(),
@@ -2367,9 +2369,14 @@ final class TaskBoardManageController extends AbstractController
             tags: $task->getTags(),
             color: $task->getColor(),
             startAt: $task->getStartAt(),
-        ), [
+        );
+        // Since 2.31.0 (REQ-RUNTIME-003 rule 4): the content this form shows, compared again when it is saved.
+        $data->baseDigest = TaskContentDigest::of($task);
+
+        return $this->createForm(TaskFormType::class, $data, [
             'column_choices' => $this->buildColumnChoices($task->getBoard()),
             'shown_column'   => true,
+            'base_digest'    => true,
             // Since 2.19.0 (FR-028): a row per custom field of the board.
             'custom_fields' => $this->customFieldForm?->options($task->getBoard(), $task) ?? [],
         ]);
