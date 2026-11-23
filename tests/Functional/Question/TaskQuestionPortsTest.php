@@ -15,6 +15,7 @@ use Nowo\TaskBoardBundle\Question\TaskQuestionView;
 use Nowo\TaskBoardBundle\Tests\Functional\App\PredictableCsrfTokenManager;
 use Nowo\TaskBoardBundle\Tests\Functional\App\ScriptedQuestionPublisher;
 use RuntimeException;
+use Symfony\Component\Form\FormView;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
 use Symfony\Component\Security\Core\Authentication\Token\UsernamePasswordToken;
 use Twig\Environment;
@@ -71,6 +72,10 @@ final class TaskQuestionPortsTest extends QuestionTestCase
         $this->login($this->owner);
         $crawler = $this->client->request('GET', '/tools/task-board/task/' . $this->task->getId());
         self::assertSame('Publish to wiki', trim($crawler->filter('[data-testid="nowo-task-question-publish"]')->text()));
+        // Since 2.31.0: a link to the publish dialog (the GET of task_question_publish), which names the host's label.
+        $crawler = $this->client->request('GET', (string) $crawler->filter('a[data-testid="nowo-task-question-publish"]')->attr('href'), server: ['HTTP_X_NOWO_DIALOG' => '1']);
+        self::assertResponseIsSuccessful();
+        self::assertSame('Publish to wiki', trim($crawler->filter('[data-testid="nowo-task-question-publish-submit"]')->text()));
         $name = 'qp_' . str_replace('-', '', $question->getId());
         $this->client->request('POST', '/tools/task-board/task/' . $this->task->getId() . '/question/' . $question->getId() . '/publish', [$name => ['_token' => PredictableCsrfTokenManager::value('task_board_question_publish_' . $question->getId())]]);
         self::assertResponseRedirects();
@@ -155,6 +160,38 @@ final class TaskQuestionPortsTest extends QuestionTestCase
         self::assertStringContainsString('nowo-ui-empty__message', $html, 'The dashboard component empty list is UiKit\'s `empty`.');
         self::assertStringNotContainsString('No items found', $html);
         self::assertInstanceOf(TaskQuestion::class, $this->manager()->find($question->getId()));
+    }
+
+    /**
+     * Since 2.31.0: the card has dialog URLs and no forms; withForms (deprecated) builds the 2.30 forms; dialogForm()
+     * makes the card's decision for one action and needs a signed-in viewer.
+     */
+    public function testTheCardsDialogsAndTheDeprecatedForms(): void
+    {
+        $question = $this->manager()->ask($this->owner, $this->task, new TaskQuestionInput('Budget?', [$this->subject($this->bob)], [new TaskQuestionOptionInput('Yes'), new TaskQuestionOptionInput('No')]));
+        $view     = self::getContainer()->get(TaskQuestionView::class);
+        self::assertInstanceOf(TaskQuestionView::class, $view);
+        self::assertNull($view->dialogForm(TaskQuestionView::ACTION_ANSWER, $question), 'no viewer');
+
+        $tokens = self::getContainer()->get('security.token_storage');
+        self::assertInstanceOf(TokenStorageInterface::class, $tokens);
+        $tokens->setToken(new UsernamePasswordToken($this->bob, 'main', $this->bob->getRoles()));
+        $card = $view->section($this->task)['cards'][0] ?? [];
+        self::assertNull($card['answerForm']);
+        self::assertStringEndsWith('/answer?version=1', (string) $card['answerUrl']);
+        self::assertNull($card['withdrawUrl']);
+        self::assertNull($card['publishUrl']);
+        $card = $view->section($this->task, withForms: true)['cards'][0] ?? [];
+        self::assertInstanceOf(FormView::class, $card['answerForm']);
+        self::assertNull($card['withdrawForm']);
+        self::assertNull($view->dialogForm('unknown', $question));
+        self::assertNull($view->dialogForm(TaskQuestionView::ACTION_WITHDRAW, $question), 'bob may not withdraw');
+        self::assertSame('7', $view->dialogForm(TaskQuestionView::ACTION_ANSWER, $question, [], 7)?->createView()->children['version']->vars['value']);
+
+        $tokens->setToken(new UsernamePasswordToken($this->owner, 'main', $this->owner->getRoles()));
+        $card = $view->section($this->task, withForms: true)['cards'][0] ?? [];
+        self::assertInstanceOf(FormView::class, $card['withdrawForm']);
+        self::assertSame('1', $card['withdrawForm']->children['version']->vars['value']);
     }
 
     private function expectForbidden(callable $call): void

@@ -23,6 +23,7 @@ use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext;
 use Psr\Clock\ClockInterface;
 use Symfony\Component\Clock\NativeClock;
 use Symfony\Component\Form\FormFactoryInterface;
+use Symfony\Component\Form\FormInterface;
 use Symfony\Component\Form\FormView;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
@@ -55,6 +56,15 @@ final readonly class TaskQuestionView
 
     public const TAB_ASKED = 'asked';
 
+    /** Since 2.31.0: the question dialogs, each the GET of its write route. */
+    public const ACTION_ANSWER = 'answer';
+
+    public const ACTION_WITHDRAW = 'withdraw';
+
+    public const ACTION_PUBLISH = 'publish';
+
+    public const DIALOG_ACTIONS = [self::ACTION_ANSWER, self::ACTION_WITHDRAW, self::ACTION_PUBLISH];
+
     /** The CSRF token id of a question form: `task_board_question_ask`, or `task_board_question_<action>_<question id>`. */
     public static function csrfId(string $action, ?string $questionId = null): string
     {
@@ -82,11 +92,16 @@ final readonly class TaskQuestionView
      * The *Questions* section of `$task` for the signed-in viewer; null without one, or (since 2.23.1) when they may not
      * see the task or, with tenancy, open its tenant.
      *
+     * Since 2.31.0 (owner rule 2026-11-23, every dialog loads its content on demand) a card carries the URLs of its answer,
+     * withdraw and publish dialogs (`answerUrl`, `withdrawUrl`, `publishUrl`: the GET of their write routes) and no
+     * forms; `$withForms` true builds the 2.30 forms per card (`answerForm`, `withdrawForm`, `publishForm`) for a host
+     * template that still renders them (deprecated, removed in 3.0).
+     *
      * @param array<string, string> $routeExtra extra route parameters of the page (`_target_path` of a drawer)
      *
      * @return array{cards: list<array<string, mixed>>, askForm: FormView|null, open: int, total: int}|null
      */
-    public function section(Task $task, array $routeExtra = []): ?array
+    public function section(Task $task, array $routeExtra = [], bool $withForms = false): ?array
     {
         $user = $this->user();
         // Since 2.23.1: a viewer who may not see the task, or (with tenancy) whose tenant is not one they may open, gets no
@@ -99,7 +114,7 @@ final readonly class TaskQuestionView
         $today     = $this->clock->now();
         $cards     = [];
         foreach ($questions as $question) {
-            $cards[] = $this->card($user, $question, $subjects, $today, $routeExtra);
+            $cards[] = $this->card($user, $question, $subjects, $today, $routeExtra, $withForms);
         }
         $askForm = null;
         if ($this->access->canAskQuestion($user, $task)) {
@@ -216,52 +231,107 @@ final readonly class TaskQuestionView
      *
      * @return array<string, mixed>
      */
-    private function card(UserInterface $user, TaskQuestion $question, array $subjects, DateTimeImmutable $today, array $routeExtra): array
+    private function card(UserInterface $user, TaskQuestion $question, array $subjects, DateTimeImmutable $today, array $routeExtra, bool $withForms = false): array
     {
-        $task   = $question->getTask();
-        $params = ['taskId' => $task->getId(), 'questionId' => $question->getId()] + $routeExtra;
-        $name   = str_replace('-', '', $question->getId());
-        $answer = null;
-        if (!$question->isWithdrawn() && $this->access->canAnswerQuestion($user, $question, $subjects)) {
-            $current = $question->getCurrentAnswer();
-            $data    = new TaskQuestionAnswerFormData(
-                $current instanceof TaskQuestionAnswer ? ($question->isMultiple() ? $current->getSelectedOptionIds() : ($current->getSelectedOptionIds()[0] ?? null)) : null,
-                $current?->getOtherText(),
-                (string) $question->getVersion(),
-            );
-            $answer = $this->forms->createNamed('qa_' . $name, TaskQuestionAnswerFormType::class, $data, [
-                'question'      => $question,
-                'csrf_token_id' => self::csrfId('answer', $question->getId()),
-                'action'        => $this->url('task_question_answer', $params),
-            ])->createView();
+        $task    = $question->getTask();
+        $params  = ['taskId' => $task->getId(), 'questionId' => $question->getId()] + $routeExtra;
+        $manages = $this->access->canManageBoard($user, $task->getBoard());
+        $asker   = ActorId::of($user) !== null && ActorId::of($user) === ActorId::of($question->getAskedBy());
+        $allowed = [];
+        foreach (self::DIALOG_ACTIONS as $action) {
+            $allowed[$action] = $this->allows($user, $action, $question, $subjects);
         }
-        $withdraw = null;
-        $manages  = $this->access->canManageBoard($user, $task->getBoard());
-        $asker    = ActorId::of($user) !== null && ActorId::of($user) === ActorId::of($question->getAskedBy());
-        if (!$question->isWithdrawn() && $this->access->canWithdrawQuestion($user, $question)) {
-            $withdraw = $this->forms->createNamed('qw_' . $name, TaskQuestionWithdrawFormType::class, new TaskQuestionWithdrawFormData('', (string) $question->getVersion()), [
-                'csrf_token_id' => self::csrfId('withdraw', $question->getId()),
-                'action'        => $this->url('task_question_withdraw', $params),
-            ])->createView();
-        }
-        $publishLabel = $question->isAnswered() ? $this->manager->publishLabel($user, $question) : null;
-        $publish      = $publishLabel === null ? null : $this->forms->createNamed('qp_' . $name, CsrfActionType::class, null, [
-            'csrf_token_id' => self::csrfId('publish', $question->getId()),
-            'action'        => $this->url('task_question_publish', $params),
-        ])->createView();
+        $form = fn (string $action): ?FormView => $withForms && $allowed[$action] ? $this->buildForm($action, $question, $routeExtra)->createView() : null;
+        // The answer and withdraw dialogs carry the version this card shows: a write after a newer one is still refused,
+        // however late the dialog was opened (REQ-RUNTIME-003).
+        $url = fn (string $action): ?string => $allowed[$action] ? $this->url('task_question_' . $action, $params + ($action === self::ACTION_PUBLISH ? [] : ['version' => (string) $question->getVersion()])) : null;
 
         return [
             'question'     => $question,
             'answer'       => $question->getCurrentAnswer(),
             'superseded'   => array_values(array_filter($question->getAnswers(), static fn (TaskQuestionAnswer $a): bool => $a->isSuperseded())),
             'overdue'      => $question->isOverdue($today),
-            'answerForm'   => $answer,
-            'withdrawForm' => $withdraw,
-            'publishForm'  => $publish,
-            'publishLabel' => $publishLabel,
+            'answerForm'   => $form(self::ACTION_ANSWER),
+            'withdrawForm' => $form(self::ACTION_WITHDRAW),
+            'publishForm'  => $form(self::ACTION_PUBLISH),
+            // Since 2.31.0: the on-demand dialogs (null when the viewer may not use them).
+            'answerUrl'    => $url(self::ACTION_ANSWER),
+            'withdrawUrl'  => $url(self::ACTION_WITHDRAW),
+            'publishUrl'   => $url(self::ACTION_PUBLISH),
+            'publishLabel' => $allowed[self::ACTION_PUBLISH] ? $this->manager->publishLabel($user, $question) : null,
             'answerLinks'  => ($asker || $manages) && !$question->isWithdrawn() ? $this->answerLinks($question) : [],
             'mine'         => array_values(array_filter($subjects, static fn (string $subject): bool => in_array($subject, array_map(static fn (TaskQuestionRecipient $r): string => $r->getSubjectId(), $question->getRecipients()), true))) !== [],
         ];
+    }
+
+    /**
+     * Since 2.31.0: the form of one question dialog (`answer`, `withdraw`, `publish`) for the signed-in viewer, posting
+     * to its write route; null when the viewer may not use it (the same decision as the card's: the write checks again).
+     * `$version`: the version the page showed (the opener's `version`), else the current one.
+     *
+     * @param array<string, string> $routeExtra
+     */
+    // @phpstan-ignore missingType.generics (Rector drops a `FormInterface<mixed>|null` docblock as a useless union)
+    public function dialogForm(string $action, TaskQuestion $question, array $routeExtra = [], ?int $version = null): ?FormInterface
+    {
+        $user = $this->user();
+        if (!$user instanceof UserInterface || !in_array($action, self::DIALOG_ACTIONS, true)) {
+            return null;
+        }
+        $subjects = $this->manager->subjectIdsOf($user, $question->getTask()->getBoard()->getTenantKey());
+
+        return $this->allows($user, $action, $question, $subjects) ? $this->buildForm($action, $question, $routeExtra, $version) : null;
+    }
+
+    /**
+     * Whether the viewer may use a question action (the card shows it).
+     *
+     * @param list<string> $subjects
+     */
+    private function allows(UserInterface $user, string $action, TaskQuestion $question, array $subjects): bool
+    {
+        return match ($action) {
+            self::ACTION_ANSWER   => !$question->isWithdrawn() && $this->access->canAnswerQuestion($user, $question, $subjects),
+            self::ACTION_WITHDRAW => !$question->isWithdrawn() && $this->access->canWithdrawQuestion($user, $question),
+            default               => $question->isAnswered() && $this->manager->publishLabel($user, $question) !== null,
+        };
+    }
+
+    /**
+     * @param array<string, string> $routeExtra
+     *
+     * @return FormInterface<mixed>
+     */
+    private function buildForm(string $action, TaskQuestion $question, array $routeExtra, ?int $version = null): FormInterface
+    {
+        $version = (string) ($version ?? $question->getVersion());
+        $params  = ['taskId' => $question->getTask()->getId(), 'questionId' => $question->getId()] + $routeExtra;
+        $name    = str_replace('-', '', $question->getId());
+        if ($action === self::ACTION_ANSWER) {
+            $current = $question->getCurrentAnswer();
+            $data    = new TaskQuestionAnswerFormData(
+                $current instanceof TaskQuestionAnswer ? ($question->isMultiple() ? $current->getSelectedOptionIds() : ($current->getSelectedOptionIds()[0] ?? null)) : null,
+                $current?->getOtherText(),
+                $version,
+            );
+
+            return $this->forms->createNamed('qa_' . $name, TaskQuestionAnswerFormType::class, $data, [
+                'question'      => $question,
+                'csrf_token_id' => self::csrfId('answer', $question->getId()),
+                'action'        => $this->url('task_question_answer', $params),
+            ]);
+        }
+        if ($action === self::ACTION_WITHDRAW) {
+            return $this->forms->createNamed('qw_' . $name, TaskQuestionWithdrawFormType::class, new TaskQuestionWithdrawFormData('', $version), [
+                'csrf_token_id' => self::csrfId('withdraw', $question->getId()),
+                'action'        => $this->url('task_question_withdraw', $params),
+            ]);
+        }
+
+        return $this->forms->createNamed('qp_' . $name, CsrfActionType::class, null, [
+            'csrf_token_id' => self::csrfId('publish', $question->getId()),
+            'action'        => $this->url('task_question_publish', $params),
+        ]);
     }
 
     /**

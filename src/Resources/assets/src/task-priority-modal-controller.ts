@@ -7,6 +7,8 @@ export default class TaskPriorityModalController extends Controller<HTMLElement>
 
     declare readonly modalTarget: HTMLDialogElement;
 
+    declare readonly hasModalTarget: boolean;
+
     declare readonly firstOptionTarget: HTMLInputElement;
 
     declare readonly hasFirstOptionTarget: boolean;
@@ -20,7 +22,8 @@ export default class TaskPriorityModalController extends Controller<HTMLElement>
     /** Since 1.14: the picked option is highlighted at once (the label carries `is-selected`). */
     select(event: Event): void {
         const input = event.currentTarget as HTMLInputElement;
-        this.modalTarget.querySelectorAll('.nowo-task-detail__priority-option').forEach((option) => {
+        // Since 2.31.0: in the on-demand dialog fragment the controller sits on the form itself (no modal target).
+        (this.hasModalTarget ? this.modalTarget : this.element).querySelectorAll('.nowo-task-detail__priority-option').forEach((option) => {
             option.classList.toggle('is-selected', option.contains(input));
         });
     }

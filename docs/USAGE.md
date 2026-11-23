@@ -368,7 +368,7 @@ under the **Source** select:
       <p><a href="{{ path('app_manual', {page: 'import'}) }}">Format and examples</a></p>
   {% endblock %}
   ```
-- The **Import subtasks** dialog is included in the task page, so its block cannot be overridden from outside. Both
+- The **Import subtasks** dialog is loaded on demand from `task_import` (since 2.31.0), so its block cannot be overridden from outside. Both
   forms also render an optional link `{url, label}`: the `help_link` include parameter, or the Twig global
   `nowo_task_board_import_help_link` for every page at once. The label is escaped, and the URL must be http(s) or a path
   on the site (`/…`); anything else becomes `#`.
@@ -455,9 +455,10 @@ Every control of the manage UI is a Symfony Form (types under `Nowo\TaskBoardBun
 |----------|----------|------|
 | `manage/list.html.twig` | `filterForm` | `TaskListFilterType` — unmapped, client-side filters (Stimulus targets kept) |
 | `manage/task.html.twig` | `advanceForm` | `CsrfActionType` (`task_board_task_advance`; the status buttons post into `#nowo-task-advance-form`) |
-| `manage/_task_links_modal.html.twig` | `linkRemoveForm` | `CsrfActionType` (`task_board_task_link_remove`; the modal controller sets the action) |
-| `manage/_task_members_modal.html.twig` | `memberRemoveForms` (keyed by member id) | `CsrfActionType` (`task_board_task_member_remove_<id>`) |
-| `manage/_task_priority_modal.html.twig` | `priorityForm` | `TaskPriorityFormType` (flat `priority` radios + `_token`) |
+| `manage/_task_links_modal.html.twig` (the link dialog, since 2.31.0 only from its route) | `linkRemoveForm` | `CsrfActionType` (`task_board_task_link_remove`; the edit dialog sets the action on the server) |
+| `manage/_task_members_modal.html.twig` (the People dialog, since 2.31.0 only from its route) | `memberRemoveForms` (keyed by member id) | `CsrfActionType` (`task_board_task_member_remove_<id>`) |
+| `manage/_task_priority_modal.html.twig` (the Priority dialog, since 2.31.0 only from its route) | `priorityForm` | `TaskPriorityFormType` (flat `priority` radios + `_token`) |
+| `manage/list.html.twig` (since 2.31.0) | `restoreForm` | `CsrfActionType` (`task_board_task_restore`; every Restore button posts it with its own `formaction`) |
 
 Overrides and demos must not reintroduce raw `<form>` / `<input>` / `<select>` / `<textarea>` markup (`make check-no-raw-html-form`, part of `release-check`). Pattern:
 
@@ -518,6 +519,25 @@ nowo_task_board:
 **Emoji picker.** `board.icon_form_type: Nowo\UiKitBundle\Form\EmojiPickerType` swaps the icon field. The bundle's constraints still apply.
 
 **Remote dialogs.** TaskBoard answers redirects. Set `nowo_ui_kit.remote_dialog.convert_redirects: true`, and `step_routes` for steps, to answer a dialog request with 204 and the redirect header.
+
+**Dialogs load on demand (since 2.31.0).** The task page and panel never render a dialog the user has not opened (owner
+rule 2026-11-23). They carry one empty UiKit `remote_form_dialog` (`taskDialogId`, `data-testid="nowo-task-dialog"`);
+each opener is a link to the GET of the dialog's write route, which answers the fragment for `X-Nowo-Dialog: 1` and a
+page with the same form otherwise (`manage/dialog/page.html.twig`):
+
+| Dialog | Route (GET = dialog, POST = write) | Access (same as the write) |
+| --- | --- | --- |
+| People | `task_member` | edit the task |
+| Priority | `task_priority` | edit the task |
+| Import subtasks | `task_import` | edit the task and the `ACTION_IMPORT_TASKS` decision |
+| Log time | `task_time` | edit the task (404 without the time logger) |
+| Add dependency | `task_dependency` | edit the task (404 without dependencies) |
+| Add link / Edit link | `task_link` / `task_link_update` | edit the task (404 for a link not on it) |
+| Answer / Withdraw / Publish decision | `task_question_answer` / `_withdraw` / `_publish` | the card's rights (403 otherwise) |
+
+A post from the dialog answers `422` with the form and its errors when it is invalid, and `204` + `X-Nowo-Redirect`
+(the same target as a page post, the flash kept) once saved; without the dialog header every answer is the 2.30 one.
+The answer and withdraw links carry `?version=` (the version the card showed), so a late answer is still refused.
 
 ## Layout without forking pages
 

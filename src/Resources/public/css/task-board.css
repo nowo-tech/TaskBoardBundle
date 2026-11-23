@@ -609,12 +609,19 @@ body.modal-open {
     line-height: 1;
 }
 
-button.nowo-task-detail__priority-tag {
+button.nowo-task-detail__priority-tag,
+a.nowo-task-detail__priority-tag {
     cursor: pointer;
     transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
-button.nowo-task-detail__priority-tag:hover {
+/* Since 2.31.0: the clickable tag is a link to the on-demand Priority dialog. */
+a.nowo-task-detail__priority-tag {
+    text-decoration: none;
+}
+
+button.nowo-task-detail__priority-tag:hover,
+a.nowo-task-detail__priority-tag:hover {
     transform: translateY(-1px);
     box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
 }
@@ -1189,6 +1196,7 @@ button.nowo-task-detail__priority-tag:hover {
     color: inherit;
     font: inherit;
     text-align: start;
+    text-decoration: none;
     cursor: pointer;
 }
 
@@ -1330,6 +1338,7 @@ details.nowo-task-section[open] > summary,
     color: inherit;
     font: inherit;
     text-align: start;
+    text-decoration: none;
     cursor: pointer;
 }
 

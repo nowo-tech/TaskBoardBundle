@@ -40,3 +40,5 @@ services:
             $tenantContext: '@?Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext'
             $perPage: '%nowo_task_board.task_questions.my_questions_per_page%'
             $logger: '@?logger'
+            # Since 2.31.0: the on-demand question dialogs.
+            $remoteDialog: '@?Nowo\UiKitBundle\Dialog\RemoteDialogResponder'

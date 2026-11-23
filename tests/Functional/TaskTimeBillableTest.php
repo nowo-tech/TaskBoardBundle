@@ -59,7 +59,8 @@ final class TaskTimeBillableTest extends FunctionalTestCase
         $taskId                        = $task->getId();
         ScriptedTimeBillable::$default = true;
         $this->login($this->owner);
-        $crawler = $this->client->request('GET', self::BASE . 'task/' . $taskId);
+        // Since 2.31.0 the Log time form is the dialog route's (GET of task_time).
+        $crawler = $this->client->request('GET', self::BASE . 'task/' . $taskId . '/time');
         self::assertResponseIsSuccessful();
         self::assertSame('checked', $crawler->filter('input[name="task_time_entry[billable]"]')->attr('checked'), 'preset to the host default');
 

@@ -2,8 +2,20 @@
     {{ ('task_board.priority.' ~ priority.value)|trans({}, 'NowoTaskBoardBundle') }}
 {% endmacro %}
 
-{% macro priority_tag(priority, clickable) %}
-    {% if clickable %}
+{#- Since 2.31.0: href (the GET of task_priority) + dialog_id make the clickable tag a link opening the on-demand
+    dialog (a page without JavaScript); without href it is the 2.30 button of the inline dialog. -#}
+{% macro priority_tag(priority, clickable, href = null, dialog_id = null) %}
+    {% if clickable and href %}
+        <a
+            href="{{ href }}"
+            class="nowo-task-detail__priority-tag nowo-task-detail__priority-tag--{{ priority.value }}"
+            title="{{ 'task_board.task.edit_priority'|trans({}, 'NowoTaskBoardBundle') }}"
+            data-testid="nowo-task-priority-open"
+            {{ nowo_ui_html_attrs(nowo_ui_remote_form_opener(dialog_id, 'task_board.task.priority_modal_title'|trans({}, 'NowoTaskBoardBundle'), false, href)|merge({'aria-haspopup': 'dialog'})) }}
+        >
+            {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'flag'}) }}{{ _self.priority_label(priority) }}
+        </a>
+    {% elseif clickable %}
         <button
             type="button"
             class="nowo-task-detail__priority-tag nowo-task-detail__priority-tag--{{ priority.value }}"

@@ -7,7 +7,10 @@
     timeEntryBillableForm (the billable switch of each entry).
 #}
 {% set deviation = deviation|default(nowo_task_board_deviation(task)) %}
-{% set _canEdit = (canEditTask ?? true) and timeEntryForm|default(null) is not null %}
+{#- Since 2.31.0 the page gets timeLogging (the time logger is wired) and the Log time dialog loads on demand; a host
+    that still passes timeEntryForm gets the inline dialog of 2.30 (deprecated, removed in 3.0). -#}
+{% set _inline = timeEntryForm|default(null) is not null %}
+{% set _canEdit = (canEditTask ?? true) and (_inline or timeLogging|default(false)) %}
 {% set _rows = [{label: 'task_board.time.own'|trans({}, 'NowoTaskBoardBundle'), value: deviation, own: true}] %}
 {% if subtaskDeviation|default(null) %}
     {% set _rows = _rows|merge([{label: 'task_board.time.subtasks_sum'|trans({}, 'NowoTaskBoardBundle'), value: subtaskDeviation, own: false}]) %}
@@ -18,9 +21,16 @@
             {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'hourglass'}) }}{{ 'task_board.time.section'|trans({}, 'NowoTaskBoardBundle') }}
         </h2>
         {% if _canEdit %}
+            {% if _inline %}
             <button type="button" class="{{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-nowo-ui-dialog-open="nowo-task-time-dialog-{{ task.id }}">
                 {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}{{ 'task_board.time.log'|trans({}, 'NowoTaskBoardBundle') }}
             </button>
+            {% else %}
+            {% set _src = path(nowo_task_board_route('task_time'), {taskId: task.id}|merge(taskRouteExtra|default({}))) %}
+            <a href="{{ _src }}" class="{{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-testid="nowo-task-time-open" {{ nowo_ui_html_attrs(nowo_ui_remote_form_opener(taskDialogId|default('nowo-task-board-task-dialog-' ~ task.id), 'task_board.time.log'|trans({}, 'NowoTaskBoardBundle'), false, _src)|merge({'aria-haspopup': 'dialog'})) }}>
+                {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}{{ 'task_board.time.log'|trans({}, 'NowoTaskBoardBundle') }}
+            </a>
+            {% endif %}
         {% endif %}
     </header>
 
@@ -138,37 +148,6 @@
             {{ form_end(timeEntryBillableForm) }}
         {% endif %}
 
-        {% set _body %}
-            {# Since 1.26 (dialog rule v2): the actions in the footer, outside the scrolling form. #}
-            {{ form_start(timeEntryForm, {method: 'POST', attr: {id: 'nowo-task-time-form-' ~ task.id, class: 'nowo-task-dialog__body'}}) }}
-                <div class="nowo-task-dialog__grid">
-                    <div class="nowo-task-field">{{ form_row(timeEntryForm.minutes) }}</div>
-                    <div class="nowo-task-field">{{ form_row(timeEntryForm.loggedAt) }}</div>
-                </div>
-                <div class="nowo-task-field">{{ form_row(timeEntryForm.note) }}</div>
-                {% if timeEntryForm.billable is defined %}
-                    <div class="nowo-task-field">{{ form_row(timeEntryForm.billable) }}</div>
-                {% endif %}
-                {% for child in timeEntryForm %}
-                    {% if not child.rendered %}
-                        {{ form_row(child) }}
-                    {% endif %}
-                {% endfor %}
-            {{ form_end(timeEntryForm) }}
-        {% endset %}
-        {% set _footer %}
-                <button type="button" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-nowo-ui-dialog-close>{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
-                <button type="submit" form="nowo-task-time-form-{{ task.id }}" class="{{ nowo_ui_class('btn_primary', 'NowoTaskBoardBundle') }}">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'device-floppy'}) }}{{ 'task_board.time.log'|trans({}, 'NowoTaskBoardBundle') }}</button>
-        {% endset %}
-        {{ include(nowo_ui_partial('dialog', 'NowoTaskBoardBundle'), {
-            id: 'nowo-task-time-dialog-' ~ task.id,
-            title: 'task_board.time.log'|trans({}, 'NowoTaskBoardBundle'),
-            bundle: 'NowoTaskBoardBundle',
-            root_class: 'nowo-task-dialog nowo-task-dialog--native',
-            attr: {'data-dialog': 'time'},
-            body: _body,
-            footer: _footer,
-            footer_attr: {class: 'nowo-task-dialog__footer nowo-task-dialog__actions'},
-        }, false) }}
+        {% if _inline %}{{ include('@NowoTaskBoardBundle/manage/_task_time_dialog.html.twig') }}{% endif %}
     {% endif %}
 </section>

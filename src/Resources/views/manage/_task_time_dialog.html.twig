@@ -1,0 +1,42 @@
+{#
+    Since 2.31.0: the "Log time" dialog of a task (was inline in _task_time_section.html.twig). Loaded on demand from the
+    GET of task_time (dialog_fragment: body and actions only); a host that passes timeEntryForm to the section still gets
+    it inline (deprecated, removed in 3.0). Variables: task, timeEntryForm.
+#}
+        {% set _body %}
+            {# Since 1.26 (dialog rule v2): the actions in the footer, outside the scrolling form. #}
+            {{ form_start(timeEntryForm, {method: 'POST', attr: {id: 'nowo-task-time-form-' ~ task.id, class: 'nowo-task-dialog__body'}}) }}
+                <div class="nowo-task-dialog__grid">
+                    <div class="nowo-task-field">{{ form_row(timeEntryForm.minutes, dialog_fragment|default(false) ? {attr: timeEntryForm.minutes.vars.attr|merge({autofocus: 'autofocus'})} : {}) }}</div>
+                    <div class="nowo-task-field">{{ form_row(timeEntryForm.loggedAt) }}</div>
+                </div>
+                <div class="nowo-task-field">{{ form_row(timeEntryForm.note) }}</div>
+                {% if timeEntryForm.billable is defined %}
+                    <div class="nowo-task-field">{{ form_row(timeEntryForm.billable) }}</div>
+                {% endif %}
+                {% for child in timeEntryForm %}
+                    {% if not child.rendered %}
+                        {{ form_row(child) }}
+                    {% endif %}
+                {% endfor %}
+            {{ form_end(timeEntryForm) }}
+        {% endset %}
+        {% set _footer %}
+                {{ include('@NowoTaskBoardBundle/manage/dialog/_cancel.html.twig', {label: 'task_board.action.cancel'}) }}
+                <button type="submit" form="nowo-task-time-form-{{ task.id }}" class="{{ nowo_ui_class('btn_primary', 'NowoTaskBoardBundle') }}">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'device-floppy'}) }}{{ 'task_board.time.log'|trans({}, 'NowoTaskBoardBundle') }}</button>
+        {% endset %}
+        {% if dialog_fragment|default(false) %}
+            {{ _body }}
+            <div class="nowo-task-dialog__footer nowo-task-dialog__actions" data-nowo-ui-dialog-actions>{{ _footer }}</div>
+        {% else %}
+        {{ include(nowo_ui_partial('dialog', 'NowoTaskBoardBundle'), {
+            id: 'nowo-task-time-dialog-' ~ task.id,
+            title: 'task_board.time.log'|trans({}, 'NowoTaskBoardBundle'),
+            bundle: 'NowoTaskBoardBundle',
+            root_class: 'nowo-task-dialog nowo-task-dialog--native',
+            attr: {'data-dialog': 'time'},
+            body: _body,
+            footer: _footer,
+            footer_attr: {class: 'nowo-task-dialog__footer nowo-task-dialog__actions'},
+        }, false) }}
+        {% endif %}

@@ -202,8 +202,9 @@ final class ConnectionControllerTest extends SyncFunctionalTestCase
         // The list view lists them with Restore.
         $crawler = $this->client->request('GET', '/tools/task-board/board/' . $board->getId() . '/list');
         self::assertSelectorTextContains('[data-testid="nowo-task-archived"]', 'Archived tasks (2)');
-        $form = $crawler->filter('[data-testid="nowo-task-archived"] form')->first();
-        $this->client->request('POST', (string) $form->attr('action'), ['_token' => PredictableCsrfTokenManager::value('task_board_task_restore')]);
+        // Since 2.31.0: one shared CSRF-only form; each Restore button posts it with its own formaction.
+        $button = $crawler->filter('[data-testid="nowo-task-archived"] button[data-testid="nowo-task-restore"]')->first();
+        $this->client->request('POST', (string) $button->attr('formaction'), ['_token' => PredictableCsrfTokenManager::value('task_board_task_restore')]);
         self::assertResponseRedirects();
         $this->client->followRedirect();
         self::assertSelectorTextContains('[data-testid="nowo-task-archived"]', 'Archived tasks (1)');

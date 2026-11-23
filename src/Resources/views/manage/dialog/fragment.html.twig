@@ -1,0 +1,7 @@
+{#
+    Since 2.31.0 (owner rule 2026-11-23, every dialog loads its content on demand): the answer of a dialog route to a
+    UiKit remote dialog request (`X-Nowo-Dialog: 1`). Variables: dialog_template (the dialog partial), dialog_vars (its
+    variables). The partial renders its body and, in [data-nowo-ui-dialog-actions], its actions; the remote dialog moves
+    them into its footer.
+#}
+{{ include(dialog_template, dialog_vars|merge({dialog_fragment: true, dialog_page: false})) }}

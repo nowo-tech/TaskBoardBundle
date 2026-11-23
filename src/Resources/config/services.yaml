@@ -160,6 +160,8 @@ services:
             $maxTasks: '%nowo_task_board.board.max_tasks%'
             # Since 1.24: the dialog mode header of an invalid board create (`board.create_dialog_header`).
             $createDialogHeader: '%nowo_task_board.board.create_dialog_header%'
+            # Since 2.31.0: the on-demand dialogs answer through UiKit's responder (its configured header names).
+            $remoteDialog: '@?Nowo\UiKitBundle\Dialog\RemoteDialogResponder'
 
     # Since 2.3.0 (audit IC-I3): task events of a copy or an occurrence are dispatched after its commit.
     # Since 2.20.0 (audit PX-L3): public, so a host that calls a port inside its own transaction holds the events until its commit.

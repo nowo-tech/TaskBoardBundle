@@ -1,0 +1,37 @@
+{#
+    Since 2.31.0 (owner rule 2026-11-23): one question dialog, loaded on demand from the GET of its write route
+    (task_question_answer, _withdraw, _publish). Variables: task, question, question_action (answer / withdraw /
+    publish), form (FormView, posting to that route), dialog_fragment, dialog_page, dialog_back_url. The answer and
+    withdraw forms carry the version read: a racing write is refused, never overwritten.
+#}
+{% set _b = 'NowoTaskBoardBundle' %}
+{% set _id = 'nowo-task-question-' ~ question_action ~ '-form-' ~ question.id %}
+{% if question_action == 'answer' %}
+    {{ form_start(form, {method: 'POST', attr: {id: _id, class: 'nowo-task-dialog__body nowo-task-question-answer-form', 'data-testid': 'nowo-task-question-answer-form'}}) }}
+        <p class="nowo-task-dialog__help">{{ question.text }}</p>
+        {% if form.options is defined %}{{ form_row(form.options, {attr: form.options.vars.attr|merge({autofocus: 'autofocus'})}) }}{% endif %}
+        {% if form.otherText is defined %}{{ form_row(form.otherText, form.options is defined ? {} : {attr: form.otherText.vars.attr|merge({autofocus: 'autofocus'})}) }}{% endif %}
+        {% for child in form %}{% if not child.rendered %}{{ form_row(child) }}{% endif %}{% endfor %}
+    {{ form_end(form, {render_rest: false}) }}
+    {% set _submit = 'task_board.question.answer.submit'|trans({}, _b) %}
+    {% set _submitClass = 'btn_primary' %}
+{% elseif question_action == 'withdraw' %}
+    {{ form_start(form, {method: 'POST', attr: {id: _id, class: 'nowo-task-dialog__body nowo-task-question-withdraw-form', 'data-testid': 'nowo-task-question-withdraw-form'}}) }}
+        <p class="nowo-task-dialog__help">{{ question.text }}</p>
+        {{ form_row(form.reason, {attr: form.reason.vars.attr|merge({autofocus: 'autofocus'})}) }}
+        {% for child in form %}{% if not child.rendered %}{{ form_row(child) }}{% endif %}{% endfor %}
+    {{ form_end(form, {render_rest: false}) }}
+    {% set _submit = 'task_board.question.withdraw.submit'|trans({}, _b) %}
+    {% set _submitClass = 'btn_danger' %}
+{% else %}
+    {{ form_start(form, {method: 'POST', attr: {id: _id, class: 'nowo-task-dialog__body nowo-task-question__publish'}}) }}
+        <p class="nowo-task-dialog__help">{{ question.text }}</p>
+        {% for child in form %}{% if not child.rendered %}{{ form_row(child) }}{% endif %}{% endfor %}
+    {{ form_end(form, {render_rest: false}) }}
+    {% set _submit = publishLabel|default(null) ?: 'task_board.question.published'|trans({}, _b) %}
+    {% set _submitClass = 'btn_primary' %}
+{% endif %}
+<div class="nowo-task-dialog__footer nowo-task-dialog__actions" data-nowo-ui-dialog-actions>
+    {{ include('@NowoTaskBoardBundle/manage/dialog/_cancel.html.twig', {label: 'task_board.action.cancel'}) }}
+    <button type="submit" form="{{ _id }}" class="{{ nowo_ui_class(_submitClass, _b) }}" data-testid="nowo-task-question-{{ question_action }}-submit"{% if question_action == 'publish' %} autofocus="autofocus"{% endif %}>{{ _submit }}</button>
+</div>

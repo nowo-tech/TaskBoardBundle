@@ -131,11 +131,16 @@ test('task page: show scaffold, stacked dialogs, kit tree', async ({ page }) => 
   await page.goto(href ?? '/');
   await expect(page.locator('[data-nowo-ui-page="show"] .nowo-task-page')).toBeVisible();
 
-  await page.locator('[data-action*="nowo-task-board-task-members-modal#open"]').first().click();
-  const members = page.locator('dialog[data-nowo-task-board-task-members-modal-target="modal"]');
+  // Since 2.31.0 (owner rule 2026-11-23): the page carries one empty remote dialog and no dialog form; each opener
+  // loads its fragment on demand.
+  const members = page.getByTestId('nowo-task-dialog');
+  await expect(members.locator('form')).toHaveCount(0);
+  await page.getByTestId('nowo-task-members-open').click();
   await expect(members).toBeVisible();
+  await expect(members.locator('form[id^="nowo-task-members-add-"]')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(members).toBeHidden();
+  await expect(members.locator('form')).toHaveCount(0);
 
   // Help opens over Import subtasks; Escape closes one at a time.
   const importButton = page.locator('.nowo-task-subtask-import__open');
@@ -146,8 +151,11 @@ test('task page: show scaffold, stacked dialogs, kit tree', async ({ page }) => 
     await expect(help).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(help).toBeHidden();
-    await expect(page.locator('dialog[data-dialog="subtask-import"]')).toBeVisible();
-    await page.keyboard.press('Escape');
+    const importDialog = page.getByTestId('nowo-task-dialog');
+    await expect(importDialog).toBeVisible();
+    // Cancel closes the on-demand dialog (a second Escape in the same instant is a browser close-watcher matter).
+    await importDialog.locator('[data-nowo-ui-dialog-close]').first().click();
+    await expect(importDialog).toBeHidden();
   }
 
   // A new subtask lands in the kit's tree, as a treeitem.
@@ -287,8 +295,8 @@ test('task page: no sideways scroll at 1280 px with a link row', async ({ page }
   const href = await page.locator('.nowo-task-card a[href*="/task/"]').first().getAttribute('href');
   await page.goto(href ?? '/');
   if ((await page.locator('.nowo-task-detail__link-row').count()) === 0) {
-    await page.locator('[data-action*="nowo-task-board-task-links-modal#openAdd"]').first().click();
-    const dialog = page.locator('dialog[data-nowo-task-board-task-links-modal-target="modal"]');
+    await page.getByTestId('nowo-task-link-add').click();
+    const dialog = page.getByTestId('nowo-task-dialog');
     await dialog.locator('input[data-nowo-task-board-task-links-modal-target="url"]').fill('https://example.test/some/long/path');
     await dialog.locator('footer button[form="nowo-task-link-form"]').click();
     await expect(page.locator('.nowo-task-detail__link-row').first()).toBeVisible();

@@ -191,6 +191,17 @@ final class ManageWritesTest extends FunctionalTestCase
         self::assertCount(1, $this->em->getRepository(TaskMember::class)->findBy(['task' => $task]));
         $this->client->followRedirect();
         self::assertSelectorExists('.alert-danger');
+
+        // Since 2.31.0, from the on-demand People dialog: the refusal is answered in place (422), on the person field.
+        OwnerOnlyAssigneeProvider::$offeredEmails = ['other@example.com'];
+        try {
+            $this->client->request('POST', self::BASE . '/task/' . $task->getId() . '/member', ['task_member_form' => ['user' => (string) $other->getId(), 'memberRole' => 'watcher', '_token' => $this->csrf('task_member_form')]], [], ['HTTP_X_NOWO_DIALOG' => '1']);
+        } finally {
+            OwnerOnlyAssigneeProvider::$offeredEmails = [];
+        }
+        self::assertResponseStatusCodeSame(422);
+        self::assertSelectorExists('form[id^="nowo-task-members-add-"]');
+        self::assertCount(1, $this->em->getRepository(TaskMember::class)->findBy(['task' => $task]));
     }
 
     public function testASubtaskIsCreatedUnderItsParent(): void
@@ -257,7 +268,7 @@ final class ManageWritesTest extends FunctionalTestCase
         $this->task($board, 'Twin', position: 2);
         $this->login($this->owner);
 
-        $crawler = $this->client->request('GET', self::BASE . '/task/' . $task->getId());
+        $crawler = $this->client->request('GET', self::BASE . '/task/' . $task->getId() . '/dependency');
 
         self::assertSame(['Twin', 'Twin (2)'], $crawler->filter('select[name="task_dependency[taskId]"] option[value!=""]')->each(static fn ($option): string => trim($option->text())));
     }

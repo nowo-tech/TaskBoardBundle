@@ -1,0 +1,23 @@
+{#
+    Since 2.31.0 (owner rule 2026-11-23): the same dialog route without JavaScript (no `X-Nowo-Dialog` header): a page with
+    the dialog's form. Variables: page (ShowPage, its title is the dialog's), dialog_template, dialog_vars,
+    dialog_back_url (where Cancel goes: the task page, or the local `_target_path`).
+#}
+{% extends '@NowoUiKitBundle/page/show.html.twig' %}
+
+{% block nowo_ui_styles %}
+    {{ parent() }}
+    <link rel="stylesheet" href="{{ asset('css/task-board.css', 'nowo_task_board') }}">
+{% endblock %}
+
+{% block nowo_ui_scripts %}
+    {{ parent() }}
+    <script src="{{ asset('js/task-board.js', 'nowo_task_board') }}" defer></script>
+{% endblock %}
+
+{% block nowo_ui_show_after %}
+    <div class="nowo-task-dialog-page" data-testid="nowo-task-dialog-page">
+        <p><a href="{{ dialog_back_url }}" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }}">{{ 'task_board.action.back'|trans({}, 'NowoTaskBoardBundle') }}</a></p>
+        {{ include(dialog_template, dialog_vars|merge({dialog_fragment: true, dialog_page: true, dialog_back_url: dialog_back_url})) }}
+    </div>
+{% endblock %}

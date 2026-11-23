@@ -45,6 +45,7 @@ use Nowo\TaskBoardBundle\Entity\ColumnSet;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
+use Nowo\TaskBoardBundle\Entity\TaskLink;
 use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
 use Nowo\TaskBoardBundle\Enum\CalendarMode;
 use Nowo\TaskBoardBundle\Enum\GanttScale;
@@ -134,6 +135,7 @@ use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
 use Nowo\TaskBoardBundle\Ui\TaskBoardPages;
 use Nowo\TaskBoardBundle\View\TaskBoardDefaultViewResolverInterface;
 use Nowo\TransactionDoctrine\Symfony\Conflict\ConflictResponsePolicy;
+use Nowo\UiKitBundle\Dialog\RemoteDialogResponder;
 use Nowo\UiKitBundle\View\Action;
 use Nowo\UiKitBundle\View\Column;
 use Nowo\UiKitBundle\View\Crumb;
@@ -205,6 +207,31 @@ final class TaskBoardManageController extends AbstractController
 
     /** Since 2.24.0: a calendar event move with a missing or malformed value. */
     public const EVENT_INVALID = 'CALENDAR_EVENT_INVALID';
+
+    /**
+     * Since 2.31.0 (owner rule 2026-11-23, every dialog loads its content on demand): the task dialogs served by the GET of
+     * their write route, name => [partial, title translation key].
+     */
+    public const DIALOG_MEMBERS = 'members';
+
+    public const DIALOG_PRIORITY = 'priority';
+
+    public const DIALOG_SUBTASK_IMPORT = 'subtask_import';
+
+    public const DIALOG_TIME = 'time';
+
+    public const DIALOG_LINK = 'link';
+
+    public const DIALOG_DEPENDENCY = 'dependency';
+
+    private const TASK_DIALOGS = [
+        self::DIALOG_MEMBERS        => ['@NowoTaskBoardBundle/manage/_task_members_modal.html.twig', 'task_board.task.members_modal_title'],
+        self::DIALOG_PRIORITY       => ['@NowoTaskBoardBundle/manage/_task_priority_modal.html.twig', 'task_board.task.priority_modal_title'],
+        self::DIALOG_SUBTASK_IMPORT => ['@NowoTaskBoardBundle/manage/_task_subtask_import.html.twig', 'task_board.import.subtasks.title'],
+        self::DIALOG_TIME           => ['@NowoTaskBoardBundle/manage/_task_time_dialog.html.twig', 'task_board.time.log'],
+        self::DIALOG_LINK           => ['@NowoTaskBoardBundle/manage/_task_links_modal.html.twig', 'task_board.task.links_modal_add_title'],
+        self::DIALOG_DEPENDENCY     => ['@NowoTaskBoardBundle/manage/_task_dependency_dialog.html.twig', 'task_board.dependency.add'],
+    ];
 
     /** Route variables never forwarded from the query by the default-view redirect (audit EX-L1). */
     private const DEFAULT_VIEW_DROPPED_KEYS = ['boardId', 'board', 'tenantSlug', 'taskId'];
@@ -304,6 +331,8 @@ final class TaskBoardManageController extends AbstractController
         // (transaction-doctrine's `conflict_response`; 409 + Retry-After 1 without it).
         private readonly ?CalendarEventCollector $eventCollector = null,
         private readonly ?ConflictResponsePolicy $conflictPolicy = null,
+        // Since 2.31.0 (owner rule 2026-11-23): UiKit's remote dialog answers, with the host's configured header names.
+        private readonly ?RemoteDialogResponder $remoteDialog = null,
     ) {
     }
 
@@ -892,7 +921,7 @@ final class TaskBoardManageController extends AbstractController
      * their `parent` — with their Gantt relations (the bundle's own CSV / JSON documents them; third-party exports
      * work too). Needs edit rights on the task.
      */
-    #[Route('/tools/task-board/task/{taskId}/import', name: 'nowo_task_board_task_import', methods: ['POST'])]
+    #[Route('/tools/task-board/task/{taskId}/import', name: 'nowo_task_board_task_import', methods: ['GET', 'POST'])]
     public function importIntoTask(string $taskId, Request $request): Response
     {
         $user = $this->requireUser();
@@ -900,11 +929,17 @@ final class TaskBoardManageController extends AbstractController
         if (!$this->resourceAccessChecker->canImportIntoTask($user, $task)) {
             throw $this->createAccessDeniedException('Task import denied.');
         }
-        $form = $this->createSubtaskImportForm($task);
+        $form = $this->createSubtaskImportForm($task, $this->dialogRouteExtra($request));
+        if ($this->isReadRequest($request)) {
+            return $this->renderTaskDialog($request, $task, self::DIALOG_SUBTASK_IMPORT, ['subtaskImportForm' => $form->createView()]);
+        }
         $form->handleRequest($request);
         /** @var TaskImportFormData $data */
         $data = $form->getData();
         $file = $form->isSubmitted() && $form->isValid() ? $data->file : null;
+        if ($file === null && $form->isSubmitted() && $this->isRemoteDialogRequest($request)) {
+            return $this->renderTaskDialog($request, $task, self::DIALOG_SUBTASK_IMPORT, ['subtaskImportForm' => $form->createView()], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
         if ($file === null) {
             $this->addFlash('error', 'task_board.flash.import_file_required');
 
@@ -965,12 +1000,9 @@ final class TaskBoardManageController extends AbstractController
         $priorityNames = array_map(strval(...), array_keys($priorities));
         $columnNames   = array_map(strval(...), array_keys($columns));
         $this->primeAvatars($tasks);
-        // Since 1.23: the archived tasks of the board, each with its Restore form (editors).
-        $archived     = $this->taskRepository instanceof ArchiveAwareTaskRepositoryInterface ? $this->taskRepository->findArchivedByBoard($board, $this->maxTasks) : [];
-        $restoreForms = [];
-        foreach ($canEditBoard ? $archived : [] as $archivedTask) {
-            $restoreForms[$archivedTask->getId()] = $this->csrfActionForm('task_board_task_restore')->createView();
-        }
+        // Since 1.23: the archived tasks of the board; since 2.31.0 one CSRF-only Restore form for all of them (each row's
+        // button posts it with its own formaction), no form per row (owner rule 2026-11-23).
+        $archived = $this->taskRepository instanceof ArchiveAwareTaskRepositoryInterface ? $this->taskRepository->findArchivedByBoard($board, $this->maxTasks) : [];
 
         return $this->render($this->templates['list'], [
             'board'       => $board,
@@ -995,7 +1027,9 @@ final class TaskBoardManageController extends AbstractController
             'taskWindow'      => $taskWindow,
             // Since 1.23: the archived tasks of the board (most recent first) and their Restore form.
             'archivedTasks' => $archived,
-            'restoreForms'  => $restoreForms,
+            'restoreForm'   => $canEditBoard && $archived !== [] ? $this->csrfActionForm('task_board_task_restore')->createView() : null,
+            // Deprecated since 2.31.0 (always empty; removed in 3.0): use restoreForm.
+            'restoreForms' => [],
             // Since 2.19.0 (FR-028).
             'customFields'      => $custom['customFields'],
             'customValues'      => $custom['customValues'],
@@ -1603,14 +1637,20 @@ final class TaskBoardManageController extends AbstractController
         return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $task->getBoard()->getId()]);
     }
 
-    #[Route('/tools/task-board/task/{taskId}/link', name: 'nowo_task_board_task_link', methods: ['POST'])]
+    #[Route('/tools/task-board/task/{taskId}/link', name: 'nowo_task_board_task_link', methods: ['GET', 'POST'])]
     public function attachLink(string $taskId, Request $request): Response
     {
         $user = $this->requireUser();
         $task = $this->findTask($taskId, $user, true);
 
         $form = $this->createForm(TaskLinkFormType::class, new TaskLinkFormData());
+        if ($this->isReadRequest($request)) {
+            return $this->renderTaskDialog($request, $task, self::DIALOG_LINK, $this->linkDialogData($form));
+        }
         $form->handleRequest($request);
+        if ($this->invalidInDialog($request, $form)) {
+            return $this->renderTaskDialog($request, $task, self::DIALOG_LINK, $this->linkDialogData($form), Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
 
         if ($form->isSubmitted() && $form->isValid()) {
             /** @var TaskLinkFormData $data */
@@ -1623,14 +1663,22 @@ final class TaskBoardManageController extends AbstractController
         return $this->afterTaskWrite($request, $task, $user);
     }
 
-    #[Route('/tools/task-board/task/{taskId}/link/{linkId}', name: 'nowo_task_board_task_link_update', methods: ['POST'])]
+    #[Route('/tools/task-board/task/{taskId}/link/{linkId}', name: 'nowo_task_board_task_link_update', methods: ['GET', 'POST'])]
     public function updateLink(string $taskId, string $linkId, Request $request): Response
     {
         $user = $this->requireUser();
         $task = $this->findTask($taskId, $user, true);
 
+        if ($this->isReadRequest($request)) {
+            $link = $this->editableLink($task, $linkId);
+
+            return $this->renderTaskDialog($request, $task, self::DIALOG_LINK, $this->linkDialogData($this->createForm(TaskLinkFormType::class, new TaskLinkFormData($link->getLinkType(), $link->getUrl(), $link->getLabel(), $link->getExternalId())), $link));
+        }
         $form = $this->createForm(TaskLinkFormType::class, new TaskLinkFormData());
         $form->handleRequest($request);
+        if ($this->invalidInDialog($request, $form)) {
+            return $this->renderTaskDialog($request, $task, self::DIALOG_LINK, $this->linkDialogData($form, $this->editableLink($task, $linkId)), Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
 
         if ($form->isSubmitted() && $form->isValid()) {
             /** @var TaskLinkFormData $data */
@@ -1660,14 +1708,20 @@ final class TaskBoardManageController extends AbstractController
         return $this->afterTaskWrite($request, $task, $user);
     }
 
-    #[Route('/tools/task-board/task/{taskId}/member', name: 'nowo_task_board_task_member', methods: ['POST'])]
+    #[Route('/tools/task-board/task/{taskId}/member', name: 'nowo_task_board_task_member', methods: ['GET', 'POST'])]
     public function addMember(string $taskId, Request $request): Response
     {
         $user = $this->requireUser();
         $task = $this->findTask($taskId, $user, true);
 
         $form = $this->createMemberForm($task->getBoard());
+        if ($this->isReadRequest($request)) {
+            return $this->renderTaskDialog($request, $task, self::DIALOG_MEMBERS, $this->membersDialogData($task, $form, $request));
+        }
         $form->handleRequest($request);
+        if ($this->invalidInDialog($request, $form)) {
+            return $this->renderTaskDialog($request, $task, self::DIALOG_MEMBERS, $this->membersDialogData($task, $form, $request), Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
 
         if ($form->isSubmitted() && $form->isValid()) {
             /** @var TaskMemberFormData $data */
@@ -1677,6 +1731,12 @@ final class TaskBoardManageController extends AbstractController
                 $this->logWrite('task_member', ['task_id' => $taskId]);
                 $this->addFlash('success', 'task_board.flash.member_added');
             } catch (UnassignableUserException) {
+                if ($this->isRemoteDialogRequest($request)) {
+                    // Since 2.31.0: the dialog keeps the choice and says why, in place (422).
+                    $form->get('user')->addError(new FormError($this->translator->trans('task_board.flash.member_not_assignable', [], TaskBoardPages::DOMAIN)));
+
+                    return $this->renderTaskDialog($request, $task, self::DIALOG_MEMBERS, $this->membersDialogData($task, $form, $request), Response::HTTP_UNPROCESSABLE_ENTITY);
+                }
                 $this->addFlash('error', 'task_board.flash.member_not_assignable');
             }
         }
@@ -1699,12 +1759,15 @@ final class TaskBoardManageController extends AbstractController
         return $this->afterTaskWrite($request, $task, $user);
     }
 
-    #[Route('/tools/task-board/task/{taskId}/priority', name: 'nowo_task_board_task_priority', methods: ['POST'])]
+    #[Route('/tools/task-board/task/{taskId}/priority', name: 'nowo_task_board_task_priority', methods: ['GET', 'POST'])]
     public function updatePriority(string $taskId, Request $request): Response
     {
         $user = $this->requireUser();
         $task = $this->findTask($taskId, $user, true);
-        $form = $this->createPriorityForm($task);
+        $form = $this->createPriorityForm($task, $this->dialogRouteExtra($request));
+        if ($this->isReadRequest($request)) {
+            return $this->renderTaskDialog($request, $task, self::DIALOG_PRIORITY, ['priorityForm' => $form->createView(), 'priorities' => TaskPriority::cases()]);
+        }
         $form->submit($request->request->all());
         if ($form->getErrors()->count() > 0) {
             // Root errors are CSRF failures; an unknown priority is a field error and is ignored as before.
@@ -1767,14 +1830,17 @@ final class TaskBoardManageController extends AbstractController
      * Since 1.15: adds a dependency between the task and another task of its board (CSRF, edit access); a dependency
      * on itself, towards another board, a duplicate or one closing a cycle is refused with a flash message.
      */
-    #[Route('/tools/task-board/task/{taskId}/dependency', name: 'nowo_task_board_task_dependency', methods: ['POST'])]
+    #[Route('/tools/task-board/task/{taskId}/dependency', name: 'nowo_task_board_task_dependency', methods: ['GET', 'POST'])]
     public function addDependency(string $taskId, Request $request): Response
     {
         $user    = $this->requireUser();
         $task    = $this->findTask($taskId, $user, true);
         $manager = $this->dependencyManager ?? throw new NotFoundHttpException('Dependencies are not available.');
 
-        $form = $this->createDependencyForm($task);
+        $form = $this->createDependencyForm($task, $this->dialogRouteExtra($request));
+        if ($this->isReadRequest($request)) {
+            return $this->renderTaskDialog($request, $task, self::DIALOG_DEPENDENCY, ['dependencyForm' => $form->createView()]);
+        }
         $form->handleRequest($request);
         if (!$form->isSubmitted()) {
             return $this->afterTaskWrite($request, $task, $user);
@@ -1785,9 +1851,7 @@ final class TaskBoardManageController extends AbstractController
         $data  = $form->getData();
         $other = $form->isValid() && $data->taskId !== null ? $this->taskRepository->findById($data->taskId) : null;
         if (!$other instanceof Task) {
-            $this->addFlash('error', 'task_board.flash.dependency_invalid');
-
-            return $this->afterTaskWrite($request, $task, $user);
+            return $this->dependencyRefused($request, $task, $user, $form, 'task_board.flash.dependency_invalid');
         }
 
         try {
@@ -1796,7 +1860,7 @@ final class TaskBoardManageController extends AbstractController
             $this->logWrite('task_dependency', ['task_id' => $taskId, 'other_task_id' => $other->getId()]);
             $this->addFlash('success', 'task_board.flash.dependency_added');
         } catch (InvalidTaskDependencyException $exception) {
-            $this->addFlash('error', 'task_board.flash.dependency_' . $exception->reason);
+            return $this->dependencyRefused($request, $task, $user, $form, 'task_board.flash.dependency_' . $exception->reason);
         }
 
         return $this->afterTaskWrite($request, $task, $user);
@@ -1825,18 +1889,24 @@ final class TaskBoardManageController extends AbstractController
     /**
      * Since 1.15: logs time spent on the task (minutes, day, note; CSRF, edit access).
      */
-    #[Route('/tools/task-board/task/{taskId}/time', name: 'nowo_task_board_task_time', methods: ['POST'])]
+    #[Route('/tools/task-board/task/{taskId}/time', name: 'nowo_task_board_task_time', methods: ['GET', 'POST'])]
     public function logTime(string $taskId, Request $request): Response
     {
         $user   = $this->requireUser();
         $task   = $this->findTask($taskId, $user, true);
         $logger = $this->timeLogger ?? throw new NotFoundHttpException('Time entries are not available.');
 
+        if ($this->isReadRequest($request)) {
+            return $this->renderTaskDialog($request, $task, self::DIALOG_TIME, ['timeEntryForm' => $this->createTimeEntryForm($task, $user, $this->dialogRouteExtra($request))->createView()]);
+        }
         $default = $this->billableDefault($task, $user);
         $form    = $this->createForm(TaskTimeEntryFormType::class, new TaskTimeEntryFormData(loggedAt: $this->today(), billable: $default ?? false));
         $form->handleRequest($request);
         if ($form->isSubmitted()) {
             $this->denyOnRootErrors($form);
+            if ($this->invalidInDialog($request, $form)) {
+                return $this->renderTaskDialog($request, $task, self::DIALOG_TIME, ['timeEntryForm' => $form->createView()], Response::HTTP_UNPROCESSABLE_ENTITY);
+            }
             /** @var TaskTimeEntryFormData $data */
             $data = $form->getData();
             if ($form->isValid() && $data->minutes !== null && $data->loggedAt !== null) {
@@ -2130,23 +2200,10 @@ final class TaskBoardManageController extends AbstractController
      */
     private function taskViewData(Task $task, UserInterface $user, FormInterface $taskForm, array $routeExtra = []): array
     {
-        $taskId      = $task->getId();
-        $linkForm    = $this->createForm(TaskLinkFormType::class, new TaskLinkFormData());
-        $memberForm  = $this->createMemberForm($task->getBoard());
         $subtaskForm = $this->createForm(TaskFormType::class, new TaskFormData(), [
             'column_choices' => $this->buildColumnChoices($task->getBoard()),
             'compact'        => true,
         ]);
-
-        /** @var array<string, FormView> $memberRemoveForms */
-        $memberRemoveForms = [];
-        foreach ($task->getMembers() as $member) {
-            $memberId                     = (string) $member->getId();
-            $memberRemoveForms[$memberId] = $this->csrfActionForm(
-                'task_board_task_member_remove_' . $memberId,
-                $this->generateUrl($this->routes['task_member_remove']['name'], ['taskId' => $taskId, 'memberId' => $memberId] + $routeExtra),
-            )->createView();
-        }
 
         // The board's tasks in one query: the subtree (any depth) and its done / total without a query per node.
         [$boardTasks]    = $this->boardTasks($task->getBoard());
@@ -2157,31 +2214,30 @@ final class TaskBoardManageController extends AbstractController
         return [
             'task'             => $task,
             'taskForm'         => $taskForm,
-            'linkForm'         => $linkForm,
-            'memberForm'       => $memberForm,
             'subtaskForm'      => $subtaskForm,
             'columnNavigation' => $this->taskManager->getColumnNavigation($task),
             // Since 1.20: previous / next in the board order (`?from=list`: the list's), and among the parent's subtasks.
-            'taskNavigation'    => TaskNavigator::navigate($task, $boardTasks, $taskTree, $this->currentRequest()?->query->getString('from'), $this->topLevelOnly),
-            'subtaskTotal'      => $subtaskProgress->total,
-            'subtaskDone'       => $subtaskProgress->done,
-            'subtaskProgress'   => $subtaskProgress,
-            'taskTree'          => $taskTree,
-            'canEditTask'       => $this->resourceAccessChecker->canEditTask($user, $task),
-            'priorities'        => TaskPriority::cases(),
-            'dashboardRoute'    => $this->dashboardRoute,
-            'advanceForm'       => $this->csrfActionForm('task_board_task_advance')->createView(),
-            'linkRemoveForm'    => $this->csrfActionForm('task_board_task_link_remove')->createView(),
-            'priorityForm'      => $this->createPriorityForm($task, $routeExtra)->createView(),
-            'memberRemoveForms' => $memberRemoveForms,
+            'taskNavigation'  => TaskNavigator::navigate($task, $boardTasks, $taskTree, $this->currentRequest()?->query->getString('from'), $this->topLevelOnly),
+            'subtaskTotal'    => $subtaskProgress->total,
+            'subtaskDone'     => $subtaskProgress->done,
+            'subtaskProgress' => $subtaskProgress,
+            'taskTree'        => $taskTree,
+            'canEditTask'     => $this->resourceAccessChecker->canEditTask($user, $task),
+            'priorities'      => TaskPriority::cases(),
+            'dashboardRoute'  => $this->dashboardRoute,
+            'advanceForm'     => $this->csrfActionForm('task_board_task_advance')->createView(),
+            // Since 2.31.0 (owner rule 2026-11-23): the people, priority, link, import, time and dependency dialogs load
+            // on demand into this one remote dialog (their forms are no longer built here; memberRemoveForms stays empty).
+            'taskDialogId'      => 'nowo-task-board-task-dialog-' . $task->getId(),
+            'memberRemoveForms' => [],
             'taskRouteExtra'    => $routeExtra,
             // Since 1.15: dependencies, time entries and the deviation (own, and the subtasks' sum).
-            'dependencyForm'       => $this->dependencyManager instanceof TaskDependencyManager ? $this->createDependencyForm($task, $routeExtra, $boardTasks)->createView() : null,
+            'dependencies'         => $this->dependencyManager instanceof TaskDependencyManager,
             'dependencyRemoveForm' => $this->csrfActionForm('task_board_task_dependency_remove')->createView(),
             // Since 1.18: import subtasks with their Gantt relations (editors only); since 1.26.2 only when the
             // ACTION_IMPORT_TASKS decision allows it, as importIntoTask() enforces.
-            'subtaskImportForm'   => $this->resourceAccessChecker->canImportIntoTask($user, $task) ? $this->createSubtaskImportForm($task, $routeExtra)->createView() : null,
-            'timeEntryForm'       => $this->timeLogger instanceof TaskTimeLogger ? $this->createTimeEntryForm($task, $user, $routeExtra)->createView() : null,
+            'canImportIntoTask'   => $this->resourceAccessChecker->canImportIntoTask($user, $task),
+            'timeLogging'         => $this->timeLogger instanceof TaskTimeLogger,
             'timeEntryRemoveForm' => $this->csrfActionForm('task_board_task_time_remove')->createView(),
             // Since 1.27.0: the entries this user may remove (their own, or all for a board manager).
             'removableTimeEntryIds' => array_values(array_map(static fn (TaskTimeEntry $entry): string => $entry->getId(), array_filter($task->getTimeEntries()->toArray(), fn (TaskTimeEntry $entry): bool => $this->resourceAccessChecker->canRemoveTimeEntry($user, $entry, $task)))),
@@ -2423,6 +2479,11 @@ final class TaskBoardManageController extends AbstractController
      */
     private function afterTaskWrite(Request $request, Task $task, UserInterface $user): Response
     {
+        // Since 2.31.0: a write sent from the on-demand dialog (it also says XMLHttpRequest) answers 204 + X-Nowo-Redirect:
+        // the dialog closes and the page goes to the same place a form post would (the flash survives).
+        if ($this->isRemoteDialogRequest($request)) {
+            return $this->remoteDialog()->redirect($this->safeTargetPath($request) ?? $this->generateUrl($this->routes['task']['name'], ['taskId' => $task->getId()]), request: $request);
+        }
         if ($this->isPanelRequest($request)) {
             return $this->renderTaskPanel($request, $task, $user);
         }
@@ -2432,6 +2493,140 @@ final class TaskBoardManageController extends AbstractController
         return $target !== null
             ? $this->redirect($target)
             : $this->redirectToRoute($this->routes['task']['name'], ['taskId' => $task->getId()]);
+    }
+
+    /**
+     * Since 2.31.0: UiKit's remote dialog responder (the container's, with the configured header names; the defaults
+     * without one).
+     */
+    private function remoteDialog(): RemoteDialogResponder
+    {
+        return $this->remoteDialog ?? new RemoteDialogResponder();
+    }
+
+    /** Since 2.31.0: a request of UiKit's remote dialog (`X-Nowo-Dialog: 1`, or the host's configured header). */
+    private function isRemoteDialogRequest(Request $request): bool
+    {
+        return $this->remoteDialog()->isDialog($request);
+    }
+
+    /** Since 2.31.0: a GET or HEAD of a dialog route (its form), as opposed to the POST of the write. */
+    private function isReadRequest(Request $request): bool
+    {
+        return in_array($request->getMethod(), [Request::METHOD_GET, Request::METHOD_HEAD], true);
+    }
+
+    /**
+     * Since 2.31.0: a form posted from the on-demand dialog that is not valid: the dialog shows it again with its errors
+     * (422) instead of the flash and redirect of a page post.
+     *
+     * @param FormInterface<mixed> $form
+     */
+    private function invalidInDialog(Request $request, FormInterface $form): bool
+    {
+        return $form->isSubmitted() && !$form->isValid() && $this->isRemoteDialogRequest($request);
+    }
+
+    /**
+     * Since 2.31.0: the `_target_path` (a local path) the dialog's forms carry back, like the panel's.
+     *
+     * @return array<string, string>
+     */
+    private function dialogRouteExtra(Request $request): array
+    {
+        $target = $this->safeTargetPath($request);
+
+        return $target === null ? [] : ['_target_path' => $target];
+    }
+
+    /**
+     * Since 2.31.0 (owner rule 2026-11-23): a task dialog, answered by the GET of its write route after the write's own
+     * access checks. A remote dialog request gets the fragment (`Vary: X-Nowo-Dialog`); any other request a page with
+     * the same form, so the opener link works without JavaScript. `$status` 422 re-renders an invalid post in place.
+     *
+     * @param array<string, mixed> $vars the partial's variables
+     */
+    private function renderTaskDialog(Request $request, Task $task, string $dialog, array $vars, int $status = Response::HTTP_OK): Response
+    {
+        [$template, $title] = self::TASK_DIALOGS[$dialog];
+        $vars += ['task' => $task, 'taskRouteExtra' => $this->dialogRouteExtra($request)];
+        if ($this->isRemoteDialogRequest($request)) {
+            $response = $this->render('@NowoTaskBoardBundle/manage/dialog/fragment.html.twig', ['dialog_template' => $template, 'dialog_vars' => $vars], new Response(status: $status));
+        } else {
+            $response = $this->render('@NowoTaskBoardBundle/manage/dialog/page.html.twig', [
+                'page'            => new ShowPage(new PageHeader($this->translator->trans($title, [], TaskBoardPages::DOMAIN)), bundle: TaskBoardPages::BUNDLE, layout: $this->pageLayout()),
+                'task'            => $task,
+                'dialog_template' => $template,
+                'dialog_vars'     => $vars,
+                'dialog_back_url' => $this->safeTargetPath($request) ?? $this->generateUrl($this->routes['task']['name'], ['taskId' => $task->getId()]),
+            ], new Response(status: $status));
+        }
+
+        return $this->remoteDialog()->fragment($response);
+    }
+
+    /**
+     * Since 2.31.0: the "Manage people" dialog — the add form and one remove form per member (only in this fragment,
+     * never on the task page).
+     *
+     * @param FormInterface<TaskMemberFormData> $form
+     *
+     * @return array<string, mixed>
+     */
+    private function membersDialogData(Task $task, FormInterface $form, Request $request): array
+    {
+        $routeExtra = $this->dialogRouteExtra($request);
+        $remove     = [];
+        foreach ($task->getMembers() as $member) {
+            $memberId          = (string) $member->getId();
+            $remove[$memberId] = $this->csrfActionForm(
+                'task_board_task_member_remove_' . $memberId,
+                $this->generateUrl($this->routes['task_member_remove']['name'], ['taskId' => $task->getId(), 'memberId' => $memberId] + $routeExtra),
+            )->createView();
+        }
+
+        return ['memberForm' => $form->createView(), 'memberRemoveForms' => $remove];
+    }
+
+    /**
+     * Since 2.31.0: the add / edit link dialog (`$link` for an edit: its Remove link form posts natively after asking).
+     *
+     * @param FormInterface<TaskLinkFormData> $form
+     *
+     * @return array<string, mixed>
+     */
+    private function linkDialogData(FormInterface $form, ?TaskLink $link = null): array
+    {
+        return ['linkForm' => $form->createView(), 'linkRemoveForm' => $this->csrfActionForm('task_board_task_link_remove')->createView(), 'linkEdit' => $link];
+    }
+
+    /** Since 2.31.0: a link of the task that the edit dialog may show (not a host object's): 404 otherwise. */
+    private function editableLink(Task $task, string $linkId): TaskLink
+    {
+        foreach ($task->getLinks() as $link) {
+            if ($link->getId() === $linkId && !$link->isHostObject()) {
+                return $link;
+            }
+        }
+
+        throw new NotFoundHttpException('Link not found.');
+    }
+
+    /**
+     * A refused dependency: in the dialog the form again with the reason (422), else the flash of 1.15.
+     *
+     * @param FormInterface<TaskDependencyFormData> $form
+     */
+    private function dependencyRefused(Request $request, Task $task, UserInterface $user, FormInterface $form, string $message): Response
+    {
+        if (!$this->isRemoteDialogRequest($request)) {
+            $this->addFlash('error', $message);
+
+            return $this->afterTaskWrite($request, $task, $user);
+        }
+        $form->get('taskId')->addError(new FormError($this->translator->trans($message, [], TaskBoardPages::DOMAIN)));
+
+        return $this->renderTaskDialog($request, $task, self::DIALOG_DEPENDENCY, ['dependencyForm' => $form->createView()], Response::HTTP_UNPROCESSABLE_ENTITY);
     }
 
     /**
@@ -2813,14 +3008,11 @@ final class TaskBoardManageController extends AbstractController
         }
 
         $sets = $this->columnSetManager->available($user, $board);
-        /** @var array<string, FormView> $deleteForms */
-        $deleteForms = [];
+        // Since 2.31.0: the sets the user may delete; one CSRF-only form posted by each set's button (its formaction).
+        $deletable = [];
         foreach ($sets as $set) {
             if ($this->resourceAccessChecker->canDeleteColumnSet($user, $set)) {
-                $deleteForms[$set->getId()] = $this->csrfActionForm(
-                    'task_board_column_set_delete',
-                    $this->generateUrl($this->routes['column_set_delete']['name'], ['boardId' => $board->getId(), 'setId' => $set->getId()]),
-                )->createView();
+                $deletable[$set->getId()] = true;
             }
         }
 
@@ -2830,7 +3022,10 @@ final class TaskBoardManageController extends AbstractController
             'columnSetApplyForm' => $this->createForm(ColumnSetApplyFormType::class, new ColumnSetApplyFormData(), [
                 'column_set_choices' => $this->columnSetChoices($sets),
             ])->createView(),
-            'columnSetDeleteForms' => $deleteForms,
+            'columnSetDeletable'  => $deletable,
+            'columnSetDeleteForm' => $deletable === [] ? null : $this->csrfActionForm('task_board_column_set_delete')->createView(),
+            // Deprecated since 2.31.0 (always empty; removed in 3.0): columnSetDeletable + columnSetDeleteForm.
+            'columnSetDeleteForms' => [],
         ];
     }
 

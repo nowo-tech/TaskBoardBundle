@@ -5,6 +5,8 @@
 - [To 1.5.1](#to-151)
 - [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [Preparing for 3.0](#preparing-for-30)
+- [To 2.31.0](#to-2310)
+  - [Dialogs load on demand](#dialogs-load-on-demand)
 - [To 2.29.0](#to-2290)
   - [Role rules judge the given user (fix)](#role-rules-judge-the-given-user-fix)
   - [Host ports by id (additive)](#host-ports-by-id-additive)
@@ -243,11 +245,50 @@ change before 3.0. What 3.0 removes:
 | the 2.15 entity-typed host ports (`SyncLimitCheckerInterface`, `TaskAttachmentStorageInterface`, ...) | their framework-free twins (table in [To 2.15.0](#to-2150)) | `@deprecated` (Symfony's DebugClassLoader, in debug mode) |
 | entity getters and public entity properties of the events | the id getters and `get*Snapshot()` accessors | `@deprecated` (as above) |
 | a layout without UiKit canonical blocks (legacy layout bridge), `templates.*` and `css_framework` keys, `nowo_task_board_btn_class()` | `web_ui.layout_template`, `nowo_ui_kit.css_framework`, `nowo_ui_class()` | when used (since 2.0) |
+| the inline task dialogs of 2.30 (a host passing `memberForm`, `linkForm`, `priorityForm`, `dependencyForm`, `subtaskImportForm`, `timeEntryForm` to the partials), `restoreForms`, `columnSetDeleteForms`, `TaskQuestionView::section(withForms: true)` | the on-demand dialogs (dialog routes' GET), `restoreForm`, `columnSetDeleteForm` | CHANGELOG 2.31.0 |
 | `Bridge\TimeTrack\TaskBoardTaskProvider`, `TaskBoardTeamContextProvider` | `nowo_task_board.task_provider` / `team_context_provider` (the 1.23 twins) | `@deprecated` (as above) |
 
 **2.x security support.** After 3.0.0 is tagged, the 2.x line gets security fixes for 6 months: Moderate and higher are
 backported to the last 2.x minor; Low ones are fixed in 3.x only, with the advice to upgrade. Advisories name both
 lines.
+
+## To 2.31.0
+
+From **2.30.x**:
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
+
+No configuration change, no schema change, no migration.
+
+### Dialogs load on demand
+
+Owner rule 2026-11-23: a page never renders the body or the form of a dialog the user has not opened. The task page
+and panel carry one empty UiKit remote dialog; People, Priority, Import subtasks, Log time, Add / edit link and Add
+dependency, and the question Answer / Withdraw / Publish, are links to the GET of their write routes (route names and
+paths unchanged; they now accept GET). With `X-Nowo-Dialog: 1` the route answers the fragment, otherwise a full page
+with the same form; an invalid post from the dialog is `422` in place, a saved one `204` + `X-Nowo-Redirect`.
+
+What a host does:
+
+- **Nothing**, when it uses the bundle's templates. UiKit's `js/nowo-ui-dialog.js` (in the kit's default scripts)
+  drives the remote dialog; without it the links open the dialog pages.
+- **A host override** of `_task_blocks.html.twig`, `_task_time_section.html.twig`, `_task_dependencies_section.html.twig`,
+  `_task_links_section.html.twig`, `_task_subtask_import.html.twig` or `_task_question_card.html.twig`: the page no longer
+  passes `memberForm`, `linkForm`, `linkRemoveForm`, `priorityForm`, `dependencyForm`, `subtaskImportForm` and
+  `timeEntryForm` (it passes `taskDialogId`, `timeLogging`, `dependencies`, `canImportIntoTask` instead), and a
+  question card has `answerUrl` / `withdrawUrl` / `publishUrl` instead of its forms. Replace the inline dialog by a
+  link built like the bundle's: `<a href="{{ path(nowo_task_board_route('task_time'), {taskId: task.id}) }}"
+  {{ nowo_ui_html_attrs(nowo_ui_remote_form_opener(taskDialogId, 'Log time', false, path(...))) }}>`. An override of
+  a dialog partial itself (`_task_members_modal.html.twig`, `_task_priority_modal.html.twig`,
+  `_task_links_modal.html.twig`) keeps working: it is now rendered by the dialog route with `dialog_fragment: true`,
+  where it prints its body and its actions in `[data-nowo-ui-dialog-actions]` instead of a `<dialog>`.
+- **A host override of `list.html.twig`** (archived tasks) or `_column_sets_dialogs.html.twig`: `restoreForms` and
+  `columnSetDeleteForms` are empty; post the shared `restoreForm` / `columnSetDeleteForm` with each button's
+  `formaction` (see the bundle's templates). Same CSRF token ids as before.
+- **Access rules** of a host that lists the bundle's routes by method (a firewall or `access_control` with
+  `methods: [POST]`): the GET of those routes is new and checks exactly what the write checks.
 
 ## To 2.29.0
 

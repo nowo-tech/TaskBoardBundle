@@ -131,8 +131,12 @@ final class DddHostKernelTest extends WebTestCase
         self::assertStringContainsString('Bruno Domain', $page, 'the directory names the comment author, the member and the time');
         self::assertStringContainsString('ddd rule 7', $page, 'the twin cause labeler');
         // The member picker offers the assignee policy's users by id: a look-alike id in another case is another user.
-        self::assertStringContainsString('value="u-ana"', $page);
-        self::assertStringContainsString('value="U-ANA"', $page);
+        // Since 2.31.0 the picker is in the People dialog, loaded on demand (the GET of task_member).
+        $this->client->request('GET', '/tools/task-board/task/' . $taskId . '/member', server: ['HTTP_X_NOWO_DIALOG' => '1']);
+        self::assertResponseIsSuccessful();
+        $dialog = (string) $this->client->getResponse()->getContent();
+        self::assertStringContainsString('value="u-ana"', $dialog);
+        self::assertStringContainsString('value="U-ANA"', $dialog);
 
         // A write over HTTP: the task moves to the next column.
         $this->client->request('POST', '/tools/task-board/task/' . $taskId . '/advance', ['_token' => PredictableCsrfTokenManager::value('task_board_task_advance'), 'action' => 'next']);

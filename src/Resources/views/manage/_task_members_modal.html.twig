@@ -40,7 +40,7 @@
             {{ form_start(memberForm, {action: path(nowo_task_board_route('task_member'), {taskId: task.id}|merge(taskRouteExtra|default({}))), method: 'POST', attr: {class: 'nowo-task-members__add', id: 'nowo-task-members-add-' ~ task.id}}) }}
                 <div class="nowo-task-field nowo-task-members__add-user">
                     {{ form_label(memberForm.user) }}
-                    {{ form_widget(memberForm.user, {attr: {'data-nowo-task-board-task-members-modal-target': 'userField'}}) }}
+                    {{ form_widget(memberForm.user, {attr: {'data-nowo-task-board-task-members-modal-target': 'userField'}|merge(dialog_fragment|default(false) ? {autofocus: 'autofocus'} : {})}) }}
                     {{ form_errors(memberForm.user) }}
                 </div>
                 <div class="nowo-task-field nowo-task-members__add-role">
@@ -58,13 +58,16 @@
     </div>
 {% endset %}
 {% set _footer %}
-        <button type="button" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-nowo-ui-dialog-close>
-            {{ 'task_board.action.close'|trans({}, 'NowoTaskBoardBundle') }}
-        </button>
+        {{ include('@NowoTaskBoardBundle/manage/dialog/_cancel.html.twig', {label: 'task_board.action.close'}) }}
         <button type="submit" form="nowo-task-members-add-{{ task.id }}" class="{{ nowo_ui_class('btn_primary', 'NowoTaskBoardBundle') }} nowo-task-members__add-button">
             {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'user-plus'}) }}{{ 'task_board.action.add_member'|trans({}, 'NowoTaskBoardBundle') }}
         </button>
 {% endset %}
+{% if dialog_fragment|default(false) %}
+    {#- Since 2.31.0: the on-demand fragment (dialog/fragment.html.twig, dialog/page.html.twig). -#}
+    {{ _body }}
+    <div class="nowo-task-dialog__footer nowo-task-dialog__actions" data-nowo-ui-dialog-actions>{{ _footer }}</div>
+{% else %}
 {{ include(nowo_ui_partial('dialog', 'NowoTaskBoardBundle'), {
     id: 'nowo-task-board-task-members-modal' ~ '-' ~ task.id,
     title: 'task_board.task.members_modal_title'|trans({}, 'NowoTaskBoardBundle'),
@@ -76,3 +79,4 @@
     footer: _footer,
     footer_attr: {class: 'nowo-task-dialog__footer nowo-task-dialog__actions'},
 }, false) }}
+{% endif %}
