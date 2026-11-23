@@ -132,6 +132,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- REQ-RUNTIME-003 (lost update): two people saving the task edit form of the same task silently lost the first save:
+  the form posts every field, so the second save wrote back the title, description, priority, estimate, dates, tags
+  and colour it had loaded. The edit form now posts the content digest of the task it showed (hidden `baseDigest`,
+  rendered by `form_end()`, no template change). `TaskManager::update()` refuses a save whose task no longer has that
+  content, and, under the task's row lock (columns first, then the task), one whose revision moved between the
+  request's load and its lock. The person sees "The task changed meanwhile: nothing was saved. Try again." (the
+  existing `task_board.flash.task_changed_meanwhile`) and the page shows the task as it is now; nothing of the
+  refused save is written or recorded in the history. A card only moved meanwhile still saves the edit and stays where
+  it is (2.2.1 behaviour). Writes without a digest (the Task API, `TaskCommandsInterface`, host forms built without the
+  new `base_digest` option) are unchanged. Additive API: `TaskFormData::$baseDigest`, the `base_digest` option of
+  `TaskFormType`, `Support\TaskContentDigest`, and the internal SPI `Service\TaskRevisionLockInterface`
+  (implemented by `DoctrineOrmOrderedRowLock`). No schema change. Tests: `tests/Functional/TaskEditFormRaceTest`
+  (stale form, a save committed between load and lock, a second process holding the row, a lock wait, a deleted task;
+  the two-connection cases on MySQL 8.4 / 9, MariaDB 11.4 and PostgreSQL 16).
+
 ## [2.30.3] - 2026-11-22
 
 ### Fixed

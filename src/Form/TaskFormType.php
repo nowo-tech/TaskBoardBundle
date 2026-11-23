@@ -169,6 +169,12 @@ final class TaskFormType extends AbstractType
             ]);
         }
 
+        // Since 2.31.0 (REQ-RUNTIME-003 rule 4): the content the edit form was built from; TaskManager::update() refuses a
+        // save whose task no longer has it. Rendered by form_end() (no template change).
+        if ((bool) $options['base_digest']) {
+            $builder->add('baseDigest', HiddenType::class, ['required' => false, 'label' => false]);
+        }
+
         // Since 2.19.0 (Beacon spec 234, FR-028): one row per native custom field (`custom_fields`, from TaskCustomFieldForm),
         // unmapped; TaskCustomFieldForm::save() writes them through TaskCustomFieldManager::setField().
         foreach ($options['custom_fields'] as $definition) {
@@ -195,9 +201,12 @@ final class TaskFormType extends AbstractType
             'translation_domain' => TaskBoardBundle::TRANSLATION_DOMAIN,
             // Since 2.19.0: the board's native custom fields (TaskCustomFieldForm::options()).
             'custom_fields' => [],
+            // Since 2.31.0 (the edit form): posts the content digest of the task it shows (`baseDigest`), checked on save.
+            'base_digest' => false,
         ]);
         $resolver->setAllowedTypes('custom_fields', 'array');
         $resolver->setAllowedTypes('shown_column', 'bool');
+        $resolver->setAllowedTypes('base_digest', 'bool');
         $resolver->setAllowedTypes('rich_description', 'bool');
         $resolver->setAllowedTypes('tag_input', 'bool');
     }

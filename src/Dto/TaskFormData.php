@@ -7,6 +7,9 @@ namespace Nowo\TaskBoardBundle\Dto;
 use DateTimeImmutable;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
+use Nowo\TaskBoardBundle\Exception\TaskChangedException;
+use Nowo\TaskBoardBundle\Service\TaskManager;
+use Nowo\TaskBoardBundle\Support\TaskContentDigest;
 
 /**
  * Form payload for creating or editing a task.
@@ -18,6 +21,14 @@ final class TaskFormData
      * write of some fields never moves the task; otherwise null chooses the board's first column, as a form does.
      */
     public bool $keepsColumn = false;
+
+    /**
+     * Since 2.31.0 (REQ-RUNTIME-003 rule 4): the content digest of the task the edit form showed (its hidden `baseDigest`
+     * field, {@see TaskContentDigest}). {@see TaskManager::update()}
+     * refuses a save whose task no longer has that content ({@see TaskChangedException}):
+     * an edit never silently overwrites what someone else saved meanwhile. Null: no check (as before).
+     */
+    public ?string $baseDigest = null;
 
     public function __construct(
         public string $title = '',

@@ -11,6 +11,7 @@ and which tests prove it on which databases. Worker mode (kernel not reset) is c
 - [Writes inside a host's transaction](#writes-inside-a-hosts-transaction)
 - [Lock order](#lock-order)
 - [Questions on tasks (2.23)](#questions-on-tasks-223)
+- [Task edit form (2.31)](#task-edit-form-231)
 - [Task API writes](#task-api-writes)
 - [Host ports by id (2.29)](#host-ports-by-id-229)
 - [Lock conflicts and replays](#lock-conflicts-and-replays)
@@ -68,6 +69,7 @@ only at its flush).
 | Withdraw, publish decision | task, question |
 | Task API writes with `base_revision` (and bulk updates) | the columns the status enters, then the task rows (ascending id) |
 | Delete (task, Task API delete) | task, then the rows its cascade removes |
+| Task edit form with `baseDigest` (2.31) | the column the edit enters (if any), then the task row (its revision read under the lock) |
 
 The question paths take the task's row first in `TaskQuestionManager::lock()` (`lockTask()`), exactly as `ask()` does.
 The activity entry and the flush then touch the task again under a lock the transaction already holds.
@@ -83,6 +85,22 @@ The activity entry and the flush then touch the task again under a lock the tran
 
 The open-question count is a locking read counted in PHP: PostgreSQL refuses `FOR UPDATE` with an aggregate, and a
 locking read sees rows a concurrent ask committed after the snapshot.
+
+## Task edit form (2.31)
+
+The board UI's task form posts every field it shows, so a save over someone else's would revert their changes. Since
+2.31.0 the form posts the digest of the content it showed (`baseDigest`, `Support\TaskContentDigest`: title,
+description, priority, estimate, dates, tags, colour). `TaskManager::update()`:
+
+- refuses at once when the loaded task's content no longer matches the digest (someone saved while the form was open);
+- otherwise locks the column the edit enters (if any), then the task's row, and refuses when the committed revision is
+  not the one this request loaded (a save committed between the load and the lock);
+- answers `TaskChangedException`: the page flashes "The task changed meanwhile: nothing was saved. Try again." and
+  shows the task as it is now. Nothing is written and no history row is recorded.
+
+A move of the card alone does not change the digest: the edit is saved and the task stays in its new column (2.2.1).
+A deadlock or lock wait timeout on the task row answers the platform's 409 `CONFLICT_001` (see below). Writes without a
+digest (Task API, host ports, host forms without the `base_digest` option) behave as before.
 
 ## Task API writes
 
