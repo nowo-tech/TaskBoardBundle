@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Tests\Functional\Sync;
 
-use RuntimeException;
 use Doctrine\ORM\Events;
 use LogicException;
 use Nowo\TaskBoardBundle\Entity\Task;
@@ -30,6 +29,7 @@ use Nowo\TaskBoardBundle\Sync\Testing\InMemoryTaskProvider;
 use Nowo\TaskBoardBundle\Sync\View\ConnectionBadgeProvider;
 use Nowo\TaskBoardBundle\Tests\Functional\App\TestCredentialResolver;
 use ReflectionMethod;
+use RuntimeException;
 use stdClass;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 

@@ -16,7 +16,7 @@ use Symfony\Component\DependencyInjection\Attribute\AsDecorator;
 #[AsDecorator('Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface')]
 final class StricterQuotas implements SyncQuotaPolicyInterface
 {
-    public function check(TaskBoardSnapshot $board, int $newTasks, int $newBytes): ?LimitRefusal
+    public function check(TaskBoardSnapshot $board, int $newTasks, int $newBytes): LimitRefusal
     {
         return new LimitRefusal('quota');
     }
