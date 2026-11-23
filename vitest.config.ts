@@ -28,6 +28,8 @@ export default defineConfig({
                 'src/Resources/assets/src/anchor-utils.ts',
                 // Since 2.23.0 (Beacon spec 242).
                 'src/Resources/assets/src/task-questions.ts',
+                // The "script loaded" console banner.
+                'src/Resources/assets/src/logger.ts',
             ],
             thresholds: { lines: 100, functions: 100, branches: 100, statements: 100 },
             exclude: ['**/*.test.ts', '**/node_modules/**'],
