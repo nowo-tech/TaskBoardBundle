@@ -31,7 +31,7 @@ interfaces, deprecated since 2.15, are removed):
 | `comments.mention_resolver` | `Comment\TaskMentionCandidatesResolverInterface` | `Comment\TaskMentionCandidatesProviderInterface` |
 | `history.cause_labeler` | `History\TaskChangeCauseLabelerInterface` | `History\TaskChangeCauseTextInterface` |
 | `TaskImportUserResolverInterface` alias | `Import\BoardAwareTaskImportUserResolverInterface` | `Import\BoardScopedTaskImportUserResolverInterface` |
-| `TaskImportLinkLookupInterface` alias | `Import\TaskImportLinkLookupInterface` | `Import\TaskImportLinkFinderInterface` |
+| `Import\TaskImportLinkFinderInterface` alias (2.x: the removed interface's alias; no configuration key) | `Import\TaskImportLinkLookupInterface` | `Import\TaskImportLinkFinderInterface` |
 | `move.targets` | `Move\TaskBoardTargetsInterface` | `Move\TaskBoardTargetIdsInterface` |
 | `board.default_view_resolver` | `View\TaskBoardDefaultViewResolverInterface` | `View\TaskBoardDefaultViewPolicyInterface` |
 | `tenancy.first_board_provisioner` | `Tenancy\FirstBoardProvisionerInterface` | `Tenancy\FirstBoardProvisioningInterface` |

@@ -303,6 +303,34 @@ final class TaskBoardEntityManager extends EntityManagerDecorator implements Res
     }
 
     /**
+     * Since 3.0.0 (audit ZAS-1 / ZAS-2): the private manager's own copy of a TaskBoard row the application's manager holds
+     * (loaded through the application's manager or repository), read again by id, so a TaskBoard service never changes
+     * the application's instance or its collections (the application's next flush would then write what TaskBoard
+     * refused, or fail on the new row). Anything else (a row the private manager holds, a new row, a non-TaskBoard
+     * object) is returned as it is. The public write services call it at their entry (ChatKit `attach()` pattern).
+     *
+     * @template T of object
+     *
+     * @param T $row
+     *
+     * @throws LogicException when the row no longer exists
+     *
+     * @return T
+     */
+    public function attach(object $row): object
+    {
+        $live = $this->live();
+        if ($live->contains($row) || !TaskBoardManagerRegistry::isBundleEntity($row::class) || !$this->heldByApplication($row)) {
+            return $row;
+        }
+        $class = $live->getClassMetadata($row::class)->getName();
+        /** @var T|null $own */
+        $own = $live->find($class, $this->source()->getUnitOfWork()->getEntityIdentifier($row));
+
+        return $own ?? throw new LogicException(sprintf('TaskBoard: the %s handed to TaskBoard (loaded through the application\'s entity manager "%s") no longer exists.', TaskBoardManagerRegistry::realClass($row::class), $this->sourceManagerName));
+    }
+
+    /**
      * Host objects on TaskBoard rows that the private manager does not hold (the security user, a user the application
      * loaded) become the private manager's reference to the same id, so Doctrine never takes them for new entities. Since
      * 3.0.0 a TaskBoard row the application's manager holds, on a to-one of a TaskBoard row, is re-resolved the same way

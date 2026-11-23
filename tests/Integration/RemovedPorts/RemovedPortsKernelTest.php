@@ -77,5 +77,8 @@ final class RemovedPortsKernelTest extends TestCase
     {
         self::assertSame('Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface', RemovedPortsPass::named('Class "Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface" not found while loading "App\X".'));
         self::assertNull(RemovedPortsPass::named('Class "Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerPolicyInterface" not found while loading "App\X".'));
+        // Audit ZAS-5: the import link lookup has no configuration key; its message names the alias to set instead.
+        self::assertStringContainsString('alias "Nowo\TaskBoardBundle\Import\TaskImportLinkFinderInterface" to your service', RemovedPortsPass::message('app.links', RemovedPortsPass::IMPORT_LINK_LOOKUP));
+        self::assertStringContainsString('keep the configuration key', RemovedPortsPass::message('app.limits', 'Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface'));
     }
 }

@@ -17,9 +17,13 @@ use Nowo\TimeTrackBundle\Repository\LockingGuardTimesheetRepositoryInterface;
 use Nowo\TimeTrackBundle\Repository\TimesheetRepositoryInterface;
 use Nowo\TimeTrackBundle\Timesheet\Period;
 use Nowo\TimeTrackBundle\Timesheet\PeriodLockGuard;
+use Nowo\TimeTrackBundle\Timesheet\TimesheetScopePolicyInterface;
 use Nowo\TimeTrackBundle\Timesheet\TimesheetScopeProviderInterface;
+use Nowo\TimeTrackBundle\ValueObject\TimeTrackUserRef;
 use PHPUnit\Framework\TestCase;
 use stdClass;
+
+use function interface_exists;
 
 /**
  * Since 2.12.0 (Beacon D-20261111-12): manual entries share TimeTrack's billable default and period lock.
@@ -31,8 +35,7 @@ final class TimeTrackBillableBridgeTest extends TestCase
         $user     = new TestUser('7', 'ana@example.com');
         $defaults = $this->createMock(TimeEntryBillableDefaultProviderInterface::class);
         $defaults->expects(self::exactly(3))->method('defaultFor')->willReturnCallback(static fn (string $scope, ?string $task): ?bool => $scope === 'org-a' ? true : null);
-        $scopes = $this->createMock(TimesheetScopeProviderInterface::class);
-        $scopes->expects(self::once())->method('scopeKeyForTask')->with($user, 'task-1', 'board-1')->willReturn('org-a');
+        $scopes = $this->scopes($user, 'org-a', 1);
 
         self::assertTrue((new TimeTrackTaskTimeBillableDefaultProvider($defaults, $scopes))->defaultFor($user, 'task-1', 'board-1'));
         self::assertNull((new TimeTrackTaskTimeBillableDefaultProvider($defaults))->defaultFor($user, 'task-1', 'board-1'), "no scope provider: ''");
@@ -44,9 +47,8 @@ final class TimeTrackBillableBridgeTest extends TestCase
     {
         $user   = new TestUser('7', 'ana@example.com');
         $repo   = $this->repository([$this->lockedWeek($user, 'UTC')]);
-        $scopes = $this->createMock(TimesheetScopeProviderInterface::class);
-        $scopes->method('scopeKeyForTask')->willReturn('org-a');
-        $lock = new TimeTrackTaskTimePeriodLock(new PeriodLockGuard($repo), $scopes, $repo);
+        $scopes = $this->scopes($user, 'org-a');
+        $lock   = new TimeTrackTaskTimePeriodLock(new PeriodLockGuard($repo), $scopes, $repo);
 
         self::assertTrue($lock->isLocked($user, 'task-1', 'board-1', new DateTimeImmutable('2026-11-10')), 'inside the locked week');
         self::assertFalse($lock->isLocked($user, 'task-1', 'board-1', new DateTimeImmutable('2026-11-17')), 'the next week');
@@ -97,5 +99,25 @@ final class TimeTrackBillableBridgeTest extends TestCase
         $repo->method('findGuarding')->willReturnCallback(static fn (string $ownerId): array => $ownerId === '7' ? $timesheets : []);
 
         return $repo;
+    }
+
+    /**
+     * TimeTrack's scope port of the installed TimeTrack: its 1.x service (TimeTrack ^1.23) or the framework-free policy
+     * (TimeTrack 2.0), answering `$scope` for `$user`.
+     */
+    private function scopes(TestUser $user, string $scope, ?int $calls = null): TimesheetScopeProviderInterface|TimesheetScopePolicyInterface
+    {
+        if (interface_exists(TimesheetScopeProviderInterface::class)) {
+            $scopes = $this->createMock(TimesheetScopeProviderInterface::class);
+            ($calls === null ? $scopes->method('scopeKeyForTask') : $scopes->expects(self::exactly($calls))->method('scopeKeyForTask'))
+                ->willReturnCallback(static fn (object $who): ?string => $who === $user ? $scope : null);
+
+            return $scopes;
+        }
+        $scopes = $this->createMock(TimesheetScopePolicyInterface::class);
+        ($calls === null ? $scopes->method('scopeKeyForUserTask') : $scopes->expects(self::exactly($calls))->method('scopeKeyForUserTask'))
+            ->willReturnCallback(static fn (TimeTrackUserRef $who): ?string => $who->user() === $user ? $scope : null);
+
+        return $scopes;
     }
 }

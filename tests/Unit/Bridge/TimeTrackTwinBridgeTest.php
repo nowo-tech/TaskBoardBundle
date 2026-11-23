@@ -25,6 +25,8 @@ use Nowo\TimeTrackBundle\ValueObject\TimeTrackUserRef;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 
+use function interface_exists;
+
 /**
  * Since 2.28.0: the TimeTrack bridge on TimeTrack's framework-free 1.23 interfaces (since 3.0.0 the only one: the 1.x
  * providers are removed); a reference without a user object or an id sees nothing.
@@ -93,18 +95,29 @@ final class TimeTrackTwinBridgeTest extends TestCase
     public function testTheScopeKeyComesFromEitherScopePort(): void
     {
         $user   = new TestUser('7', 'ana@example.com');
-        $legacy = $this->createMock(TimesheetScopeProviderInterface::class);
-        $legacy->expects(self::once())->method('scopeKeyForTask')->with($user, 'task-1', 'board-1')->willReturn('org-a');
         $policy = $this->createMock(TimesheetScopePolicyInterface::class);
         $policy->expects(self::once())->method('scopeKeyForUserTask')->willReturnCallback(static fn (TimeTrackUserRef $ref, string $task, ?string $board): ?string => $ref->user() === $user && $ref->id === '7' && $task === 'task-1' && $board === null ? 'org-b' : null);
 
-        self::assertSame('org-a', TimeTrackScopeKeys::forTask($legacy, $user, 'task-1', 'board-1'));
         self::assertSame('org-b', TimeTrackScopeKeys::forTask($policy, $user, 'task-1', null));
         self::assertNull(TimeTrackScopeKeys::forTask($policy, new stdClass(), 'task-1', null), 'not a security user');
-        self::assertNull(TimeTrackScopeKeys::forTask(null, $user, 'task-1', null), 'no scope port');
+        self::assertNull(TimeTrackScopeKeys::forTask(null, $user, 'task-1', null), 'no scope port (TimeTrack 2.0 with timesheets off)');
         self::assertNull(TimeTrackScopeKeys::forTask(new stdClass(), $user, 'task-1', null), 'neither interface');
+        self::assertSame(TimesheetScopePolicyInterface::class, TimeTrackScopeKeys::serviceId('Nowo\\TimeTrackBundle\\Timesheet\\MissingScopeProvider'), 'TimeTrack 2.0: the framework-free id');
+    }
 
+    /** TimeTrack 1.x (^1.23): its 1.x scope service is asked, by its 1.x id. */
+    public function testTimeTrackOneXAsksItsOneXScopeService(): void
+    {
+        if (!interface_exists(TimesheetScopeProviderInterface::class)) {
+            self::assertSame(TimesheetScopePolicyInterface::class, TimeTrackScopeKeys::serviceId(), 'TimeTrack 2.0 installed');
+
+            return;
+        }
+        $user   = new TestUser('7', 'ana@example.com');
+        $legacy = $this->createMock(TimesheetScopeProviderInterface::class);
+        $legacy->expects(self::once())->method('scopeKeyForTask')->with($user, 'task-1', 'board-1')->willReturn('org-a');
+
+        self::assertSame('org-a', TimeTrackScopeKeys::forTask($legacy, $user, 'task-1', 'board-1'));
         self::assertSame(TimesheetScopeProviderInterface::class, TimeTrackScopeKeys::serviceId());
-        self::assertSame(TimesheetScopePolicyInterface::class, TimeTrackScopeKeys::serviceId('Nowo\\TimeTrackBundle\\Timesheet\\MissingScopeProvider'));
     }
 }

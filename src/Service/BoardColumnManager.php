@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Service;
 use Closure;
 use Doctrine\ORM\EntityManagerInterface;
 use InvalidArgumentException;
+use Nowo\TaskBoardBundle\Doctrine\TaskBoardEntityManager;
 use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
@@ -76,11 +77,15 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
         private ?TaskColumnFollow $follow = null,
         // Since 2.21.0 (Beacon spec 239, FR-013): the fixed lock order of the multi-row writes; none: written as before.
         private ?OrderedRowLockInterface $rowLock = null,
+        // Since 3.0.0 (audit ZAS-1 / ZAS-2): TaskBoard rows the application's manager holds are read again by id at
+        // each write entry (none: a service built by hand works on the rows it is given, as in 2.x).
+        private ?TaskBoardEntityManager $rows = null,
     ) {
     }
 
     public function add(TaskBoard $board, BoardColumnFormData $data, ?object $actor = null): BoardColumn
     {
+        $board = $this->rows?->attach($board) ?? $board;
         // Audit PW-H1: on a board of a folder that shares its statuses the edit changes every board of the folder.
         if ($actor !== null) {
             $this->statusSets?->assertMayChangeColumns($actor, $board);
@@ -120,6 +125,7 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
      */
     public function reorder(TaskBoard $board, array $orderedColumnIds, ?object $actor = null): void
     {
+        $board = $this->rows?->attach($board) ?? $board;
         // Audit PW-H1: on a board of a folder that shares its statuses the edit changes every board of the folder.
         if ($actor !== null) {
             $this->statusSets?->assertMayChangeColumns($actor, $board);
@@ -165,6 +171,7 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
 
     public function update(BoardColumn $column, BoardColumnFormData $data, ?object $actor = null): void
     {
+        $column = $this->rows?->attach($column) ?? $column;
         // Audit PW-H1: on a board of a folder that shares its statuses the edit changes every board of the folder.
         if ($actor !== null) {
             $this->statusSets?->assertMayChangeColumns($actor, $column->getBoard());
@@ -227,6 +234,7 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
      */
     public function setHumansOnly(BoardColumn $column, bool $humansOnly, ?object $actor = null): bool
     {
+        $column = $this->rows?->attach($column) ?? $column;
         if ($column->isHumansOnly() === $humansOnly) {
             return false;
         }
@@ -260,6 +268,7 @@ final readonly class BoardColumnManager implements BoardColumnManagerInterface
      */
     public function delete(BoardColumn $column, ?object $actor = null, ?ColumnTransitionVia $via = null): bool
     {
+        $column = $this->rows?->attach($column) ?? $column;
         // Audit PW-H1: on a board of a folder that shares its statuses the edit changes every board of the folder.
         if ($actor !== null) {
             $this->statusSets?->assertMayChangeColumns($actor, $column->getBoard());

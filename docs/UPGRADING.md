@@ -13,6 +13,7 @@
   - [Templates, Twig and layout](#templates-twig-and-layout)
   - [Configuration](#configuration)
   - [TimeTrack bridge](#timetrack-bridge)
+  - [Kept in 3.0, changing later](#kept-in-30-changing-later)
   - [2.x support](#2x-support)
 - [To 2.31.0](#to-2310)
   - [Dialogs load on demand](#dialogs-load-on-demand)
@@ -315,12 +316,20 @@ to check). What breaks in code that worked in 2.x without the option:
   (`Nowo\TaskBoardBundle\Doctrine\TaskBoardEntityManager`) and flush that.
 - **A TaskBoard row you loaded through your own manager** (`$em->getRepository(Task::class)` when that is your manager,
   a route `EntityValueResolver`, a query of yours) belongs to your manager:
-  - handed to a TaskBoard write that persists it, it fails with `TaskBoard: the … handed to TaskBoard was loaded
-    through the application's entity manager …` instead of a duplicate INSERT;
-  - set on a to-one association of a new TaskBoard row (a comment's task, a link's task), it is replaced by TaskBoard's
-    reference to the same id;
-  - changed by a TaskBoard service and flushed by TaskBoard, the change is not saved: load TaskBoard rows through
-    TaskBoard's services and repositories, or pass ids (`TaskCommandsInterface`, `TaskBoardQueryInterface`).
+  - the write services `TaskManager` (create, update, move, reschedule, priority, tags, complete, archive, restore),
+    `BoardColumnManager`, `TaskMemberAssigner`, `TaskTimeLogger`, `TaskDependencyManager`, `TaskLinkAttacher` and
+    `TaskCommentManager` read it again by id at their entry and write TaskBoard's own copy: your instance and its
+    collections are never changed (so your next `flush()` neither fails on TaskBoard's new row nor writes it), and your
+    instance does not show TaskBoard's change until you load it again. A row that no longer exists is refused
+    (`… no longer exists`);
+  - any other TaskBoard service (custom fields, recurrence, templates, questions, folders, copy and move, sync, ...)
+    expects rows loaded through TaskBoard: pass ids (`TaskCommandsInterface`, `TaskBoardQueryInterface`) or rows from
+    TaskBoard's repositories. Handed to a write that persists it, your row fails with `TaskBoard: the … handed to
+    TaskBoard was loaded through the application's entity manager …` instead of a duplicate INSERT; after that
+    exception, `$entityManager->refresh()` or drop the instance before you flush your manager (the service may have
+    changed it in memory before the refusal);
+  - set on a to-one association of a new TaskBoard row, it is replaced by TaskBoard's reference to the same id;
+  - your own changes to it stay pending in your manager and are written by your `flush()`, never by TaskBoard.
 - **Your users on TaskBoard rows.** The security user (or any user your manager holds) is referenced by id on the rows
   TaskBoard writes, as since 2.15. Since 3.0 a user that is not saved yet (persisted but not flushed, or without an id)
   fails before anything is written: `TaskBoard: the App\Entity\User on … is not saved yet …` — flush it first. Users you
@@ -381,8 +390,11 @@ instead and keep the configuration key as it is; the bundle asks it through its 
 - **Injecting a port:** code that injected a removed interface to ask it (for example `SyncActorResolverInterface` in
   a sync handler) injects the framework-free one instead: `SyncActorProviderInterface` is a public alias that follows
   `sync.actor_resolver`.
-- The bundle keeps internal entity-typed seams for its own defaults and gates (`Port\Internal\*`, `@internal`); a class
-  outside the bundle that implements one of them fails the build like the removed interfaces.
+- The bundle keeps internal entity-typed seams for its own defaults and gates (`Port\Internal\*`, `@internal`). They
+  are not a host extension point and implementing or decorating them is not supported: a service a configuration key
+  names that implements a seam (and not the framework-free interface) fails the build, but a host `#[AsDecorator]` of a
+  `Port\Internal\*` id or a class that also implements the attribution-only / ownerless seams is not refused at build
+  time. It cannot widen a default either: implement the framework-free interface.
 
 ### Event members
 
@@ -410,7 +422,8 @@ them fails with "Cannot access private property".
 | Removed (deprecated since) | Replacement |
 |---|---|
 | A layout without the UiKit canonical blocks (the `manage/_legacy_layout.html.twig` bridge, 2.0.0) | a layout that renders `nowo_ui_page_header`, `nowo_ui_flashes`, `nowo_ui_content` and `nowo_ui_modals` (see [To 2.0.0](#to-200-uikit-page-contract)). Such a layout now fails when a page is rendered, naming the layout. The Twig functions `nowo_task_board_legacy_layout()` / `nowo_task_board_legacy_blocks()` of the bridge are gone. |
-| Twig `nowo_task_board_btn_class(slot)` (2.0.0) | `nowo_ui_class(slot, 'NowoTaskBoardBundle')` |
+| Twig `nowo_task_board_btn_class(slot)` (2.0.0) and its method `TaskBoardTwigExtension::buttonClass()` | `nowo_ui_class(slot, 'NowoTaskBoardBundle')` |
+| `Ui\TaskBoardPages::LEGACY_ADMIN_BRIDGE`, `legacyLayout()`, `legacyBlocks()` (the 2.0 bridge's helpers) | none (the bridge is gone) |
 | The 2.30 inline dialogs: a host override passing `memberForm`, `linkForm`, `linkRemoveForm`, `priorityForm`, `dependencyForm`, `subtaskImportForm` or `timeEntryForm` to the task page partials, `restoreForms`, `columnSetDeleteForms`, `TaskQuestionView::section(…, withForms: true)` and the cards' `answerForm` / `withdrawForm` / `publishForm` (2.31.0) | the on-demand dialogs ([Dialogs load on demand](#dialogs-load-on-demand)), `restoreForm`, `columnSetDeletable` + `columnSetDeleteForm`, the cards' `answerUrl` / `withdrawUrl` / `publishUrl` |
 
 A host template that still uses them fails when Twig renders the page ("Unknown function", "Key … does not exist"),
@@ -435,7 +448,20 @@ are removed. Point TimeTrack at the services `nowo_task_board.task_provider` / `
 (TimeTrack's 1.23 `TaskDirectoryInterface` / `TeamDirectoryInterface`), as the documented configuration already does.
 A TimeTrack configuration that names the removed classes fails the build (unknown service). The billable default and
 the period lock of manual entries keep asking TimeTrack's scope port: the 1.x `TimesheetScopeProviderInterface`
-service while TimeTrack has it, else `TimesheetScopePolicyInterface`.
+service while TimeTrack has it (1.x), else `TimesheetScopePolicyInterface`, which TimeTrack 2.0 serves under that id.
+When TimeTrack has a scope port but does not serve that id, the container build fails (`TimeTrack has a timesheet scope
+port but does not serve it as …`) instead of resolving the scope to nothing (an over-locking period lock, the billable
+default asked for scope `''`); alias the id to your scope policy service or update TimeTrack.
+
+### Kept in 3.0, changing later
+
+- `Dto\TaskMemberFormData::$user` (2.29 said "removed in 3.0" in a docblock only, without a runtime notice): kept in 3.0,
+  because the member form and hosts still pass the user object as its first argument. A 3.x minor raises a deprecation
+  when a user object is passed; 4.0 removes it in favour of `$userId`.
+- `events.after_host_commit` keeps its default `false` in 3.0. A 3.x minor raises a notice when the key is unset; 4.0
+  makes `true` the default (`false` stays an explicit option).
+- Also removed with the deprecation layer: `TaskBoardExtension::unsetPrivateEntityManagerNotice()` (the 2.28 notice
+  text) and the extension constants `TIME_TRACK_LEGACY_TASK_PROVIDER` / `TIME_TRACK_LEGACY_TEAM_PROVIDER`.
 
 ### 2.x support
 

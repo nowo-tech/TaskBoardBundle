@@ -166,9 +166,11 @@ UPGRADING "To 3.0.0".
 - **BREAKING:** `TaskBoardEvents::BOARD_LIST_RESULT`, `TASK_LIST_QUERY`, `TASK_LIST_RESULT`, `TASK_READ_ONLY_RESOLVE`,
   `MEMBER_LIST_QUERY` (deprecated since 2.10.0, never dispatched) and `Api\TaskApiWhere::reachesBoard()` (2.15.0).
 - **BREAKING:** the 2.0 layout bridge (`manage/_legacy_layout.html.twig`, the Twig functions
-  `nowo_task_board_legacy_layout()` / `nowo_task_board_legacy_blocks()`): a `web_ui.layout_template` without the UiKit
+  `nowo_task_board_legacy_layout()` / `nowo_task_board_legacy_blocks()`, `Ui\TaskBoardPages::LEGACY_ADMIN_BRIDGE` /
+  `legacyLayout()` / `legacyBlocks()`): a `web_ui.layout_template` without the UiKit
   canonical blocks now fails when a page is rendered, naming the layout. The Twig function
-  `nowo_task_board_btn_class()` (deprecated since 2.0.0).
+  `nowo_task_board_btn_class()` and `TaskBoardTwigExtension::buttonClass()` (deprecated since 2.0.0).
+  `TaskBoardExtension::unsetPrivateEntityManagerNotice()` (the 2.28 notice text).
 - **BREAKING:** the 2.30 inline dialogs (deprecated since 2.31.0): the task page partials ignore `memberForm`,
   `linkForm`, `priorityForm`, `dependencyForm`, `subtaskImportForm` and `timeEntryForm`; the board pages no longer pass
   `restoreForms` / `columnSetDeleteForms`; `TaskQuestionView::section()` lost `$withForms` and the cards their
@@ -197,8 +199,21 @@ UPGRADING "To 3.0.0".
 - The import link lookup (no configuration key): a host aliases `Import\TaskImportLinkFinderInterface` to its service
   (in 2.x it aliased the removed `Import\TaskImportLinkLookupInterface`); `TaskBoardPortsPass` then asks it through its
   gate. Without the alias the bundle's `DoctrineTaskImportLinkLookup` answers, as before.
+- Audit ZAS-1 / ZAS-2: the write services `TaskManager`, `BoardColumnManager`, `TaskMemberAssigner`, `TaskTimeLogger`,
+  `TaskDependencyManager`, `TaskLinkAttacher` and `TaskCommentManager` read a board, task, column or comment that the
+  application's manager holds again by id at their entry (new optional constructor argument, autowired): TaskBoard
+  writes its own copy and never changes the application's instance or its collections, so the application's next flush
+  neither fails on TaskBoard's new row nor writes a row TaskBoard wrote or refused.
+- Audit ZAS-3: with TimeTrack 2.0, a TimeTrack scope port that is not served as `TimesheetScopePolicyInterface` fails
+  the build (new internal `DependencyInjection\Compiler\TimeTrackScopePortPass`) instead of resolving the scope of
+  manual entries to nothing. CI: a job runs the suite against TimeTrack 2.0.
 - `Number\TaskNumberBackfiller`: the `$logger` argument (2.27, for the removed mode) is ignored (deprecated, removed in
   4.0).
+
+### Kept
+
+- `Dto\TaskMemberFormData::$user` (announced for 3.0 in a 2.29 docblock only): kept; a 3.x minor deprecates it at
+  runtime and 4.0 removes it. `events.after_host_commit` keeps `false`; 4.0 flips it after a 3.x notice.
 
 ### Security
 
