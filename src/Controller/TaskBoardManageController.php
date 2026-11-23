@@ -136,6 +136,7 @@ use Nowo\TaskBoardBundle\Ui\TaskBoardPages;
 use Nowo\TaskBoardBundle\View\TaskBoardDefaultViewResolverInterface;
 use Nowo\TransactionDoctrine\Symfony\Conflict\ConflictResponsePolicy;
 use Nowo\UiKitBundle\Dialog\RemoteDialogResponder;
+use Nowo\UiKitBundle\Dialog\RemoteDialogTarget;
 use Nowo\UiKitBundle\View\Action;
 use Nowo\UiKitBundle\View\Column;
 use Nowo\UiKitBundle\View\Crumb;
@@ -2655,7 +2656,8 @@ final class TaskBoardManageController extends AbstractController
             return null;
         }
 
-        return $target;
+        // TB-L1: the same rules as the dialog redirect (no `.` / `..` / `%2e` segments), so the redirect cannot throw after a commit.
+        return RemoteDialogTarget::tryPath($target, null);
     }
 
     /**
