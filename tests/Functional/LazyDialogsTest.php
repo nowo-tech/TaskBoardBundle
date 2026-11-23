@@ -199,6 +199,26 @@ final class LazyDialogsTest extends FunctionalTestCase
         self::assertSame($target, $this->client->getResponse()->headers->get('X-Nowo-Redirect'));
     }
 
+    /** TB-L1: a `_target_path` with dot segments falls back to the task URL; the committed write is never a 500. */
+    public function testADotSegmentTargetPathFallsBackToTheTaskUrlAfterTheWrite(): void
+    {
+        $task = $this->crowdedTask(1);
+        $this->login($this->owner);
+        $id = $task->getId();
+
+        foreach (['/tools/task-board/../x', '/tools/task-board/%2e%2e/x', '/./x'] as $bad) {
+            $before = $this->em->getRepository(TaskTimeEntry::class)->count([]);
+            $this->client->request('POST', self::BASE . '/task/' . $id . '/time?_target_path=' . $bad, ['task_time_entry' => ['minutes' => '15', 'loggedAt' => '2026-11-04', 'note' => '', '_token' => PredictableCsrfTokenManager::value('task_time_entry')]], server: self::DIALOG);
+            self::assertResponseStatusCodeSame(204, $bad);
+            self::assertSame(self::BASE . '/task/' . $id, $this->client->getResponse()->headers->get('X-Nowo-Redirect'), $bad);
+            self::assertSame($before + 1, $this->em->getRepository(TaskTimeEntry::class)->count([]), $bad);
+
+            $this->client->request('POST', self::BASE . '/task/' . $id . '/link?_target_path=' . $bad, ['task_link_form' => ['linkType' => 'url', 'url' => 'https://example.test/new', '_token' => PredictableCsrfTokenManager::value('task_link_form')]], server: self::DIALOG);
+            self::assertResponseStatusCodeSame(204, $bad);
+            self::assertSame(self::BASE . '/task/' . $id, $this->client->getResponse()->headers->get('X-Nowo-Redirect'), $bad);
+        }
+    }
+
     public function testTheDialogsRefuseAsTheirWritesDo(): void
     {
         $task = $this->crowdedTask(1);

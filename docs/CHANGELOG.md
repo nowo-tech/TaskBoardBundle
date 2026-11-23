@@ -132,6 +132,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A `_target_path` with dot segments (`/tools/task-board/../x`, `%2e`) no longer turns a committed dialog write into a 500 (audit TB-L1). `safeTargetPath()` (manage and menu controllers) and `TaskQuestionController::targetPath()` validate the target with UiKit's `RemoteDialogTarget::tryPath()` (same rules as the dialog redirect); a refused target falls back to the default task URL, so the dialog closes normally and the user is not invited to submit a second time (a duplicate time entry).
+
 ## [2.31.0] - 2026-11-23
 
 ### Changed
