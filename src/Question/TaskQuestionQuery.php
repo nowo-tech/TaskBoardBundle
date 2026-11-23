@@ -9,10 +9,8 @@ use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
-use Nowo\TaskBoardBundle\Entity\TaskMember;
 use Nowo\TaskBoardBundle\Question\Entity\TaskQuestion;
 use Nowo\TaskBoardBundle\Question\Entity\TaskQuestionRecipient;
-use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Support\ActorId;
 use Nowo\TaskBoardBundle\User\TaskBoardUsers;
 use SortDirection;
@@ -164,7 +162,9 @@ final readonly class TaskQuestionQuery
         /** @var list<TaskQuestion> $questions */
         $questions = $this->openQuery()
             ->andWhere(($this->users?->identity('q.askedBy') ?? 'IDENTITY(q.askedBy)') . ' = :asker')
-            ->setParameter('asker', $id)
+            // Since 2.32.0 (audit ZAK-2): the house binding (the entity in relation mode, so Doctrine converts its id with the
+            // id's own type, e.g. a binary Uuid; the id in id mode); the rows are still compared exactly below.
+            ->setParameter('asker', $this->users?->parameter($user) ?? $user)
             ->getQuery()->getResult();
         $questions = array_values(array_filter($questions, static fn (TaskQuestion $question): bool => ActorId::of($question->getAskedBy()) === $id));
         $this->hydrate($questions);
@@ -227,30 +227,20 @@ final readonly class TaskQuestionQuery
     }
 
     /**
-     * Since 2.32.0: how many open questions are addressed to one of the subject ids on `$boardIds`, counting on a board of
-     * `$viewableBoardIds` every task and on the others only the tasks `$participantId` created or is a member of (the
-     * default rule of {@see TaskBoardResourceAccessChecker::canViewTask()}). One query
-     * whatever the number of questions, no entity read.
+     * Since 2.32.0: how many open questions are addressed to one of the subject ids on `$boardIds` (every task of those
+     * boards: the caller passes the boards the viewer may see whole). One query whatever the number of questions, no
+     * entity read.
      *
      * @param list<string> $subjectIds
      * @param list<string> $boardIds
-     * @param list<string> $viewableBoardIds
      */
-    public function countOpenForSubjects(array $subjectIds, array $boardIds, array $viewableBoardIds, ?string $participantId): int
+    public function countOpenForSubjects(array $subjectIds, array $boardIds): int
     {
         if ($subjectIds === [] || $boardIds === []) {
             return 0;
         }
         $builder = $this->countQuery($subjectIds);
         $builder->andWhere($this->inLists($builder, 'IDENTITY(ct.board)', $boardIds, 'boards'));
-        $reach = [$this->inLists($builder, 'IDENTITY(ct.board)', $viewableBoardIds, 'viewable')];
-        if ($participantId !== null) {
-            $reach[] = ($this->users?->identity('ct.creator') ?? 'IDENTITY(ct.creator)') . ' = :participant';
-            $reach[] = 'EXISTS (SELECT cm.id FROM ' . TaskMember::class . ' cm WHERE cm.task = ct AND ' . ($this->users?->identity('cm.user') ?? 'IDENTITY(cm.user)') . ' = :participant)';
-            // @igor-ignore - A query builder of this call (countQuery()), not a shared service.
-            $builder->setParameter('participant', $participantId);
-        }
-        $builder->andWhere('(' . implode(' OR ', $reach) . ')');
 
         return $this->exactCount($builder, $subjectIds);
     }

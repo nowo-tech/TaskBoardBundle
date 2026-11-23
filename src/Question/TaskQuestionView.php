@@ -30,6 +30,7 @@ use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
 
+use function array_diff;
 use function array_filter;
 use function array_keys;
 use function array_map;
@@ -205,9 +206,11 @@ final readonly class TaskQuestionView implements TaskQuestionCountsInterface
      * 1. One query reads the boards of the viewer's open questions; each passes the tenant rule and the board rule
      *    ({@see TaskBoardResourceAccessChecker::boardViewDecider()}: BOARD_ACCESS_CHECK per board, the viewer's teams read
      *    once).
-     * 2. Without a TASK_ACCESS_CHECK listener, one query counts the open questions on those boards: every task of a
-     *    visible board, else the tasks the viewer created or is a member of. With one, one query reads the tasks (with
-     *    their members) and each passes TASK_ACCESS_CHECK, as in `mine()`, then one query counts on the visible tasks.
+     * 2. Without a TASK_ACCESS_CHECK listener, one query counts the open questions on the boards the viewer may see.
+     * 3. On the other boards (on every board with such a listener), one query reads the candidate tasks with their
+     *    members and each passes {@see TaskBoardResourceAccessChecker::taskViewDecider()} — TASK_ACCESS_CHECK, then the
+     *    board, then the participants compared exactly in PHP, as in `mine()` (audit ZAK-1) — then one query counts on
+     *    the visible tasks.
      *
      * A subject id is compared byte for byte (REQ-SEC-006). Unlike the list, the count is not cut at
      * {@see TaskQuestionQuery::MY_QUESTIONS_CAP} candidates. 0 without a signed-in viewer, and on a tenant URL whose
@@ -241,19 +244,25 @@ final readonly class TaskQuestionView implements TaskQuestionCountsInterface
         if ($boards === []) {
             return 0;
         }
-        $boardIds = array_map(strval(...), array_keys($boards));
-        if (!$this->access->taskListenersMayDecide()) {
-            return $this->query->countOpenForSubjects($subjects, $boardIds, array_map(strval(...), array_keys(array_filter($boards))), ActorId::of($user));
+        // Boards the viewer may see whole: counted in SQL when no TASK_ACCESS_CHECK listener may decide a task.
+        $whole = $this->access->taskListenersMayDecide() ? [] : array_map(strval(...), array_keys(array_filter($boards)));
+        $count = $this->query->countOpenForSubjects($subjects, $whole);
+        // Every other board (all of them with a listener): its candidate tasks in one query, each decided in PHP exactly as
+        // canViewTask() decides it (TASK_ACCESS_CHECK, then the board, then the participants compared byte for byte; audit
+        // ZAK-1), then one count on the visible ones.
+        $rest = array_values(array_diff(array_map(strval(...), array_keys($boards)), $whole));
+        if ($rest === []) {
+            return $count;
         }
         $taskViewable = $this->access->taskViewDecider($user, static fn (TaskBoard $board): bool => $boards[$board->getId()] ?? false);
         $tasks        = [];
-        foreach ($this->query->tasksOpenForSubjects($subjects, $boardIds) as $task) {
+        foreach ($this->query->tasksOpenForSubjects($subjects, $rest) as $task) {
             if ($taskViewable($task)) {
                 $tasks[] = $task->getId();
             }
         }
 
-        return $this->query->countOpenOnTasks($subjects, $tasks);
+        return $count + $this->query->countOpenOnTasks($subjects, $tasks);
     }
 
     /**

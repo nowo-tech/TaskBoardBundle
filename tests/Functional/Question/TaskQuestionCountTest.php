@@ -5,6 +5,10 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Tests\Functional\Question;
 
 use DateTimeImmutable;
+use Doctrine\DBAL\Platforms\AbstractMySQLPlatform;
+use Doctrine\DBAL\Platforms\SQLitePlatform;
+use Doctrine\ORM\Tools\SchemaTool;
+use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskMember;
@@ -24,6 +28,7 @@ use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\AppUser;
 use Nowo\TaskBoardBundle\Tests\Functional\App\MemberTenantResolver;
 use Nowo\TaskBoardBundle\Tests\Functional\FoldsKeyColumns;
+use Nowo\TaskBoardBundle\Tests\Stub\TestUser;
 use Symfony\Bridge\Doctrine\Middleware\Debug\DebugDataHolder;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\HttpFoundation\Request;
@@ -175,6 +180,42 @@ final class TaskQuestionCountTest extends QuestionTestCase
         self::assertSame(1, $this->countAs($bob));
     }
 
+    /**
+     * Audit ZAK-1 (REQ-SEC-006): with `database.user_reference: id` on folding user columns, a task created by `Alice` or
+     * with an `ALICE` member row on a board `alice` may not see is not hers: the list hides it, the count does too. Her
+     * own task there (creator `alice`) counts in both.
+     */
+    public function testALookAlikeParticipantNeverCounts(): void
+    {
+        self::$taskBoardConfig = ['task_questions' => ['enabled' => true], 'database' => ['user_reference' => 'id'], 'user_directory' => 'app.no_user_directory'];
+        self::ensureKernelShutdown();
+        $this->setUp();
+        $this->foldUserColumns();
+        $owner = new TestUser('owner', 'owner@example.com');
+        $alice = new TestUser('alice', 'alice@example.com');
+        $board = new TaskBoard('Hidden', 'hidden', $owner);
+        $board->addColumn(new BoardColumn($board, 'To do', 0));
+        $this->em->persist($board);
+        $created = new Task(board: $board, title: 'Created by Alice', creator: new TestUser('Alice', 'Alice@example.com'), column: $board->getColumns()->get(0));
+        $member  = new Task(board: $board, title: 'ALICE is a member', creator: $owner, column: $board->getColumns()->get(0), position: 1);
+        $member->addMember(new TaskMember($member, new TestUser('ALICE', 'ALICE@example.com'), TaskMemberRole::Assignee));
+        $hers = new Task(board: $board, title: 'Her own', creator: $alice, column: $board->getColumns()->get(0), position: 2);
+        foreach ([$created, $member, $hers] as $task) {
+            $this->em->persist($task);
+            $question = new TaskQuestion($task, 'For alice', null, TaskQuestionChoiceMode::Single, true, $owner, new DateTimeImmutable());
+            $question->addRecipient(new TaskQuestionRecipient($question, 'user:alice', 'alice', false, 0));
+            $this->em->persist($question);
+        }
+        $this->em->flush();
+        $this->em->clear();
+
+        $this->tokens()->setToken(new UsernamePasswordToken($alice, 'main', $alice->getRoles()));
+        $view = self::getContainer()->get(TaskQuestionView::class);
+        self::assertInstanceOf(TaskQuestionView::class, $view);
+        self::assertCount(1, $view->mine());
+        self::assertSame(1, $view->countToAnswer());
+    }
+
     public function testNoSubjectOrNoBoardCountsNothingWithoutAQuery(): void
     {
         // A viewer without an id has no subject id: nothing to count.
@@ -182,7 +223,7 @@ final class TaskQuestionCountTest extends QuestionTestCase
         $query = $this->query();
         self::assertSame([], $query->boardsOpenForSubjects([]));
         self::assertSame([], $query->tasksOpenForSubjects(['user:1'], []));
-        self::assertSame(0, $query->countOpenForSubjects(['user:1'], [], [], null));
+        self::assertSame(0, $query->countOpenForSubjects(['user:1'], []));
         self::assertSame(0, $query->countOpenOnTasks([], ['task']));
     }
 
@@ -282,6 +323,28 @@ final class TaskQuestionCountTest extends QuestionTestCase
         $this->direct($this->task, ['user:nobody', 'contact:client'], $this->owner);
         $this->em->remove($deleted);
         $this->em->flush();
+        $this->em->clear();
+    }
+
+    /** The user reference columns of tasks and task members on a folding collation (SQLite NOCASE; MySQL `_general_ci`). */
+    private function foldUserColumns(): void
+    {
+        $platform  = $this->em->getConnection()->getDatabasePlatform();
+        $collation = match (true) {
+            $platform instanceof SQLitePlatform        => 'NOCASE',
+            $platform instanceof AbstractMySQLPlatform => 'utf8mb4_general_ci',
+            default                                    => null,
+        };
+        if ($collation === null) {
+            self::markTestSkipped('PostgreSQL has no built-in case-insensitive collation; its columns compare exactly.');
+        }
+        $metadata = $this->em->getMetadataFactory()->getAllMetadata();
+        foreach ([Task::class => 'creator', TaskMember::class => 'user'] as $class => $field) {
+            $this->em->getClassMetadata($class)->fieldMappings[$field]->options = ['collation' => $collation];
+        }
+        $tool = new SchemaTool($this->em);
+        $tool->dropDatabase();
+        $tool->createSchema($metadata);
         $this->em->clear();
     }
 
