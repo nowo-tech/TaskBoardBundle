@@ -382,10 +382,19 @@ final class TaskBoardManageControllerAccessTest extends TestCase
 
         self::assertInstanceOf(FormView::class, $this->rendered['advanceForm']);
         self::assertSame('token-task_board_task_advance', $this->rendered['advanceForm']->children['_token']->vars['value']);
-        self::assertSame('_token', $this->rendered['linkRemoveForm']->children['_token']->vars['full_name']);
-        self::assertSame('priority', $this->rendered['priorityForm']->children['priority']->vars['full_name']);
-        self::assertSame($this->task->getPriority()->value, $this->rendered['priorityForm']->children['priority']->vars['value']);
-        self::assertSame('token-task_board_task_member_remove_' . $member->getId(), $this->rendered['memberRemoveForms'][$member->getId()]->children['_token']->vars['value']);
+        // Since 2.31.0 the dialog forms are built by the dialog routes only, never for the page.
+        self::assertSame([], $this->rendered['memberRemoveForms']);
+        self::assertArrayNotHasKey('priorityForm', $this->rendered);
+        self::assertArrayNotHasKey('memberForm', $this->rendered);
+        self::assertSame('nowo-task-board-task-dialog-' . $this->task->getId(), $this->rendered['taskDialogId']);
+
+        $this->controller($this->owner, realFormFactory: $this->realFormFactory())->attachLink($this->task->getId(), Request::create('/'));
+        self::assertSame('_token', $this->rendered['dialog_vars']['linkRemoveForm']->children['_token']->vars['full_name']);
+        $this->controller($this->owner, realFormFactory: $this->realFormFactory())->updatePriority($this->task->getId(), Request::create('/'));
+        self::assertSame('priority', $this->rendered['dialog_vars']['priorityForm']->children['priority']->vars['full_name']);
+        self::assertSame($this->task->getPriority()->value, $this->rendered['dialog_vars']['priorityForm']->children['priority']->vars['value']);
+        $this->controller($this->owner, realFormFactory: $this->realFormFactory())->addMember($this->task->getId(), Request::create('/'));
+        self::assertSame('token-task_board_task_member_remove_' . $member->getId(), $this->rendered['dialog_vars']['memberRemoveForms'][$member->getId()]->children['_token']->vars['value']);
     }
 
     /** 1.10.1: the subtask handler builds the compact form the task page renders (title and the hidden column). */
@@ -589,7 +598,9 @@ final class TaskBoardManageControllerAccessTest extends TestCase
         self::assertNotNull($this->rendered['columnDeleteForm']);
         self::assertSame('/board?x=1', $this->rendered['panelTargetPath']);
         self::assertSame([$set], $this->rendered['columnSets']);
-        self::assertArrayHasKey($set->getId(), $this->rendered['columnSetDeleteForms']);
+        self::assertArrayHasKey($set->getId(), $this->rendered['columnSetDeletable']);
+        self::assertNotNull($this->rendered['columnSetDeleteForm']);
+        self::assertSame([], $this->rendered['columnSetDeleteForms']);
         self::assertSame(['tabler:bug'], $this->findCreatedForm(BoardColumnFormType::class)['options']['icon_choices']);
     }
 
@@ -895,12 +906,19 @@ final class TaskBoardManageControllerAccessTest extends TestCase
         // Editor with import granted (default): the dialog is offered.
         $this->controller($this->owner, realFormFactory: $this->realFormFactory())->task($this->task->getId(), Request::create('/'));
         self::assertTrue($this->rendered['canEditTask']);
-        self::assertInstanceOf(FormView::class, $this->rendered['subtaskImportForm']);
+        self::assertTrue($this->rendered['canImportIntoTask']);
+        $this->controller($this->owner, realFormFactory: $this->realFormFactory())->importIntoTask($this->task->getId(), Request::create('/'));
+        self::assertInstanceOf(FormView::class, $this->rendered['dialog_vars']['subtaskImportForm']);
 
-        // Editor whose import is denied: may still edit the task, but gets no dialog and a 403 on POST.
+        // Editor whose import is denied: may still edit the task, but gets no dialog (403 on its GET too) and a 403 on POST.
         $this->controller($this->owner, realFormFactory: $this->realFormFactory(), dispatcher: $this->importDeniedDispatcher())->task($this->task->getId(), Request::create('/'));
         self::assertTrue($this->rendered['canEditTask']);
-        self::assertNull($this->rendered['subtaskImportForm']);
+        self::assertFalse($this->rendered['canImportIntoTask']);
+        try {
+            $this->controller($this->owner, realFormFactory: $this->realFormFactory(), dispatcher: $this->importDeniedDispatcher())->importIntoTask($this->task->getId(), Request::create('/'));
+            self::fail('A denied import dialog must not open.');
+        } catch (AccessDeniedException) {
+        }
 
         $request = Request::create('/', 'POST');
         try {
@@ -914,7 +932,7 @@ final class TaskBoardManageControllerAccessTest extends TestCase
         // Read-only viewer whose import a listener would grant: without edit rights there is no dialog either.
         $this->controller($this->attacker, realFormFactory: $this->realFormFactory(), dispatcher: $this->readOnlyDispatcher())->task($this->task->getId(), Request::create('/'));
         self::assertFalse($this->rendered['canEditTask']);
-        self::assertNull($this->rendered['subtaskImportForm']);
+        self::assertFalse($this->rendered['canImportIntoTask']);
     }
 
     private function importDeniedDispatcher(): EventDispatcher
@@ -1144,11 +1162,17 @@ final class TaskBoardManageControllerAccessTest extends TestCase
 
         $this->controller($this->owner, realFormFactory: $this->realFormFactory())->task($this->task->getId(), Request::create('/'));
 
-        self::assertInstanceOf(FormView::class, $this->rendered['dependencyForm']);
-        self::assertInstanceOf(FormView::class, $this->rendered['timeEntryForm']);
-        self::assertSame(['Child' => $child->getId()], $this->findCreatedForm(TaskDependencyFormType::class)['options']['task_choices']);
+        self::assertTrue($this->rendered['dependencies']);
+        self::assertTrue($this->rendered['timeLogging']);
         self::assertSame(30, $this->rendered['subtaskDeviation']->estimatedMinutes);
         self::assertNull($this->rendered['deviation']->estimatedMinutes);
+
+        // Since 2.31.0: the dialog routes build the forms.
+        $this->controller($this->owner, realFormFactory: $this->realFormFactory())->addDependency($this->task->getId(), Request::create('/'));
+        self::assertInstanceOf(FormView::class, $this->rendered['dialog_vars']['dependencyForm']);
+        self::assertSame(['Child' => $child->getId()], $this->findCreatedForm(TaskDependencyFormType::class)['options']['task_choices']);
+        $this->controller($this->owner, realFormFactory: $this->realFormFactory())->logTime($this->task->getId(), Request::create('/'));
+        self::assertInstanceOf(FormView::class, $this->rendered['dialog_vars']['timeEntryForm']);
     }
 
     public function testGanttUsesTheScaleOfTheQueryAndTheWeekStart(): void

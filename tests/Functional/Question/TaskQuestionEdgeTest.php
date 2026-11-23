@@ -193,7 +193,8 @@ final class TaskQuestionEdgeTest extends QuestionTestCase
     {
         $question = $this->ask(options: false);
         $this->login($this->bob);
-        $crawler = $this->client->request('GET', '/tools/task-board/task/' . $this->task->getId());
+        // Since 2.31.0 the answer form is the answer dialog's (the GET of task_question_answer).
+        $crawler = $this->client->request('GET', '/tools/task-board/task/' . $this->task->getId() . '/question/' . $question->getId() . '/answer', server: ['HTTP_X_NOWO_DIALOG' => '1']);
         $name    = 'qa_' . str_replace('-', '', $question->getId());
         self::assertCount(1, $crawler->filter('textarea[name="' . $name . '[otherText]"]'));
         self::assertCount(0, $crawler->filter('input[name^="' . $name . '[options]"]'));

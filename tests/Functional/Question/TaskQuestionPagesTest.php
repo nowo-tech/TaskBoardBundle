@@ -59,9 +59,14 @@ final class TaskQuestionPagesTest extends QuestionTestCase
         self::assertCount(1, $crawler->filter('[data-testid="nowo-task-question-recommended"]'));
         $html = (string) $this->client->getResponse()->getContent();
         self::assertStringNotContainsString('data-nowo-ui-context-menu-source="x"', $html, 'Context Markdown goes through the reserved-attribute stripper');
-        // The asker may withdraw; not a recipient, so no answer form.
-        self::assertCount(0, $crawler->filter('[data-testid="nowo-task-question-answer-form"]'));
-        self::assertCount(1, $crawler->filter('[data-testid="nowo-task-question-withdraw-form"]'));
+        // The asker may withdraw; not a recipient, so no answer. Since 2.31.0 the card renders no form: links to the
+        // on-demand dialogs, the answer and withdraw ones with the version the card shows.
+        self::assertCount(0, $crawler->filter('[data-testid="nowo-task-question"] form'));
+        self::assertCount(0, $crawler->filter('[data-testid="nowo-task-question-answer-toggle"]'));
+        $withdraw = $crawler->filter('a[data-testid="nowo-task-question-withdraw-toggle"]');
+        self::assertCount(1, $withdraw);
+        self::assertStringEndsWith('/question/' . $question->getId() . '/withdraw?version=1', (string) $withdraw->attr('href'));
+        self::assertSame('nowo-task-board-task-dialog-' . $this->task->getId(), $withdraw->attr('data-nowo-ui-dialog-open'));
     }
 
     public function testAnInvalidAskIsAFlashAndAForgedOneIsRefused(): void
@@ -90,9 +95,21 @@ final class TaskQuestionPagesTest extends QuestionTestCase
         $path     = '/tools/task-board/task/' . $this->task->getId() . '/question/' . $question->getId() . '/answer';
         $this->login($this->bob);
         $crawler = $this->client->request('GET', '/tools/task-board/task/' . $this->task->getId());
+        self::assertCount(0, $crawler->filter('[data-testid="nowo-task-question"] form'));
+        self::assertCount(1, $crawler->filter('a[data-testid="nowo-task-question-answer-toggle"]'));
+        self::assertCount(0, $crawler->filter('[data-testid="nowo-task-question-withdraw-toggle"]'));
+        // The answer dialog: the fragment for the remote dialog, a page otherwise; the version the card showed.
+        $crawler = $this->client->request('GET', $path . '?version=1', server: ['HTTP_X_NOWO_DIALOG' => '1']);
+        self::assertResponseIsSuccessful();
+        self::assertStringNotContainsString('<html', (string) $this->client->getResponse()->getContent());
         self::assertCount(1, $crawler->filter('[data-testid="nowo-task-question-answer-form"]'));
-        self::assertCount(1, $crawler->filter('details.nowo-task-question__answer-box[open]'), 'Open for its recipient while open');
-        self::assertCount(0, $crawler->filter('[data-testid="nowo-task-question-withdraw-form"]'));
+        self::assertSame('1', $crawler->filter('input[name="' . $name . '[version]"]')->attr('value'));
+        $crawler = $this->client->request('GET', $path);
+        self::assertResponseIsSuccessful();
+        self::assertCount(1, $crawler->filter('[data-testid="nowo-task-dialog-page"] [data-testid="nowo-task-question-answer-form"]'));
+        // Bob is no asker or manager: no withdraw dialog either.
+        $this->client->request('GET', '/tools/task-board/task/' . $this->task->getId() . '/question/' . $question->getId() . '/withdraw', server: ['HTTP_X_NOWO_DIALOG' => '1']);
+        self::assertResponseStatusCodeSame(403);
 
         $this->client->request('POST', $path, [$name => ['options' => $question->getOptions()[1]->getId(), 'version' => '1', '_token' => PredictableCsrfTokenManager::value(TaskQuestionView::csrfId('answer', $question->getId()))]]);
         self::assertResponseRedirects();
@@ -128,6 +145,22 @@ final class TaskQuestionPagesTest extends QuestionTestCase
         self::assertResponseStatusCodeSame(403);
         $this->client->request('POST', $path, []);
         self::assertResponseStatusCodeSame(403);
+
+        // Since 2.31.0, from the dialog: an invalid answer is answered in place (422), a saved one 204 + X-Nowo-Redirect,
+        // a stale version is still the conflict flash, a forged one still 403.
+        $dialog  = ['HTTP_X_NOWO_DIALOG' => '1', 'HTTP_X_REQUESTED_WITH' => 'XMLHttpRequest'];
+        $crawler = $this->client->request('POST', $path, [$name => ['options' => 'not-an-option', 'version' => '4', '_token' => PredictableCsrfTokenManager::value(TaskQuestionView::csrfId('answer', $question->getId()))]], [], $dialog);
+        self::assertResponseStatusCodeSame(422);
+        self::assertCount(1, $crawler->filter('[data-testid="nowo-task-question-answer-form"]'));
+        $this->client->request('POST', $path, [$name => ['options' => $question->getOptions()[1]->getId(), 'version' => '4', '_token' => PredictableCsrfTokenManager::value(TaskQuestionView::csrfId('answer', $question->getId()))]], [], $dialog);
+        self::assertResponseStatusCodeSame(204);
+        self::assertSame('/tools/task-board/task/' . $this->task->getId(), $this->client->getResponse()->headers->get('X-Nowo-Redirect'));
+        $this->flashes();
+        $this->client->request('POST', $path, [$name => ['options' => $question->getOptions()[0]->getId(), 'version' => '4', '_token' => PredictableCsrfTokenManager::value(TaskQuestionView::csrfId('answer', $question->getId()))]], [], $dialog);
+        self::assertResponseStatusCodeSame(204);
+        self::assertSame(['error' => ['task_board.question.flash.conflict']], $this->flashes());
+        $this->client->request('POST', $path, [$name => ['options' => $question->getOptions()[0]->getId(), '_token' => 'forged']], [], $dialog);
+        self::assertResponseStatusCodeSame(403);
     }
 
     public function testSomeoneWhoIsNotARecipientIsRefusedAndAnotherTasksQuestionIsNotFound(): void
@@ -153,6 +186,15 @@ final class TaskQuestionPagesTest extends QuestionTestCase
         $name     = 'qw_' . str_replace('-', '', $question->getId());
         $path     = '/tools/task-board/task/' . $this->task->getId() . '/question/' . $question->getId() . '/withdraw';
         $this->login($this->owner);
+        // Since 2.31.0: the withdraw dialog (fragment / page), and an empty reason from it is answered in place (422).
+        $crawler = $this->client->request('GET', $path . '?version=1', server: ['HTTP_X_NOWO_DIALOG' => '1']);
+        self::assertResponseIsSuccessful();
+        self::assertCount(1, $crawler->filter('[data-testid="nowo-task-question-withdraw-form"] input[name="' . $name . '[reason]"][autofocus]'));
+        $this->client->request('GET', $path);
+        self::assertSelectorExists('[data-testid="nowo-task-dialog-page"] [data-testid="nowo-task-question-withdraw-form"]');
+        $this->client->request('POST', $path, [$name => ['reason' => '', 'version' => '1', '_token' => PredictableCsrfTokenManager::value(TaskQuestionView::csrfId('withdraw', $question->getId()))]], [], ['HTTP_X_NOWO_DIALOG' => '1']);
+        self::assertResponseStatusCodeSame(422);
+        self::assertSelectorExists('[data-testid="nowo-task-question-withdraw-form"]');
         $this->client->request('POST', $path, [$name => ['reason' => '', 'version' => '1', '_token' => PredictableCsrfTokenManager::value(TaskQuestionView::csrfId('withdraw', $question->getId()))]]);
         self::assertResponseRedirects();
         $this->client->request('POST', $path, [$name => ['reason' => 'Decided in the call', 'version' => '1', '_token' => PredictableCsrfTokenManager::value(TaskQuestionView::csrfId('withdraw', $question->getId()))]]);
@@ -160,7 +202,9 @@ final class TaskQuestionPagesTest extends QuestionTestCase
         $crawler = $this->client->request('GET', '/tools/task-board/task/' . $this->task->getId());
         self::assertSame('withdrawn', $crawler->filter('[data-testid="nowo-task-question"]')->attr('data-question-state'));
         self::assertStringContainsString('Decided in the call', $crawler->filter('[data-testid="nowo-task-question-withdrawn"]')->text());
-        // Withdrawn again: the form is gone, a forged post is refused.
+        // Withdrawn again: the form is gone (the dialog too), a forged post is refused.
+        $this->client->request('GET', $path, server: ['HTTP_X_NOWO_DIALOG' => '1']);
+        self::assertResponseStatusCodeSame(403);
         $this->flashes();
         $this->client->request('POST', $path, [$name => ['reason' => 'Again', 'version' => '2', '_token' => PredictableCsrfTokenManager::value(TaskQuestionView::csrfId('withdraw', $question->getId()))]]);
         self::assertResponseRedirects();

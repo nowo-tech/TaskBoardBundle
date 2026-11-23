@@ -92,7 +92,7 @@
                     {% endif %}
                     {# Since 2.2.1: the column this page shows; a stale page then does not move the task back. #}
                     {% if taskForm.columnIdShown is defined %}{{ form_widget(taskForm.columnIdShown) }}{% endif %}
-                    {{ priorityUi.priority_tag(task.priority, true) }}
+                    {{ memberForm is defined and memberForm ? priorityUi.priority_tag(task.priority, true) : priorityUi.priority_tag(task.priority, true, path(nowo_task_board_route('task_priority'), {taskId: task.id}|merge(taskRouteExtra|default({}))), taskDialogId|default('nowo-task-board-task-dialog-' ~ task.id)) }}
                     <div hidden>{{ form_widget(taskForm.priority, {label: false}) }}</div>
                 </div>
                 {# Since 1.15: the parent path of a subtask ("Epic › Story › this task"). #}
@@ -127,6 +127,8 @@
                         <span>{{ 'task_board.task.people'|trans({}, 'NowoTaskBoardBundle') }}</span>
                     </dt>
                     <dd class="nowo-task-detail__field-value">
+{% set _membersSrc = path(nowo_task_board_route('task_member'), {taskId: task.id}|merge(taskRouteExtra|default({}))) %}
+                        {% if memberForm is defined and memberForm %}
                         <button
                             type="button"
                             class="nowo-task-detail__people"
@@ -144,6 +146,21 @@
                             <span class="nowo-task-detail__field-edit" aria-hidden="true">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'user-plus'}) }}</span>
                             <span class="nowo-task-sr-only">{{ 'task_board.task.manage_people'|trans({}, 'NowoTaskBoardBundle') }}</span>
                         </button>
+                        {% else %}
+                        {#- Since 2.31.0: a link to the GET of task_member, opened in the on-demand dialog (a page without JS). -#}
+                        <a href="{{ _membersSrc }}" class="nowo-task-detail__people" title="{{ 'task_board.task.manage_people'|trans({}, 'NowoTaskBoardBundle') }}" data-testid="nowo-task-members-open" {{ nowo_ui_html_attrs(nowo_ui_remote_form_opener(taskDialogId|default('nowo-task-board-task-dialog-' ~ task.id), 'task_board.task.members_modal_title'|trans({}, 'NowoTaskBoardBundle'), false, _membersSrc)|merge({'aria-haspopup': 'dialog'})) }}>
+                            {% for member in task.members %}
+                                <span class="nowo-task-detail__member-chip" title="{{ ('task_board.member.' ~ member.memberRole.value)|trans({}, 'NowoTaskBoardBundle') }}">
+                                    {{ include('@NowoTaskBoardBundle/manage/_task_member_avatar.html.twig', {user: member.user, class: 'nowo-task-detail__member-chip-avatar', size: 24, labelled: false}, with_context: false) }}
+                                    <span class="nowo-task-detail__member-chip-name">{{ memberUi.member_label(member.user, true) }}</span>
+                                </span>
+                            {% else %}
+                                <span class="nowo-task-detail__empty">{{ 'task_board.task.no_members'|trans({}, 'NowoTaskBoardBundle') }}</span>
+                            {% endfor %}
+                            <span class="nowo-task-detail__field-edit" aria-hidden="true">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'user-plus'}) }}</span>
+                            <span class="nowo-task-sr-only">{{ 'task_board.task.manage_people'|trans({}, 'NowoTaskBoardBundle') }}</span>
+                        </a>
+                        {% endif %}
                         {# Since 1.25: who created it in the provider and who else is assigned / watching there (no user here). #}
                         {% set _syncCreator = task_board_sync_creator(task) %}
                         {% if _syncCreator %}
@@ -304,8 +321,18 @@
             {{ form_end(taskForm) }}
         </div>
 
-        {{ include('@NowoTaskBoardBundle/manage/_task_members_modal.html.twig') }}
-        {{ include('@NowoTaskBoardBundle/manage/_task_priority_modal.html.twig') }}
+        {% if memberForm is defined and memberForm %}
+            {#- A host passing the 2.30 forms keeps the inline dialogs (deprecated, removed in 3.0). -#}
+            {{ include('@NowoTaskBoardBundle/manage/_task_members_modal.html.twig') }}
+            {{ include('@NowoTaskBoardBundle/manage/_task_priority_modal.html.twig') }}
+        {% else %}
+            {#-
+                Since 2.31.0 (owner rule 2026-11-23, every dialog loads its content on demand): one empty remote dialog for
+                the task's dialogs (people, priority, import subtasks, log time, links, dependencies). Each opener is a link
+                to its write route's GET, which answers the fragment for `X-Nowo-Dialog: 1` and a page otherwise.
+            -#}
+            {{ include(nowo_ui_partial('remote_form_dialog', 'NowoTaskBoardBundle'), {id: taskDialogId|default('nowo-task-board-task-dialog-' ~ task.id), size: 'md', bundle: 'NowoTaskBoardBundle', attr: {'data-testid': 'nowo-task-dialog'}}, false) }}
+        {% endif %}
     </div>
     {% endblock %}
 
@@ -383,7 +410,7 @@
         data-nowo-task-board-task-links-modal-edit-title-value="{{ 'task_board.task.links_modal_edit_title'|trans({}, 'NowoTaskBoardBundle')|e('html_attr') }}"
     >
         {{ include('@NowoTaskBoardBundle/manage/_task_links_section.html.twig') }}
-        {{ include('@NowoTaskBoardBundle/manage/_task_links_modal.html.twig') }}
+        {% if linkForm is defined and linkForm %}{{ include('@NowoTaskBoardBundle/manage/_task_links_modal.html.twig') }}{% endif %}
 
         {# Since 1.15: dependencies in both directions, added and removed from here. #}
         {{ include('@NowoTaskBoardBundle/manage/_task_dependencies_section.html.twig') }}

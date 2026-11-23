@@ -7,12 +7,14 @@
 {% set _body %}
     {# Plain radio widgets: the option label is the custom priority tag below, not the theme's form-check label. #}
     {% form_theme priorityForm 'form_div_layout.html.twig' %}
-    {{ form_start(priorityForm, {attr: {id: 'nowo-task-board-priority-form-' ~ task.id, class: 'nowo-task-dialog__body'}}) }}
+    {#- Since 2.31.0: in the on-demand fragment the form holds its own controller (the highlight of the picked option). -#}
+    {{ form_start(priorityForm, {attr: {id: 'nowo-task-board-priority-form-' ~ task.id, class: 'nowo-task-dialog__body'}|merge(dialog_fragment|default(false) ? {'data-controller': 'nowo-task-board-task-priority-modal'} : {})}) }}
         <p class="nowo-task-dialog__help">{{ 'task_board.task.priority_modal_help'|trans({}, 'NowoTaskBoardBundle') }}</p>
         <div class="nowo-task-detail__priority-options">
             {% for priority in priorities %}
                 {% set _optionAttr = {class: 'nowo-task-detail__priority-radio', 'data-action': 'change->nowo-task-board-task-priority-modal#select'} %}
                 <label class="nowo-task-detail__priority-option{% if task.priority == priority %} is-selected{% endif %}">
+                    {% if dialog_fragment|default(false) and task.priority == priority %}{% set _optionAttr = _optionAttr|merge({autofocus: 'autofocus'}) %}{% endif %}
                     {{ form_widget(priorityForm.priority[loop.index0], {attr: loop.first ? _optionAttr|merge({'data-nowo-task-board-task-priority-modal-target': 'firstOption'}) : _optionAttr}) }}
                     <span class="nowo-task-detail__priority-option-content">
                         {{ priorityUi.priority_tag(priority, false) }}
@@ -29,13 +31,16 @@
     {{ form_end(priorityForm) }}
 {% endset %}
 {% set _footer %}
-        <button type="button" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-nowo-ui-dialog-close>
-            {{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}
-        </button>
+        {{ include('@NowoTaskBoardBundle/manage/dialog/_cancel.html.twig', {label: 'task_board.action.cancel'}) }}
         <button type="submit" form="nowo-task-board-priority-form-{{ task.id }}" class="{{ nowo_ui_class('btn_primary', 'NowoTaskBoardBundle') }}">
             {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'device-floppy'}) }}{{ 'task_board.action.save'|trans({}, 'NowoTaskBoardBundle') }}
         </button>
 {% endset %}
+{% if dialog_fragment|default(false) %}
+    {#- Since 2.31.0: the on-demand fragment (dialog/fragment.html.twig, dialog/page.html.twig). -#}
+    {{ _body }}
+    <div class="nowo-task-dialog__footer nowo-task-dialog__actions" data-nowo-ui-dialog-actions>{{ _footer }}</div>
+{% else %}
 {{ include(nowo_ui_partial('dialog', 'NowoTaskBoardBundle'), {
     id: 'nowo-task-board-task-priority-modal' ~ '-' ~ task.id,
     title: 'task_board.task.priority_modal_title'|trans({}, 'NowoTaskBoardBundle'),
@@ -46,3 +51,4 @@
     footer: _footer,
     footer_attr: {class: 'nowo-task-dialog__footer nowo-task-dialog__actions'},
 }, false) }}
+{% endif %}

@@ -1,0 +1,40 @@
+{#
+    Since 2.31.0: the "Add dependency" dialog of a task (was inline in _task_dependencies_section.html.twig). Loaded on
+    demand from the GET of task_dependency (dialog_fragment: body and actions only); a host that passes dependencyForm
+    to the section still gets it inline (deprecated, removed in 3.0). Variables: task, dependencyForm.
+#}
+        {% set _body %}
+            {# Since 1.26 (dialog rule v2): the actions in the footer, outside the scrolling form. #}
+            {{ form_start(dependencyForm, {method: 'POST', attr: {id: 'nowo-task-dependency-form-' ~ task.id, class: 'nowo-task-dialog__body', 'data-controller': 'nowo-task-board-option-filter'}}) }}
+                <p class="nowo-task-dialog__help">{{ 'task_board.dependency.help'|trans({'%title%': task.title}, 'NowoTaskBoardBundle') }}</p>
+                <div class="nowo-task-field">{{ form_row(dependencyForm.type) }}</div>
+                <div class="nowo-task-field">{{ form_row(dependencyForm.search, dialog_fragment|default(false) ? {attr: dependencyForm.search.vars.attr|merge({autofocus: 'autofocus'})} : {}) }}</div>
+                <div class="nowo-task-field">{{ form_row(dependencyForm.taskId) }}</div>
+                <p class="nowo-task-dialog__help nowo-task-dependency-picker__empty" data-nowo-task-board-option-filter-target="empty" hidden>{{ 'task_board.dependency.no_match'|trans({}, 'NowoTaskBoardBundle') }}</p>
+                {% for child in dependencyForm %}
+                    {% if not child.rendered %}
+                        {{ form_row(child) }}
+                    {% endif %}
+                {% endfor %}
+            {{ form_end(dependencyForm) }}
+        {% endset %}
+        {% set _footer %}
+                {{ include('@NowoTaskBoardBundle/manage/dialog/_cancel.html.twig', {label: 'task_board.action.cancel'}) }}
+                <button type="submit" form="nowo-task-dependency-form-{{ task.id }}" class="{{ nowo_ui_class('btn_primary', 'NowoTaskBoardBundle') }}">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}{{ 'task_board.dependency.add'|trans({}, 'NowoTaskBoardBundle') }}</button>
+        {% endset %}
+        {% if dialog_fragment|default(false) %}
+            {{ _body }}
+            <div class="nowo-task-dialog__footer nowo-task-dialog__actions" data-nowo-ui-dialog-actions>{{ _footer }}</div>
+        {% else %}
+        {{ include(nowo_ui_partial('dialog', 'NowoTaskBoardBundle'), {
+            id: 'nowo-task-dependency-dialog-' ~ task.id,
+            title: 'task_board.dependency.add'|trans({}, 'NowoTaskBoardBundle'),
+            bundle: 'NowoTaskBoardBundle',
+            root_class: 'nowo-task-dialog nowo-task-dialog--native nowo-task-dialog--wide',
+            size: 'wide',
+            attr: {'data-dialog': 'dependency'},
+            body: _body,
+            footer: _footer,
+            footer_attr: {class: 'nowo-task-dialog__footer nowo-task-dialog__actions'},
+        }, false) }}
+        {% endif %}

@@ -23,14 +23,17 @@ use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext;
 use Nowo\TaskBoardBundle\Ui\TaskBoardPages;
+use Nowo\UiKitBundle\Dialog\RemoteDialogResponder;
 use Nowo\UiKitBundle\View\Column;
 use Nowo\UiKitBundle\View\EmptyState;
 use Nowo\UiKitBundle\View\ListPage;
+use Nowo\UiKitBundle\View\PageHeader;
 use Nowo\UiKitBundle\View\Pagination;
+use Nowo\UiKitBundle\View\ShowPage;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
-use Symfony\Component\HttpFoundation\RedirectResponse;
+use Symfony\Component\Form\FormInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -78,6 +81,8 @@ final class TaskQuestionController extends AbstractController
         private readonly int $perPage = 25,
         private readonly TaskBoardPages $pages = new TaskBoardPages(),
         private readonly LoggerInterface $logger = new NullLogger(),
+        // Since 2.31.0 (owner rule 2026-11-23): the on-demand answer, withdraw and publish dialogs.
+        private readonly ?RemoteDialogResponder $remoteDialog = null,
     ) {
     }
 
@@ -108,17 +113,23 @@ final class TaskQuestionController extends AbstractController
         }, 'task_board.question.flash.asked');
     }
 
-    #[Route('/tools/task-board/task/{taskId}/question/{questionId}/answer', name: 'nowo_task_board_task_question_answer', methods: ['POST'])]
+    #[Route('/tools/task-board/task/{taskId}/question/{questionId}/answer', name: 'nowo_task_board_task_question_answer', methods: ['GET', 'POST'])]
     public function answer(string $taskId, string $questionId, Request $request): Response
     {
         [$user, $task] = $this->source($taskId);
         $question      = $this->question($task, $questionId);
-        $form          = $this->container->get('form.factory')->createNamed('qa_' . str_replace('-', '', $question->getId()), TaskQuestionAnswerFormType::class, new TaskQuestionAnswerFormData(), ['question' => $question, 'csrf_token_id' => TaskQuestionView::csrfId('answer', $question->getId())]);
+        if ($this->isRead($request)) {
+            return $this->dialog($request, $task, $question, TaskQuestionView::ACTION_ANSWER);
+        }
+        $form = $this->container->get('form.factory')->createNamed('qa_' . str_replace('-', '', $question->getId()), TaskQuestionAnswerFormType::class, new TaskQuestionAnswerFormData(), ['question' => $question, 'csrf_token_id' => TaskQuestionView::csrfId('answer', $question->getId())]);
         $form->handleRequest($request);
         if (!$form->isSubmitted()) {
             throw $this->createAccessDeniedException('Invalid form.');
         }
         $this->denyOnCsrfError($form->getErrors());
+        if (!$form->isValid() && $this->remoteDialog()->isDialog($request)) {
+            return $this->dialog($request, $task, $question, TaskQuestionView::ACTION_ANSWER, $form, Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
         if (!$form->isValid()) {
             $this->addFlash('error', 'task_board.question.flash.invalid');
 
@@ -133,17 +144,23 @@ final class TaskQuestionController extends AbstractController
         }, 'task_board.question.flash.answered');
     }
 
-    #[Route('/tools/task-board/task/{taskId}/question/{questionId}/withdraw', name: 'nowo_task_board_task_question_withdraw', methods: ['POST'])]
+    #[Route('/tools/task-board/task/{taskId}/question/{questionId}/withdraw', name: 'nowo_task_board_task_question_withdraw', methods: ['GET', 'POST'])]
     public function withdraw(string $taskId, string $questionId, Request $request): Response
     {
         [$user, $task] = $this->source($taskId);
         $question      = $this->question($task, $questionId);
-        $form          = $this->container->get('form.factory')->createNamed('qw_' . str_replace('-', '', $question->getId()), TaskQuestionWithdrawFormType::class, new TaskQuestionWithdrawFormData(), ['csrf_token_id' => TaskQuestionView::csrfId('withdraw', $question->getId())]);
+        if ($this->isRead($request)) {
+            return $this->dialog($request, $task, $question, TaskQuestionView::ACTION_WITHDRAW);
+        }
+        $form = $this->container->get('form.factory')->createNamed('qw_' . str_replace('-', '', $question->getId()), TaskQuestionWithdrawFormType::class, new TaskQuestionWithdrawFormData(), ['csrf_token_id' => TaskQuestionView::csrfId('withdraw', $question->getId())]);
         $form->handleRequest($request);
         if (!$form->isSubmitted()) {
             throw $this->createAccessDeniedException('Invalid form.');
         }
         $this->denyOnCsrfError($form->getErrors());
+        if (!$form->isValid() && $this->remoteDialog()->isDialog($request)) {
+            return $this->dialog($request, $task, $question, TaskQuestionView::ACTION_WITHDRAW, $form, Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
         if (!$form->isValid()) {
             $this->addFlash('error', 'task_board.question.flash.invalid');
 
@@ -158,12 +175,15 @@ final class TaskQuestionController extends AbstractController
         }, 'task_board.question.flash.withdrawn');
     }
 
-    #[Route('/tools/task-board/task/{taskId}/question/{questionId}/publish', name: 'nowo_task_board_task_question_publish', methods: ['POST'])]
+    #[Route('/tools/task-board/task/{taskId}/question/{questionId}/publish', name: 'nowo_task_board_task_question_publish', methods: ['GET', 'POST'])]
     public function publish(string $taskId, string $questionId, Request $request): Response
     {
         [$user, $task] = $this->source($taskId);
         $question      = $this->question($task, $questionId);
-        $form          = $this->container->get('form.factory')->createNamed('qp_' . str_replace('-', '', $question->getId()), CsrfActionType::class, null, ['csrf_token_id' => TaskQuestionView::csrfId('publish', $question->getId())]);
+        if ($this->isRead($request)) {
+            return $this->dialog($request, $task, $question, TaskQuestionView::ACTION_PUBLISH);
+        }
+        $form = $this->container->get('form.factory')->createNamed('qp_' . str_replace('-', '', $question->getId()), CsrfActionType::class, null, ['csrf_token_id' => TaskQuestionView::csrfId('publish', $question->getId())]);
         $form->handleRequest($request);
         if (!$form->isSubmitted() || !$form->isValid()) {
             throw $this->createAccessDeniedException('Invalid CSRF token.');
@@ -261,10 +281,15 @@ final class TaskQuestionController extends AbstractController
         }
     }
 
-    private function back(Request $request, Task $task): RedirectResponse
+    private function back(Request $request, Task $task): Response
     {
-        $target = $request->query->get('_target_path', $request->request->get('_target_path'));
-        $target = is_string($target) && str_starts_with($target, '/') && preg_match('#^//|\\\\|[\x00-\x1f]#', $target) !== 1 ? $target : null;
+        $target = $this->targetPath($request);
+        if ($this->remoteDialog()->isDialog($request)) {
+            // Since 2.31.0: from the on-demand dialog, 204 + X-Nowo-Redirect to the same page (the flash survives). No
+            // #fragment: the dialog navigates there, and a URL that differs from the page only by its fragment would
+            // scroll instead of loading the answered question.
+            return $this->remoteDialog()->redirect($target ?? $this->generateUrl($this->routes['task']['name'] ?? 'nowo_task_board_task', ['taskId' => $task->getId()]), request: $request);
+        }
         if ($request->isXmlHttpRequest() || $request->headers->has('Turbo-Frame')) {
             // A drawer's fetch follows the redirect and gets the panel again.
             return $this->redirectToRoute($this->routes['task_panel']['name'] ?? 'nowo_task_board_task_panel', ['taskId' => $task->getId()] + ($target !== null ? ['_target_path' => $target] : []));
@@ -273,6 +298,56 @@ final class TaskQuestionController extends AbstractController
         return $target !== null
             ? $this->redirect($target . '#nowo-task-questions')
             : $this->redirectToRoute($this->routes['task']['name'] ?? 'nowo_task_board_task', ['taskId' => $task->getId(), '_fragment' => 'nowo-task-questions']);
+    }
+
+    /** A local `_target_path` (query or body), else null: open redirects are refused. */
+    private function targetPath(Request $request): ?string
+    {
+        $target = $request->query->get('_target_path', $request->request->get('_target_path'));
+
+        return is_string($target) && str_starts_with($target, '/') && preg_match('#^//|\\\\|[\x00-\x1f]#', $target) !== 1 ? $target : null;
+    }
+
+    private function remoteDialog(): RemoteDialogResponder
+    {
+        return $this->remoteDialog ?? new RemoteDialogResponder();
+    }
+
+    private function isRead(Request $request): bool
+    {
+        return in_array($request->getMethod(), [Request::METHOD_GET, Request::METHOD_HEAD], true);
+    }
+
+    /**
+     * Since 2.31.0 (owner rule 2026-11-23): a question dialog, the GET of its write route. Same decision as the card:
+     * 403 when the viewer may not answer / withdraw / publish (the write checks again). A remote dialog request gets
+     * the fragment, any other a page with the same form; `$submitted` re-renders an invalid post (422).
+     *
+     * @param FormInterface<mixed>|null $submitted
+     */
+    private function dialog(Request $request, Task $task, TaskQuestion $question, string $action, ?FormInterface $submitted = null, int $status = Response::HTTP_OK): Response
+    {
+        $target   = $this->targetPath($request);
+        $version  = $request->query->get('version');
+        $version  = is_string($version) && preg_match('/^\d{1,9}$/D', $version) === 1 ? (int) $version : null;
+        $form     = $submitted ?? $this->view->dialogForm($action, $question, $target === null ? [] : ['_target_path' => $target], $version) ?? throw $this->createAccessDeniedException('Question access denied.');
+        $user     = $this->requireUser();
+        $vars     = ['task' => $task, 'question' => $question, 'question_action' => $action, 'form' => $form->createView(), 'publishLabel' => $action === TaskQuestionView::ACTION_PUBLISH ? $this->manager->publishLabel($user, $question) : null];
+        $template = '@NowoTaskBoardBundle/manage/_task_question_dialog.html.twig';
+        if ($this->remoteDialog()->isDialog($request)) {
+            $response = $this->render('@NowoTaskBoardBundle/manage/dialog/fragment.html.twig', ['dialog_template' => $template, 'dialog_vars' => $vars], new Response(status: $status));
+        } else {
+            $twig     = $this->container->get('twig');
+            $response = $this->render('@NowoTaskBoardBundle/manage/dialog/page.html.twig', [
+                'page'            => new ShowPage(new PageHeader($question->getText()), bundle: TaskBoardPages::BUNDLE, layout: $twig instanceof Environment ? $this->pages->layout($twig) : null),
+                'task'            => $task,
+                'dialog_template' => $template,
+                'dialog_vars'     => $vars,
+                'dialog_back_url' => $target ?? $this->generateUrl($this->routes['task']['name'] ?? 'nowo_task_board_task', ['taskId' => $task->getId(), '_fragment' => 'nowo-task-questions']),
+            ], new Response(status: $status));
+        }
+
+        return $this->remoteDialog()->fragment($response);
     }
 
     private function requireUser(): UserInterface

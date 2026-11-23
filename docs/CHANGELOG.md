@@ -132,6 +132,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Owner rule 2026-11-23 (symfony-beacon), **every dialog loads its content on demand**: hidden per-row forms had made
+  one Beacon page 474 MB in dev and the FrankenPHP workers ran out of memory. The task page (and the task panel) no
+  longer renders the body or the form of a dialog the user has not opened. It carries one empty UiKit
+  `remote_form_dialog` (`data-testid="nowo-task-dialog"`), and each opener is a real link to the dialog's own page: the
+  GET of its write route, which now also answers GET (paths and names unchanged):
+  - People: `task_member` (`/task/{taskId}/member`), with the per-member remove forms only inside it;
+  - Priority: `task_priority`; Import subtasks: `task_import` (with its format help); Log time: `task_time`;
+    Add dependency: `task_dependency`; Add link: `task_link`; Edit link: `task_link_update` (filled on the server,
+    with Remove link);
+  - Questions (with `task_questions.enabled`): Answer, Withdraw and Publish decision are links to the GET of
+    `task_question_answer`, `_withdraw` and `_publish`; a card renders no form. The answer and withdraw links carry
+    the version the card showed (`?version=`), so an answer written after a newer one is still refused however late
+    the dialog was opened (REQ-RUNTIME-003 unchanged).
+
+  With `X-Nowo-Dialog: 1` (UiKit's remote dialog; the configured header name is honoured) a dialog route answers the
+  fragment (`Vary: X-Nowo-Dialog`), else a page with the same form (`manage/dialog/page.html.twig`), so the link works
+  without JavaScript. A post from the dialog answers `422` with the form and its errors in place when it is invalid
+  (time, link, member, dependency, subtask import, answer, withdraw), and `204` + `X-Nowo-Redirect` once saved (the
+  same target and flash as a page post). Each dialog route applies exactly the access decision of its write (404 for
+  a task or link the user may not find, 403 without edit rights, the import and question rights). CSRF tokens, the
+  409 lock conflicts and every answer to a request without the dialog header are unchanged.
+- The list's archived tasks share one CSRF-only Restore form (`restoreForm`; each row's button posts it with its own
+  `formaction`) instead of one form per row built in the controller; the Apply column set dialog does the same for
+  the delete buttons (`columnSetDeleteForm`, `columnSetDeletable`).
+- Measured with 50 rows (functional kernel, before → after): task page with 50 members and 50 links 266,964 → 164,250
+  bytes, 67 → 9 forms, 7 → 1 dialogs (empty); task page with 50 questions (a recipient) 364,146 → 269,475 bytes, 67 → 9
+  forms; list with 50 archived tasks 70,933 → 62,816 bytes, 55 → 6 forms (`tests/Functional/LazyDialogsTest`).
+
+### Deprecated
+
+- Template variables kept for host templates, removed in 3.0: `restoreForms` and `columnSetDeleteForms` (always empty
+  now), `memberRemoveForms` on the task page (empty; the members dialog has its own). The task page no longer passes
+  `memberForm`, `linkForm`, `linkRemoveForm`, `priorityForm`, `dependencyForm`, `subtaskImportForm` and
+  `timeEntryForm`; a host template that still passes them to the bundle's partials gets the 2.30 inline dialogs
+  (deprecated). `TaskQuestionView::section()` builds the 2.30 per-card forms only with `withForms: true`
+  (deprecated). See UPGRADING.
+
+### Added
+
+- `manage/dialog/fragment.html.twig`, `manage/dialog/page.html.twig` and `manage/dialog/_cancel.html.twig`; the
+  partials `_task_time_dialog.html.twig`, `_task_dependency_dialog.html.twig` and `_task_question_dialog.html.twig`;
+  `TaskQuestionView::dialogForm()` and the card keys `answerUrl`, `withdrawUrl`, `publishUrl`. The task dialog
+  partials render their body and `[data-nowo-ui-dialog-actions]` with `dialog_fragment: true`.
+
 ### Fixed
 
 - REQ-RUNTIME-003 (lost update): two people saving the task edit form of the same task silently lost the first save:

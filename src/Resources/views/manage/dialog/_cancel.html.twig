@@ -1,0 +1,9 @@
+{#
+    Since 2.31.0: the Cancel / Close of a dialog partial: a close button in a dialog, a link back on the no-JS page
+    (dialog_page, dialog_back_url). Variable: label (translation key, default task_board.action.cancel).
+#}
+{% if dialog_page|default(false) %}
+    <a href="{{ dialog_back_url|default('#') }}" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}">{{ (label|default('task_board.action.cancel'))|trans({}, 'NowoTaskBoardBundle') }}</a>
+{% else %}
+    <button type="button" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-nowo-ui-dialog-close>{{ (label|default('task_board.action.cancel'))|trans({}, 'NowoTaskBoardBundle') }}</button>
+{% endif %}

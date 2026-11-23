@@ -17,7 +17,12 @@ const isPhone = (page: Page): boolean => (page.viewportSize()?.width ?? 1280) <=
 
 function watch(page: Page): string[] {
   const errors: string[] = [];
-  page.on('pageerror', (e) => errors.push(e.message));
+  page.on('pageerror', (e) => {
+    // The demo's dev toolbar, cancelled when a page navigates (a dialog's 204 + redirect too): WebKit reports it as a page error.
+    if (!/_wdt/.test(e.message)) {
+      errors.push(e.message);
+    }
+  });
   page.on('console', (m) => {
     if (m.type() === 'error' && !/Failed to load resource|favicon|mercure|_wdt/.test(m.text())) {
       errors.push(m.text());
@@ -42,12 +47,19 @@ async function noSidewaysScroll(page: Page): Promise<void> {
   expect(overflow).toBeLessThanOrEqual(1);
 }
 
-/** Opens a card's answer form (already open for a recipient while the question is open). */
-async function openAnswer(card: Locator): Promise<void> {
-  const box = card.locator('details.nowo-task-question__answer-box');
-  if ((await box.getAttribute('open')) === null) {
-    await card.getByTestId('nowo-task-question-answer-toggle').click();
-  }
+/**
+ * Opens a card's answer dialog. Since 2.31.0 the card renders no form: the dialog loads its form on demand
+ * (`X-Nowo-Dialog`), with the version the card showed.
+ */
+async function openAnswer(card: Locator): Promise<Locator> {
+  const page = card.page();
+  const loaded = page.waitForResponse((response) => response.request().headers()['x-nowo-dialog'] === '1' && /\/answer/.test(response.url()));
+  await card.getByTestId('nowo-task-question-answer-toggle').click();
+  expect((await loaded).status()).toBe(200);
+  const dialog = page.getByTestId('nowo-task-dialog');
+  await expect(dialog.getByTestId('nowo-task-question-answer-form')).toBeVisible();
+
+  return dialog;
 }
 
 async function ask(page: Page, text: string): Promise<Locator> {
@@ -91,32 +103,42 @@ test('ask from the task menu, answer, a late answer is refused, supersede, withd
   await stale.goto(taskUrl);
   const staleCard = stale.getByTestId('nowo-task-question').filter({ hasText: text });
 
-  await openAnswer(question);
-  await question.getByRole('radio', { name: 'Hetzner' }).check();
-  await question.getByTestId('nowo-task-question-answer-submit').click();
+  // The card renders no form (owner rule 2026-11-23).
+  await expect(question.locator('form')).toHaveCount(0);
+  let dialog = await openAnswer(question);
+  await dialog.getByRole('radio', { name: 'Hetzner' }).check();
+  await dialog.getByTestId('nowo-task-question-answer-submit').click();
   await page.waitForLoadState('load');
   const answered = page.getByTestId('nowo-task-question').filter({ hasText: text });
   await expect(answered.getByTestId('nowo-task-question-state')).toHaveText('Answered');
   await expect(answered.getByTestId('nowo-task-question-answer')).toContainText('Hetzner');
 
-  await openAnswer(staleCard);
-  await staleCard.getByRole('radio', { name: 'AWS' }).check();
-  await staleCard.getByTestId('nowo-task-question-answer-submit').click();
+  dialog = await openAnswer(staleCard);
+  await dialog.getByRole('radio', { name: 'AWS' }).check();
+  await dialog.getByTestId('nowo-task-question-answer-submit').click();
   await stale.waitForLoadState('load');
   await expect(stale.getByTestId('nowo-task-question').filter({ hasText: text }).getByTestId('nowo-task-question-answer')).toContainText('Hetzner');
   await stale.close();
 
-  await openAnswer(answered);
-  await answered.getByRole('radio', { name: 'AWS' }).check();
-  await answered.getByTestId('nowo-task-question-answer-submit').click();
+  dialog = await openAnswer(answered);
+  await dialog.getByRole('radio', { name: 'AWS' }).check();
+  await dialog.getByTestId('nowo-task-question-answer-submit').click();
   await page.waitForLoadState('load');
   const superseded = page.getByTestId('nowo-task-question').filter({ hasText: text });
   await expect(superseded.getByTestId('nowo-task-question-answer')).toContainText('AWS');
   await expect(superseded.locator('.nowo-task-question__history summary')).toHaveText('1 earlier answer');
 
   await superseded.getByTestId('nowo-task-question-withdraw-toggle').click();
-  await superseded.getByLabel('Why is it withdrawn?').fill('Decided in the call');
-  await superseded.getByTestId('nowo-task-question-withdraw-submit').click();
+  dialog = page.getByTestId('nowo-task-dialog');
+  // An empty reason is answered in place (422): the dialog stays open with the error.
+  // (The browser's own check is lifted to reach the server's.)
+  await dialog.getByLabel('Why is it withdrawn?').evaluate((field) => field.removeAttribute('required'));
+  const refused = page.waitForResponse((response) => response.request().method() === 'POST' && /\/withdraw/.test(response.url()));
+  await dialog.getByTestId('nowo-task-question-withdraw-submit').click();
+  expect((await refused).status()).toBe(422);
+  await expect(dialog.getByLabel('Why is it withdrawn?')).toBeVisible();
+  await dialog.getByLabel('Why is it withdrawn?').fill('Decided in the call');
+  await dialog.getByTestId('nowo-task-question-withdraw-submit').click();
   await page.waitForLoadState('load');
   const withdrawn = page.getByTestId('nowo-task-question').filter({ hasText: text });
   await expect(withdrawn.getByTestId('nowo-task-question-state')).toHaveText('Withdrawn');

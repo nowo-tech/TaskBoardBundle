@@ -63,12 +63,15 @@
                                 <span class="nowo-task-column-sets__name">{{ set.name }}</span>
                                 <span class="nowo-task-column-sets__columns">{{ set.items|map(item => item.name)|join(', ') }}</span>
                             </div>
-                            {% set deleteForm = columnSetDeleteForms[set.id] ?? null %}
-                            {% if deleteForm is not null %}
-                                {{ form_start(deleteForm, {attr: {
-                                    class: 'nowo-task-column-sets__delete',
-                                                                        'data-confirm': 'task_board.column_set.delete_confirm'|trans({'%name%': set.name}, 'NowoTaskBoardBundle'),
-                                }}) }}
+                            {% if columnSetDeletable[set.id] is defined and columnSetDeleteForm|default(null) %}
+                                {#- Since 2.31.0: the shared CSRF-only form below, posted with this set's formaction. -#}
+                                <button type="submit" form="nowo-task-column-set-delete-form" formaction="{{ path(nowo_task_board_route('column_set_delete'), {boardId: board.id, setId: set.id}) }}" data-confirm="{{ 'task_board.column_set.delete_confirm'|trans({'%name%': set.name}, 'NowoTaskBoardBundle') }}" class="{{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_danger', 'NowoTaskBoardBundle') }}" aria-label="{{ 'task_board.column_set.delete_named'|trans({'%name%': set.name}, 'NowoTaskBoardBundle') }}">
+                                    {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'trash'}) }}
+                                </button>
+                            {% elseif columnSetDeleteForms[set.id] is defined %}
+                                {#- A host passing the 2.30 per-set forms (deprecated, removed in 3.0). -#}
+                                {% set deleteForm = columnSetDeleteForms[set.id] %}
+                                {{ form_start(deleteForm, {attr: {class: 'nowo-task-column-sets__delete', 'data-confirm': 'task_board.column_set.delete_confirm'|trans({'%name%': set.name}, 'NowoTaskBoardBundle')}}) }}
                                     {% for child in deleteForm %}
                                         {% if not child.rendered %}
                                             {{ form_row(child) }}
@@ -82,6 +85,11 @@
                         </li>
                     {% endfor %}
                 </ul>
+                {% if columnSetDeleteForm|default(null) %}
+                    {{ form_start(columnSetDeleteForm, {action: '#', method: 'POST', attr: {id: 'nowo-task-column-set-delete-form', hidden: 'hidden'}}) }}
+                        {% for child in columnSetDeleteForm %}{% if not child.rendered %}{{ form_row(child) }}{% endif %}{% endfor %}
+                    {{ form_end(columnSetDeleteForm) }}
+                {% endif %}
             {% endif %}
         </div>
     {% endset %}

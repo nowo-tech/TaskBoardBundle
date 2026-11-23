@@ -168,7 +168,9 @@
                         <li class="nowo-task-flex nowo-task-wrap nowo-task-center nowo-task-gap nowo-task-mb-2">
                             <a href="{{ path(nowo_task_board_route('task'), {taskId: task.id}) }}">{{ task.title }}</a>
                             <span class="{{ nowo_ui_class('badge_neutral', 'NowoTaskBoardBundle') }}">{{ ('task_board.task.archive_reason.' ~ (task.archiveReason ?? 'user'))|trans({}, 'NowoTaskBoardBundle') }}</span>
-                            {% if restoreForms[task.id] is defined %}
+                            {% if restoreForm|default(null) %}
+                                <button type="submit" form="nowo-task-restore-form" formaction="{{ path(nowo_task_board_route('task_restore'), {taskId: task.id}) }}" class="{{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-testid="nowo-task-restore">{{ 'task_board.task.restore'|trans({}, 'NowoTaskBoardBundle') }}<span class="visually-hidden"> {{ task.title }}</span></button>
+                            {% elseif restoreForms[task.id] is defined %}
                                 {{ form_start(restoreForms[task.id], {action: path(nowo_task_board_route('task_restore'), {taskId: task.id}), method: 'POST', attr: {class: 'd-inline'}}) }}
                                     <button type="submit" class="{{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}">{{ 'task_board.task.restore'|trans({}, 'NowoTaskBoardBundle') }}<span class="visually-hidden"> {{ task.title }}</span></button>
                                 {{ form_end(restoreForms[task.id]) }}
@@ -176,6 +178,12 @@
                         </li>
                     {% endfor %}
                 </ul>
+                {#- Since 2.31.0: one CSRF-only form for every Restore button (REQ-TWIG-005), no form per row. -#}
+                {% if restoreForm|default(null) %}
+                    {{ form_start(restoreForm, {action: '#', method: 'POST', attr: {id: 'nowo-task-restore-form', hidden: 'hidden'}}) }}
+                        {% for child in restoreForm %}{% if not child.rendered %}{{ form_row(child) }}{% endif %}{% endfor %}
+                    {{ form_end(restoreForm) }}
+                {% endif %}
             </details>
         {% endif %}
     {% endblock %}

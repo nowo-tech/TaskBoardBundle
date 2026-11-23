@@ -79,10 +79,15 @@ final class AvatarsTest extends FunctionalTestCase
 
         $crawler = $this->client->request('GET', '/tools/task-board/task/' . $crowded->getId());
         // Beside a printed name the chip is decorative.
-        foreach (['.nowo-task-detail__member-chip-avatar' => 'P', '.nowo-task-members__avatar' => 'P', '.nowo-task-comment .nowo-task-detail__history-avatar' => 'C', '.nowo-task-detail__history-item .nowo-task-detail__history-avatar' => 'H'] as $selector => $initial) {
+        foreach (['.nowo-task-detail__member-chip-avatar' => 'P', '.nowo-task-comment .nowo-task-detail__history-avatar' => 'C', '.nowo-task-detail__history-item .nowo-task-detail__history-avatar' => 'H'] as $selector => $initial) {
             self::assertSame($initial, $crawler->filter($selector)->first()->text(), $selector);
             self::assertSame('true', $crawler->filter($selector . ' > [aria-hidden]')->first()->attr('aria-hidden'), $selector);
         }
+        self::assertCount(0, $crawler->filter('img.nowo-task-member-avatar__image'));
+        // Since 2.31.0 the members list is in the People dialog, loaded on demand.
+        $crawler = $this->client->request('GET', '/tools/task-board/task/' . $crowded->getId() . '/member', server: ['HTTP_X_NOWO_DIALOG' => '1']);
+        self::assertSame('P', $crawler->filter('.nowo-task-members__avatar')->first()->text());
+        self::assertSame('true', $crawler->filter('.nowo-task-members__avatar > [aria-hidden]')->first()->attr('aria-hidden'));
         self::assertCount(0, $crawler->filter('img.nowo-task-member-avatar__image'));
     }
 
