@@ -31,7 +31,7 @@ final class ApiOpenApiTest extends ApiTestCase
     {
         // Since 2.16.0: the optional routes too (task_templates.enabled adds GET /v2/list/{list_id}/taskTemplate; since
         // 2.23.0 task_questions.enabled adds the question routes).
-        static::$hostConfig = ['task_templates' => ['enabled' => true], 'task_questions' => ['enabled' => true]];
+        self::$hostConfig = ['task_templates' => ['enabled' => true], 'task_questions' => ['enabled' => true]];
         parent::setUp();
     }
 

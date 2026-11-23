@@ -22,6 +22,7 @@ use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
 use Nowo\TaskBoardBundle\Event\BoardAccessCheckEvent;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
+use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Service\BoardColumnManager;
@@ -155,7 +156,7 @@ final class ApiManagementTest extends ApiTestCase
             $this->service(TaskApiAudit::class),
             $this->service(TaskBoardAccessCheckerInterface::class),
             $this->service(TaskBoardCreator::class),
-            new TaskBoardEditor($this->service('Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface')),
+            new TaskBoardEditor($this->service(TaskBoardRepositoryInterface::class)),
             $eraser,
             $this->service(BoardColumnManager::class),
             $this->service(TaskApiQueryRepository::class),
@@ -258,7 +259,7 @@ final class ApiManagementTest extends ApiTestCase
         $endpoints = $this->endpoints();
         foreach ([TaskApiLevel::MyTasks, TaskApiLevel::Read, TaskApiLevel::Tasks] as $level) {
             $this->issueToken($level);
-            foreach ($endpoints as $name => $call) {
+            foreach ($endpoints as $call) {
                 $call();
                 $this->assertRefused(403, 'TOKEN_001');
             }

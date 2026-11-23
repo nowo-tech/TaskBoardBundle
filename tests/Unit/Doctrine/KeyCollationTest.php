@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Tests\Unit\Doctrine;
 
+use App\Entity\User;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Platforms\AbstractPlatform;
 use Doctrine\DBAL\Platforms\MariaDBPlatform;
@@ -104,7 +105,7 @@ final class KeyCollationTest extends TestCase
         $manager = $this->createStub(EntityManagerInterface::class);
         $manager->method('getConnection')->willReturn($this->connection($platform, $version));
 
-        (new TaskBoardMetadataListener('t', 'b', 'teams', 'members', 'App\\Entity\\User', logger: $logger))->loadClassMetadata(new LoadClassMetadataEventArgs($metadata, $manager));
+        (new TaskBoardMetadataListener('t', 'b', 'teams', 'members', User::class, logger: $logger))->loadClassMetadata(new LoadClassMetadataEventArgs($metadata, $manager));
 
         return $metadata;
     }

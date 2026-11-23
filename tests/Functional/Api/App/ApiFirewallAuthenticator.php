@@ -11,7 +11,6 @@ use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
 use Symfony\Component\Security\Core\Exception\AuthenticationException;
 use Symfony\Component\Security\Http\Authenticator\AbstractAuthenticator;
 use Symfony\Component\Security\Http\Authenticator\Passport\Badge\UserBadge;
-use Symfony\Component\Security\Http\Authenticator\Passport\Passport;
 use Symfony\Component\Security\Http\Authenticator\Passport\SelfValidatingPassport;
 
 /**
@@ -20,12 +19,12 @@ use Symfony\Component\Security\Http\Authenticator\Passport\SelfValidatingPasspor
  */
 final class ApiFirewallAuthenticator extends AbstractAuthenticator
 {
-    public function supports(Request $request): ?bool
+    public function supports(Request $request): bool
     {
         return isset(ApiTestHost::$tokens[(string) TaskApiCredential::fromRequest($request)]);
     }
 
-    public function authenticate(Request $request): Passport
+    public function authenticate(Request $request): SelfValidatingPassport
     {
         return new SelfValidatingPassport(new UserBadge(ApiTestHost::$tokens[(string) TaskApiCredential::fromRequest($request)]['email']));
     }

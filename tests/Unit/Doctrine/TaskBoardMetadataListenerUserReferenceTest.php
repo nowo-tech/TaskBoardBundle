@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Tests\Unit\Doctrine;
 
+use App\Entity\User;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Platforms\MariaDBPlatform;
 use Doctrine\DBAL\Platforms\MySQL80Platform;
@@ -67,7 +68,7 @@ final class TaskBoardMetadataListenerUserReferenceTest extends TestCase
         $manager = $this->createStub(EntityManagerInterface::class);
         $manager->method('getConnection')->willReturn($connection);
 
-        (new TaskBoardMetadataListener('t', 'b', 'teams', 'members', 'App\\Entity\\User', TaskBoardUsers::ID))->loadClassMetadata(new LoadClassMetadataEventArgs($metadata, $manager));
+        (new TaskBoardMetadataListener('t', 'b', 'teams', 'members', User::class, TaskBoardUsers::ID))->loadClassMetadata(new LoadClassMetadataEventArgs($metadata, $manager));
 
         return $metadata;
     }

@@ -23,7 +23,7 @@ final class TaskBoardUserLocatorTest extends TestCase
     public function testIdModeAsksTheDirectoryAndKeepsTheExactAnswerOnly(): void
     {
         $directory = new class implements TaskBoardUserDirectoryInterface {
-            public function find(string $id): ?object
+            public function find(string $id): LocatedUser
             {
                 if ($id === 'boom') {
                     throw new RuntimeException('directory down');

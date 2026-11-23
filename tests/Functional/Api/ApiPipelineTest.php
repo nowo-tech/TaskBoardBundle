@@ -237,7 +237,7 @@ final class ApiPipelineTest extends ApiTestCase
     public function testAFailureInAControllerLeavesAsARefusalWithoutItsMessage(Throwable $failure, int $status, string $ecode): void
     {
         $this->issueToken();
-        $this->withListener(KernelEvents::CONTROLLER, static function () use ($failure): void {
+        $this->withListener(KernelEvents::CONTROLLER, static function () use ($failure): never {
             throw $failure;
         });
 
@@ -275,7 +275,7 @@ final class ApiPipelineTest extends ApiTestCase
         $this->withListener(KernelEvents::CONTROLLER, static function (ControllerEvent $event) use ($kernel): void {
             if ($event->isMainRequest()) {
                 // An API route without the pipeline has no principal, and the error is the host's page.
-                $response = $kernel->handle(Request::create('/api/tasks/v2/user'), $kernel::SUB_REQUEST);
+                $response = $kernel->handle(Request::create('/api/tasks/v2/user'), ApiKernel::SUB_REQUEST);
                 self::assertSame(500, $response->getStatusCode());
                 self::assertFalse($response->headers->has('X-RateLimit-Limit'));
             }

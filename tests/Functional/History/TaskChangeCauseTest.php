@@ -156,7 +156,7 @@ final class TaskChangeCauseTest extends FunctionalTestCase
         $this->setUp();
         $task = $this->task($this->board(), 'Labelled');
         $this->context()->run('rule:42', fn () => $this->tasks()->updatePriority($task, TaskPriority::High, $this->owner));
-        $this->context()->run('import:1', fn () => $this->tasks()->addTag($task, 'x', $this->owner));
+        $this->context()->run('import:1', fn (): bool => $this->tasks()->addTag($task, 'x', $this->owner));
         $this->login($this->owner);
 
         $crawler = $this->client->request('GET', '/tools/task-board/task/' . $task->getId());

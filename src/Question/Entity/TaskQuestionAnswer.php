@@ -12,6 +12,7 @@ use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 
 use function array_values;
+use function in_array;
 
 /**
  * Since 2.23.0 (Beacon spec 242): one answer to a question — the options picked (ids of the question's options), the
@@ -96,13 +97,7 @@ class TaskQuestionAnswer
 
     public function selects(string $optionId): bool
     {
-        foreach ($this->selectedOptionIds as $id) {
-            if ($id === $optionId) {
-                return true;
-            }
-        }
-
-        return false;
+        return in_array($optionId, $this->selectedOptionIds, true);
     }
 
     /** @return list<TaskQuestionOption> the options picked, in the question's order */

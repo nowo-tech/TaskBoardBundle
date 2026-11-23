@@ -179,7 +179,7 @@ final class TaskBoardUsers implements ResetInterface
             }
         }
 
-        return array_map('strval', array_keys(array_diff_key($seen, $exact)));
+        return array_map(strval(...), array_keys(array_diff_key($seen, $exact)));
     }
 
     public function reset(): void

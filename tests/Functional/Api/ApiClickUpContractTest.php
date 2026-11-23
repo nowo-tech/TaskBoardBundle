@@ -132,7 +132,7 @@ final class ApiClickUpContractTest extends ApiTestCase
 
     protected function setUp(): void
     {
-        static::$hostConfig = SyncFunctionalTestCase::SYNC_CONFIG;
+        self::$hostConfig = SyncFunctionalTestCase::SYNC_CONFIG;
         parent::setUp();
         ApiTestHost::$tenants = ['tenant-a'];
         $colleague            = $this->user('colleague@example.com');

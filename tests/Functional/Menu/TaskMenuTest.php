@@ -119,7 +119,7 @@ final class TaskMenuTest extends FunctionalTestCase
         $slot    = $card->filter('[data-nowo-task-menu-shared]');
         self::assertSame([$this->columnId('To do'), 'normal'], [$slot->attr('data-column'), $slot->attr('data-priority')]);
 
-        $template = (string) $crawler->filter('template#nowo-task-menu-shared')->html();
+        $template = $crawler->filter('template#nowo-task-menu-shared')->html();
         foreach (['To do', 'Doing', 'Done'] as $column) {
             self::assertStringContainsString('value="__TASK__|status:' . $this->columnId($column) . '"', $template);
         }
@@ -387,7 +387,7 @@ final class TaskMenuTest extends FunctionalTestCase
 
     private function dispatcher(): EventDispatcherInterface
     {
-        $dispatcher = static::getContainer()->get('event_dispatcher');
+        $dispatcher = self::getContainer()->get('event_dispatcher');
         self::assertInstanceOf(EventDispatcherInterface::class, $dispatcher);
 
         return $dispatcher;

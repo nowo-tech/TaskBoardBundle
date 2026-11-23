@@ -172,7 +172,7 @@ final class TaskBoardMultiBoardController extends AbstractController
         ]);
     }
 
-    #[Route('/tools/task-board/tasks/export.{format}', name: 'nowo_task_board_tasks_export', methods: ['GET'], requirements: ['format' => TaskBoardRouteLoader::EXPORT_FORMAT_REQUIREMENT])]
+    #[Route('/tools/task-board/tasks/export.{format}', name: 'nowo_task_board_tasks_export', requirements: ['format' => TaskBoardRouteLoader::EXPORT_FORMAT_REQUIREMENT], methods: ['GET'])]
     public function export(Request $request, string $format): Response
     {
         $user   = $this->requireUser();

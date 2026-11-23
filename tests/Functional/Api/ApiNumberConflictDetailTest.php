@@ -23,7 +23,7 @@ final class ApiNumberConflictDetailTest extends ApiTestCase
 
     protected function setUp(): void
     {
-        static::$hostConfig = ['task_numbers' => ['enabled' => true]];
+        self::$hostConfig = ['task_numbers' => ['enabled' => true]];
         parent::setUp();
         $this->foldKeyColumns($this->em);
         $this->owner          = $this->user('owner@example.com');

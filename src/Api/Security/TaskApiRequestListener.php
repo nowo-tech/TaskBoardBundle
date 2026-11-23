@@ -31,6 +31,7 @@ use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
 use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 use Symfony\Component\Security\Core\Exception\AuthenticationException;
+use Symfony\Component\Security\Core\User\UserInterface;
 use Throwable;
 
 use function array_filter;
@@ -185,7 +186,7 @@ final readonly class TaskApiRequestListener implements EventSubscriberInterface
     private function requireSecurityUser(TaskApiPrincipal $principal): void
     {
         $securityUser = $this->tokenStorage->getToken()?->getUser();
-        if ($securityUser === $principal->user || ($securityUser !== null && $this->idOf($securityUser) !== null && $this->idOf($securityUser) === $this->idOf($principal->user))) {
+        if ($securityUser === $principal->user || ($securityUser instanceof UserInterface && $this->idOf($securityUser) !== null && $this->idOf($securityUser) === $this->idOf($principal->user))) {
             return;
         }
         $this->logger->error('TaskBoard API: the security user is not the token\'s user. The API must sit behind a stateless firewall that authenticates the token.', ['bundle' => 'nowo_task_board']);

@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Doctrine\DBAL\Platforms\AbstractMySQLPlatform;
 use Doctrine\DBAL\Platforms\SQLitePlatform;
 use Doctrine\ORM\Tools\SchemaTool;
+use Nowo\TaskBoardBundle\Api\Hook\ManualTaskApiTimeEntries;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiTimeEntriesInterface;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiTimeEntryBillableInterface;
 use Nowo\TaskBoardBundle\Api\Repository\TaskApiQueryRepository;
@@ -50,7 +51,7 @@ final class DddHostLookAlikeTest extends KernelTestCase
     protected static function createKernel(array $options = []): KernelInterface
     {
         return new DddHostKernel([
-            'api'  => ['enabled' => true, 'hooks' => ['authenticator' => 'app.users', 'time_entries' => 'Nowo\\TaskBoardBundle\\Api\\Hook\\ManualTaskApiTimeEntries', 'users' => 'app.users']],
+            'api'  => ['enabled' => true, 'hooks' => ['authenticator' => 'app.users', 'time_entries' => ManualTaskApiTimeEntries::class, 'users' => 'app.users']],
             'sync' => ['enabled' => true, 'credential_resolver' => 'app.users'],
         ]);
     }

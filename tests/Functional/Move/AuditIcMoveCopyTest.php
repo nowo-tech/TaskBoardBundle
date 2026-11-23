@@ -18,6 +18,7 @@ use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Event\TaskAccessCheckEvent;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Event\TaskBoardQuotaCheckEvent;
+use Nowo\TaskBoardBundle\Move\TaskMovePlan;
 use Nowo\TaskBoardBundle\Tests\Functional\App\FunctionalKernel;
 use Nowo\TaskBoardBundle\Tests\Functional\App\PredictableCsrfTokenManager;
 use Nowo\TaskBoardBundle\Tests\Functional\Copy\CopyTestCase;
@@ -109,7 +110,7 @@ final class AuditIcMoveCopyTest extends CopyTestCase
             $em->flush();
         }, 100);
 
-        $this->assertRefused('stale', fn () => $this->mover()->move($task, $target, [], $plan->fingerprint, $this->owner));
+        $this->assertRefused('stale', fn (): TaskMovePlan => $this->mover()->move($task, $target, [], $plan->fingerprint, $this->owner));
         self::assertTrue($this->em->isOpen(), 'a refusal inside the transaction leaves the entity manager usable');
         $row = $this->em->getConnection()->fetchAssociative('SELECT s.board_id AS a, t.board_id AS b FROM task_board_task_dependencies d JOIN task_board_tasks s ON s.id = d.source_task_id JOIN task_board_tasks t ON t.id = d.target_task_id');
         self::assertIsArray($row);

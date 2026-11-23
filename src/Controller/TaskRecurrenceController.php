@@ -140,7 +140,7 @@ final class TaskRecurrenceController extends AbstractController
         ]);
     }
 
-    #[Route('/tools/task-board/task/{taskId}/recurrence/{action}', name: 'nowo_task_board_task_recurrence_action', methods: ['POST'], requirements: ['action' => TaskBoardRouteLoader::RECURRENCE_ACTION_REQUIREMENT])]
+    #[Route('/tools/task-board/task/{taskId}/recurrence/{action}', name: 'nowo_task_board_task_recurrence_action', requirements: ['action' => TaskBoardRouteLoader::RECURRENCE_ACTION_REQUIREMENT], methods: ['POST'])]
     public function action(string $taskId, string $action, Request $request): RedirectResponse
     {
         [$user, $task] = $this->source($taskId);

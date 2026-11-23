@@ -114,17 +114,17 @@ final class MultiBoardDddHostTest extends MultiBoardTestCase
         $bob   = $this->user('bob@example.com');
         $hr    = $this->board('HR', creator: $bob);
         $this->make($hr, 'Payroll');
-        $domain = static::getContainer()->get('app.domain_scope');
+        $domain = self::getContainer()->get('app.domain_scope');
         self::assertInstanceOf(DomainProjectBoardScope::class, $domain);
         $domain->projects = ['p-hr' => ['name' => 'HR project', 'boardId' => $hr->getId(), 'members' => [(string) $alice->getId(), (string) $admin->getId()], 'organisation' => 'acme']];
-        $tokens           = static::getContainer()->get('security.token_storage');
+        $tokens           = self::getContainer()->get('security.token_storage');
         self::assertInstanceOf(TokenStorageInterface::class, $tokens);
         $tokens->setToken(new UsernamePasswordToken($admin, 'main', $admin->getRoles()));
-        $tasks = static::getContainer()->get(MultiBoardTaskListInterface::class);
+        $tasks = self::getContainer()->get(MultiBoardTaskListInterface::class);
         self::assertInstanceOf(MultiBoardTaskListInterface::class, $tasks);
 
         // Audit NI-4: the admin's role opens bob's board to the admin, not to alice read while the admin is signed in.
-        self::assertSame(['HR project'], array_map(static fn ($board): string => $board->label, $tasks->boards(new MultiBoardViewer((string) $admin->getId()))));
+        self::assertSame(['HR project'], array_map(static fn (MultiBoardBoard $board): string => $board->label, $tasks->boards(new MultiBoardViewer((string) $admin->getId()))));
         self::assertSame([], $tasks->boards(new MultiBoardViewer((string) $alice->getId())));
         $tokens->setToken(null);
         self::assertSame([], $tasks->boards(new MultiBoardViewer((string) $admin->getId())), 'no token: no manager role');

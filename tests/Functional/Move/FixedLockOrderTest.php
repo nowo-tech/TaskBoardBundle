@@ -182,7 +182,7 @@ final class FixedLockOrderTest extends FunctionalTestCase
         self::assertSame(0, proc_close($process), $errors);
         self::assertSame('moved', $other);
 
-        $positions = array_map('intval', $this->em->getConnection()->fetchFirstColumn('SELECT position FROM task_board_tasks WHERE column_id = ? ORDER BY position', [$doing->getId()]));
+        $positions = array_map(intval(...), $this->em->getConnection()->fetchFirstColumn('SELECT position FROM task_board_tasks WHERE column_id = ? ORDER BY position', [$doing->getId()]));
         self::assertSame([0, 1, 2, 3], $positions, 'unique and contiguous');
         // From the committed column (H, L, M), not from the one read before the lock (L, M, H).
         $this->assertPositions([$high, $entering, $low, $middle]);
@@ -228,7 +228,7 @@ final class FixedLockOrderTest extends FunctionalTestCase
 
         self::assertNull($failure, (string) $failure?->getMessage());
         self::assertSame('moved', $other);
-        self::assertSame([0, 1, 2], array_map('intval', $this->em->getConnection()->fetchFirstColumn('SELECT position FROM task_board_tasks WHERE column_id = ? ORDER BY position', [$doing->getId()])));
+        self::assertSame([0, 1, 2], array_map(intval(...), $this->em->getConnection()->fetchFirstColumn('SELECT position FROM task_board_tasks WHERE column_id = ? ORDER BY position', [$doing->getId()])));
     }
 
     public function testASubtaskCreatedWithADepthLimitAndAConcurrentRenumberingMoveBothFinish(): void
@@ -251,7 +251,7 @@ final class FixedLockOrderTest extends FunctionalTestCase
 
         self::assertNull($failure, (string) $failure?->getMessage());
         self::assertSame('created', $other);
-        self::assertSame([0, 1, 2], array_map('intval', $this->em->getConnection()->fetchFirstColumn('SELECT position FROM task_board_tasks WHERE column_id = ? ORDER BY position', [$doing->getId()])), 'unique and contiguous');
+        self::assertSame([0, 1, 2], array_map(intval(...), $this->em->getConnection()->fetchFirstColumn('SELECT position FROM task_board_tasks WHERE column_id = ? ORDER BY position', [$doing->getId()])), 'unique and contiguous');
     }
 
     public function testAColumnDeletionMovesATaskThatEnteredWhileItWaited(): void
@@ -460,7 +460,7 @@ final class FixedLockOrderTest extends FunctionalTestCase
                 if (!$this->em->getConnection()->getDatabasePlatform() instanceof SQLitePlatform) {
                     self::assertStringContainsString('FOR UPDATE', $query['sql']);
                 }
-                $locks[] = ['index' => $index, 'table' => $match[1], 'ids' => array_values(array_map('strval', $query['params']))];
+                $locks[] = ['index' => $index, 'table' => $match[1], 'ids' => array_values(array_map(strval(...), $query['params']))];
             }
         }
 

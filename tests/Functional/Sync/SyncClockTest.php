@@ -48,7 +48,7 @@ final class SyncClockTest extends SyncFunctionalTestCase
         $board   = $this->board(columns: ['To do', 'Done']);
         $created = new DateTimeImmutable('2030-05-06 07:08:09 UTC');
         $this->put(new RemoteTask(
-            task: new ImportedTaskDto(title: 'Created by the source', externalId: 'c1', status: 'To do', priority: TaskPriority::Normal, hasPriority: false, createdAt: $created),
+            task: new ImportedTaskDto(title: 'Created by the source', externalId: 'c1', status: 'To do', priority: TaskPriority::Normal, createdAt: $created, hasPriority: false),
             remoteUpdatedAt: new DateTimeImmutable('@1790000001'),
         ));
 

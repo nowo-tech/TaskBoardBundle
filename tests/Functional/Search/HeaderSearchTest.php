@@ -11,6 +11,7 @@ use Nowo\TaskBoardBundle\Event\SearchScopeEvent;
 use Nowo\TaskBoardBundle\Event\TaskAccessCheckEvent;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Repository\TeamMemberRepositoryInterface;
+use Nowo\TaskBoardBundle\Search\Header\SearchableBoard;
 use Nowo\TaskBoardBundle\Search\Header\SearchBoardScope;
 use Nowo\TaskBoardBundle\Search\Header\SearchHit;
 use Nowo\TaskBoardBundle\Search\Header\SearchHits;
@@ -310,7 +311,7 @@ final class HeaderSearchTest extends HeaderSearchTestCase
         self::assertInstanceOf(TaskBoardResourceAccessChecker::class, $checker);
         $scope = new SearchBoardScope($this->em, $checker);
 
-        self::assertSame(['Mine'], array_map(static fn ($board): string => $board->board->getName(), array_values($scope->boards($this->viewer($this->owner), SearchScopeEvent::GROUP_BOARDS)->boards)));
+        self::assertSame(['Mine'], array_map(static fn (SearchableBoard $board): string => $board->board->getName(), array_values($scope->boards($this->viewer($this->owner), SearchScopeEvent::GROUP_BOARDS)->boards)));
         self::assertTrue($scope->boards(new SearchViewer(new stdClass()), SearchScopeEvent::GROUP_BOARDS)->isEmpty(), 'no id, no team: the default rule opens nothing');
     }
 

@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\Question;
 
 use DateTimeImmutable;
 use Nowo\TaskBoardBundle\Question\Entity\TaskQuestionAnswer;
+use Nowo\TaskBoardBundle\Question\Entity\TaskQuestionOption;
 use Nowo\TaskBoardBundle\Support\ActorId;
 
 use function array_map;
@@ -43,8 +44,8 @@ final readonly class TaskQuestionAnswerSnapshot
             $answer->getId(),
             $answer->getQuestion()->getId(),
             $answer->getSequence(),
-            array_map(static fn ($option): string => $option->getId(), $options),
-            array_map(static fn ($option): string => $option->getLabel(), $options),
+            array_map(static fn (TaskQuestionOption $option): string => $option->getId(), $options),
+            array_map(static fn (TaskQuestionOption $option): string => $option->getLabel(), $options),
             $answer->getOtherText(),
             $answer->getAnsweredBySubject(),
             ActorId::of($answer->getAnsweredBy()),

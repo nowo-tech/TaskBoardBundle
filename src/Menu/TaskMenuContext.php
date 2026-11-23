@@ -36,7 +36,7 @@ final readonly class TaskMenuContext
     /** Since 2.23.0: whether the menu offers *Ask a question…* for the task (false with questions off). */
     public function canAskQuestion(Task $task): bool
     {
-        return $this->canAskQuestion !== null && ($this->canAskQuestion)($task) === true;
+        return $this->canAskQuestion instanceof Closure && ($this->canAskQuestion)($task) === true;
     }
 
     public function canEditTask(Task $task): bool

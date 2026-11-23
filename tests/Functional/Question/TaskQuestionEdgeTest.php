@@ -12,6 +12,7 @@ use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Port\Snapshots;
 use Nowo\TaskBoardBundle\Question\DefaultTaskQuestionRecipientResolver;
 use Nowo\TaskBoardBundle\Question\Entity\TaskQuestion;
+use Nowo\TaskBoardBundle\Question\Entity\TaskQuestionAnswer;
 use Nowo\TaskBoardBundle\Question\TaskQuestionAnswerInput;
 use Nowo\TaskBoardBundle\Question\TaskQuestionChoiceMode;
 use Nowo\TaskBoardBundle\Question\TaskQuestionInput;
@@ -48,7 +49,7 @@ final class TaskQuestionEdgeTest extends QuestionTestCase
 
         // Another writer withdrew it meanwhile.
         $connection->executeStatement("UPDATE task_board_task_questions SET state = 'withdrawn', version = version + 1 WHERE id = ?", [$question->getId()]);
-        $this->expectRefusal(TaskQuestionRefusedException::WITHDRAWN, fn () => $this->manager()->answer($this->bob, $question, new TaskQuestionAnswerInput([$option]), 3));
+        $this->expectRefusal(TaskQuestionRefusedException::WITHDRAWN, fn (): TaskQuestionAnswer => $this->manager()->answer($this->bob, $question, new TaskQuestionAnswerInput([$option]), 3));
 
         // Another writer removed it. (Read the task again: with the private entity manager a rolled-back write drops it.)
         $task = $this->em->find(Task::class, $this->task->getId());
@@ -57,7 +58,7 @@ final class TaskQuestionEdgeTest extends QuestionTestCase
         $connection->executeStatement('DELETE FROM task_board_task_question_options WHERE question_id = ?', [$second->getId()]);
         $connection->executeStatement('DELETE FROM task_board_task_question_recipients WHERE question_id = ?', [$second->getId()]);
         $connection->executeStatement('DELETE FROM task_board_task_questions WHERE id = ?', [$second->getId()]);
-        $this->expectRefusal(TaskQuestionRefusedException::FORBIDDEN, fn () => $this->manager()->answer($this->bob, $second, new TaskQuestionAnswerInput([$second->getOptions()[0]->getId()])));
+        $this->expectRefusal(TaskQuestionRefusedException::FORBIDDEN, fn (): TaskQuestionAnswer => $this->manager()->answer($this->bob, $second, new TaskQuestionAnswerInput([$second->getOptions()[0]->getId()])));
     }
 
     public function testAFailedAskLeavesNoRowInTheManager(): void
@@ -133,7 +134,7 @@ final class TaskQuestionEdgeTest extends QuestionTestCase
             }
         });
         // Dave sees the task (granted), but is no recipient, not the asker and no manager of the board.
-        $this->expectRefusal(TaskQuestionRefusedException::FORBIDDEN, fn () => $this->manager()->answer($dave, $question, new TaskQuestionAnswerInput([$question->getOptions()[0]->getId()])));
+        $this->expectRefusal(TaskQuestionRefusedException::FORBIDDEN, fn (): TaskQuestionAnswer => $this->manager()->answer($dave, $question, new TaskQuestionAnswerInput([$question->getOptions()[0]->getId()])));
         $this->expectRefusal(TaskQuestionRefusedException::FORBIDDEN, fn () => $this->manager()->withdraw($dave, $question, 'Dave says no'));
         $this->em->refresh($question);
         self::assertTrue($question->isOpen());
@@ -144,7 +145,7 @@ final class TaskQuestionEdgeTest extends QuestionTestCase
                 $event->deny();
             }
         });
-        $this->expectRefusal(TaskQuestionRefusedException::FORBIDDEN, fn () => $this->manager()->answer($this->bob, $question, new TaskQuestionAnswerInput([$question->getOptions()[0]->getId()])));
+        $this->expectRefusal(TaskQuestionRefusedException::FORBIDDEN, fn (): TaskQuestionAnswer => $this->manager()->answer($this->bob, $question, new TaskQuestionAnswerInput([$question->getOptions()[0]->getId()])));
     }
 
     public function testTheHostDecidesQuestionActionsThroughTaskQuestionAccessCheck(): void
@@ -168,7 +169,7 @@ final class TaskQuestionEdgeTest extends QuestionTestCase
         $answer = $this->manager()->answer($this->owner, $question, new TaskQuestionAnswerInput([$question->getOptions()[0]->getId()]));
         self::assertSame('user:' . $this->owner->getId(), $answer->getAnsweredBySubject());
         $this->expectRefusal(TaskQuestionRefusedException::FORBIDDEN, fn () => $this->manager()->withdraw($this->owner, $question, 'No'));
-        $this->expectRefusal(TaskQuestionRefusedException::FORBIDDEN, fn () => $this->ask());
+        $this->expectRefusal(TaskQuestionRefusedException::FORBIDDEN, fn (): TaskQuestion => $this->ask());
         self::assertContains($question->getId(), $seen);
 
         $access = self::getContainer()->get(TaskBoardResourceAccessChecker::class);
@@ -185,7 +186,7 @@ final class TaskQuestionEdgeTest extends QuestionTestCase
         for ($i = 1; $i <= TaskQuestionManager::MAX_ANSWERS; ++$i) {
             $this->manager()->answerAsSubject($question->getId(), $this->subject($this->bob), 'Bob', new TaskQuestionAnswerInput([], 'Answer ' . $i), $i);
         }
-        $this->expectRefusal(TaskQuestionRefusedException::INVALID_ANSWER, fn () => $this->manager()->answerAsSubject($question->getId(), $this->subject($this->bob), 'Bob', new TaskQuestionAnswerInput([], 'One more'), 51), 'answers');
+        $this->expectRefusal(TaskQuestionRefusedException::INVALID_ANSWER, fn (): TaskQuestionAnswer => $this->manager()->answerAsSubject($question->getId(), $this->subject($this->bob), 'Bob', new TaskQuestionAnswerInput([], 'One more'), 51), 'answers');
     }
 
     public function testAFreeTextQuestionAndTheReads(): void

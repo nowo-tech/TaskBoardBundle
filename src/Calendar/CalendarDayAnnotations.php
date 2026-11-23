@@ -33,7 +33,7 @@ final readonly class CalendarDayAnnotations
                 throw new InvalidArgumentException(sprintf('Calendar day annotations hold %s, %s given.', CalendarDayAnnotation::class, get_debug_type($annotation)));
             }
             $known = $days[$annotation->date] ?? null;
-            if ($known === null || (!$known->nonWorking && $annotation->nonWorking)) {
+            if (!$known instanceof CalendarDayAnnotation || (!$known->nonWorking && $annotation->nonWorking)) {
                 $days[$annotation->date] = $annotation;
             }
         }

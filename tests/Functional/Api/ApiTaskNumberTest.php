@@ -19,7 +19,7 @@ final class ApiTaskNumberTest extends ApiTestCase
 
     protected function setUp(): void
     {
-        static::$hostConfig = static::$hostConfig !== [] ? static::$hostConfig : ['task_numbers' => ['enabled' => true]];
+        self::$hostConfig = self::$hostConfig !== [] ? self::$hostConfig : ['task_numbers' => ['enabled' => true]];
         parent::setUp();
         ApiTestHost::$tenants = ['tenant-a', 'tenant-b', null];
         $this->roadmap        = $this->board('Roadmap', tenantKey: 'tenant-a');
@@ -86,7 +86,7 @@ final class ApiTaskNumberTest extends ApiTestCase
     public function testATaskThatCameBackAnswersOnlyToItsNewNumber(): void
     {
         self::ensureKernelShutdown();
-        static::$hostConfig = ['task_numbers' => ['enabled' => true, 'scope' => 'board']];
+        self::$hostConfig = ['task_numbers' => ['enabled' => true, 'scope' => 'board']];
         $this->setUp();
         $this->task($this->roadmap, 'First');
         $task = $this->task($this->roadmap, 'Travels');
@@ -123,7 +123,7 @@ final class ApiTaskNumberTest extends ApiTestCase
     public function testPerBoardNumbersNeedTheList(): void
     {
         self::ensureKernelShutdown();
-        static::$hostConfig = ['task_numbers' => ['enabled' => true, 'scope' => 'board']];
+        self::$hostConfig = ['task_numbers' => ['enabled' => true, 'scope' => 'board']];
         $this->setUp();
         $this->task($this->roadmap, 'First');
 
@@ -137,7 +137,7 @@ final class ApiTaskNumberTest extends ApiTestCase
     public function testWithoutTaskNumbersTheNumberIsNullAndNothingIsFound(): void
     {
         self::ensureKernelShutdown();
-        static::$hostConfig = ['calendar' => ['enabled' => false]];
+        self::$hostConfig = ['calendar' => ['enabled' => false]];
         $this->setUp();
         $task = $this->task($this->roadmap, 'First');
 

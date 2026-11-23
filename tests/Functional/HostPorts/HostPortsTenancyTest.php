@@ -17,6 +17,7 @@ use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\AppUser;
 use Nowo\TaskBoardBundle\Tests\Functional\App\MemberTenantResolver;
 use Nowo\TaskBoardBundle\Tests\Functional\FunctionalTestCase;
 use Nowo\TaskBoardBundle\ValueObject\UserRef;
+use Nowo\TaskBoardBundle\View\TaskView;
 
 /**
  * Audit YJ-M1 (2.29.0): with `tenancy.enabled` the id-based host ports reach a board only through a tenant the user may
@@ -93,12 +94,12 @@ final class HostPortsTenancyTest extends FunctionalTestCase
         self::assertFalse($this->access->canEditTask($user, $taskId), $who);
         self::assertSame([], $this->access->filterBoardIds($user, [$boardId]), $who);
         $calls = [
-            fn () => $this->commands->createTask($user, $boardId, new TaskFormData('x')),
-            fn () => $this->commands->updateTask($user, $taskId, new TaskFormData('x')),
-            fn () => $this->commands->deleteTask($user, $taskId),
-            fn () => $this->commands->addComment($user, $taskId, 'hi'),
-            fn () => $this->commands->logTime($user, $taskId, 5, new DateTimeImmutable()),
-            fn () => $this->commands->addColumn($user, $boardId, new BoardColumnFormData('New')),
+            fn (): TaskView => $this->commands->createTask($user, $boardId, new TaskFormData('x')),
+            fn (): TaskView => $this->commands->updateTask($user, $taskId, new TaskFormData('x')),
+            fn (): int => $this->commands->deleteTask($user, $taskId),
+            fn (): string => $this->commands->addComment($user, $taskId, 'hi'),
+            fn (): string => $this->commands->logTime($user, $taskId, 5, new DateTimeImmutable()),
+            fn (): string => $this->commands->addColumn($user, $boardId, new BoardColumnFormData('New')),
         ];
         foreach ($calls as $index => $call) {
             try {

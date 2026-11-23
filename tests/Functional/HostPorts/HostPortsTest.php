@@ -135,7 +135,7 @@ final class HostPortsTest extends FunctionalTestCase
             self::fail('A stale revision must be refused.');
         } catch (TaskChangedException $changed) {
             self::assertSame($view->revision + 1, $changed->currentRevision);
-            self::assertSame('CONFLICT_001', $changed::CODE, 'audit ZD-I5: the house conflict code');
+            self::assertSame('CONFLICT_001', TaskChangedException::CODE, 'audit ZD-I5: the house conflict code');
         }
         try {
             $this->commands->moveTask($this->ownerRef, $view->id, null, 0, $view->revision);
@@ -283,7 +283,7 @@ final class HostPortsTest extends FunctionalTestCase
     public function testTheFormsConstraintsAreAppliedBeforeAnyWrite(): void
     {
         $board = $this->board();
-        $task  = $this->commands->createTask($this->ownerRef, $board->getId(), new TaskFormData('Work', color: '#AABBCC', tags: ['a', 'b']));
+        $task  = $this->commands->createTask($this->ownerRef, $board->getId(), new TaskFormData('Work', tags: ['a', 'b'], color: '#AABBCC'));
         $tags  = array_map(static fn (int $i): string => 'tag' . $i, range(1, 21));
         $calls = [
             'javascript: link'  => fn (): string => $this->commands->addLink($this->ownerRef, $task->id, new TaskLinkFormData(url: 'javascript:alert(1)')),
@@ -319,7 +319,7 @@ final class HostPortsTest extends FunctionalTestCase
         self::assertSame(1, $this->query->countTasks(TaskCriteria::forBoards([$board->getId()])));
 
         // What the forms accept still passes: 20 tags, an http link, the longest texts.
-        $this->commands->updateTask($this->ownerRef, $task->id, new TaskFormData('Work', color: '#00ff00', tags: array_slice($tags, 0, 20)));
+        $this->commands->updateTask($this->ownerRef, $task->id, new TaskFormData('Work', tags: array_slice($tags, 0, 20), color: '#00ff00'));
         $this->commands->addLink($this->ownerRef, $task->id, new TaskLinkFormData(url: 'http://intranet/spec', label: str_repeat('l', 255), externalId: str_repeat('e', 128)));
         $this->commands->addComment($this->ownerRef, $task->id, str_repeat('c', 5000));
         $this->commands->logTime($this->ownerRef, $task->id, 30, new DateTimeImmutable(), str_repeat('n', 512));

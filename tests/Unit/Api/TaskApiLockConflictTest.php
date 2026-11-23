@@ -139,16 +139,16 @@ final class TaskApiLockConflictTest extends TestCase
 
         self::assertFalse($watermark->committedSince($request), 'no mark yet');
         $ledger->record();
-        $watermark->onController(new ControllerEvent($kernel, static fn () => null, $request, HttpKernelInterface::MAIN_REQUEST));
+        $watermark->onController(new ControllerEvent($kernel, static fn (): null => null, $request, HttpKernelInterface::MAIN_REQUEST));
         self::assertFalse($watermark->committedSince($request), 'the writes before the controller do not count');
         $ledger->record();
         self::assertTrue($watermark->committedSince($request));
 
         // Off the API and in a sub-request no mark is taken.
         $other = new Request();
-        $watermark->onController(new ControllerEvent($kernel, static fn () => null, $other, HttpKernelInterface::MAIN_REQUEST));
+        $watermark->onController(new ControllerEvent($kernel, static fn (): null => null, $other, HttpKernelInterface::MAIN_REQUEST));
         $sub = new Request(attributes: [TaskApiRequestListener::ROUTE_FLAG => true]);
-        $watermark->onController(new ControllerEvent($kernel, static fn () => null, $sub, HttpKernelInterface::SUB_REQUEST));
+        $watermark->onController(new ControllerEvent($kernel, static fn (): null => null, $sub, HttpKernelInterface::SUB_REQUEST));
         self::assertFalse($watermark->committedSince($other));
         self::assertFalse($watermark->committedSince($sub));
 

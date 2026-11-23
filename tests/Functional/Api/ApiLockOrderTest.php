@@ -94,7 +94,7 @@ final class ApiLockOrderTest extends ApiTestCase
         self::assertSame('moved', $other, 'the move was not chosen as a deadlock victim');
         self::assertSame(200, $status, $body);
         $positions = $this->em->getConnection()->fetchFirstColumn('SELECT position FROM task_board_tasks WHERE column_id = ? ORDER BY position', [$doing->getId()]);
-        self::assertSame([0, 1, 2], array_map('intval', $positions), 'unique and contiguous');
+        self::assertSame([0, 1, 2], array_map(intval(...), $positions), 'unique and contiguous');
     }
 
     private function column(int $index): BoardColumn

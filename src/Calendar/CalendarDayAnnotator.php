@@ -74,7 +74,7 @@ final readonly class CalendarDayAnnotator
 
         $warnings = [];
         // Only dated tasks are on a calendar.
-        foreach (array_filter($tasks, static fn (Task $task): bool => $task->getStartAt() !== null || $task->getDueAt() !== null) as $task) {
+        foreach (array_filter($tasks, static fn (Task $task): bool => $task->getStartAt() instanceof DateTimeImmutable || $task->getDueAt() instanceof DateTimeImmutable) as $task) {
             $first = (string) ($task->getStartAt() ?? $task->getDueAt())?->format('Y-m-d');
             $last  = (string) ($task->getDueAt() ?? $task->getStartAt())?->format('Y-m-d');
             // Within the page only: the provider was asked for these days.

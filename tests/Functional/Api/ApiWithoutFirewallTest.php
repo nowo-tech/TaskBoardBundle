@@ -11,7 +11,7 @@ final class ApiWithoutFirewallTest extends ApiTestCase
 {
     protected function setUp(): void
     {
-        static::$withFirewall = false;
+        self::$withFirewall = false;
         parent::setUp();
     }
 

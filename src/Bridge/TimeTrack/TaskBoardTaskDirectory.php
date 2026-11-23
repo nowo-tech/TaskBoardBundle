@@ -34,7 +34,7 @@ final readonly class TaskBoardTaskDirectory implements TaskDirectoryInterface
     {
         $task = $this->trackable($taskId, $user);
 
-        return $task instanceof Task ? self::toReference($task) : null;
+        return $task instanceof Task ? $this->toReference($task) : null;
     }
 
     public function listTrackableFor(TimeTrackUserRef $user, TaskListQuery $query): array
@@ -43,7 +43,7 @@ final readonly class TaskBoardTaskDirectory implements TaskDirectoryInterface
             return [];
         }
 
-        return array_values(array_map(self::toReference(...), $this->taskRepository->findTrackableForUser($user->id, $query->search, $query->limit, $query->offset)));
+        return array_values(array_map($this->toReference(...), $this->taskRepository->findTrackableForUser($user->id, $query->search, $query->limit, $query->offset)));
     }
 
     public function canTrackTask(TimeTrackUserRef $user, string $taskId): bool
@@ -63,7 +63,7 @@ final readonly class TaskBoardTaskDirectory implements TaskDirectoryInterface
         return $task instanceof Task && $this->accessGuard->canTrack($securityUser, $task) ? $task : null;
     }
 
-    private static function toReference(Task $task): TaskReference
+    private function toReference(Task $task): TaskReference
     {
         $board = $task->getBoard();
 

@@ -52,7 +52,7 @@ final class SyncPeopleViewProvider implements ResetInterface
         // Since 1.28.0: tells who is shown for attribution only.
         private readonly ?SyncPersonResolverInterface $resolver = null,
         // Since 2.15.0 (database.user_reference).
-        private ?TaskBoardUsers $users = null,
+        private readonly ?TaskBoardUsers $users = null,
     ) {
     }
 
@@ -216,7 +216,7 @@ final class SyncPeopleViewProvider implements ResetInterface
         $user     = $person->getMappedUser();
         $access   = $user === null ? null : $this->accessChecker->canViewBoard($user, $task->getBoard());
         // Since 1.28.0: attribution to a host user the board does not give access to: their label, nothing else.
-        $attribution = $user !== null && !$person->isAnonymised() && $this->resolver !== null && Ports::isAttributionOnly($this->resolver, $task->getBoard(), $user);
+        $attribution = $user !== null && !$person->isAnonymised() && $this->resolver instanceof SyncPersonResolverInterface && Ports::isAttributionOnly($this->resolver, $task->getBoard(), $user);
         if ($attribution) {
             $access = false;
         }

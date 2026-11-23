@@ -225,7 +225,7 @@ final class TaskMoverTest extends CopyTestCase
                 {
                 }
 
-                public function onFlush(): void
+                public function onFlush(): never
                 {
                     $driver = new class('lock') extends AbstractException {
                     };
@@ -233,7 +233,7 @@ final class TaskMoverTest extends CopyTestCase
                     throw new ($this->class)($driver, null);
                 }
             });
-            $this->assertRefused('stale', fn () => $this->mover()->move($task, $target, [], $plan->fingerprint, $this->owner));
+            $this->assertRefused('stale', fn (): TaskMovePlan => $this->mover()->move($task, $target, [], $plan->fingerprint, $this->owner));
             $this->em->getEventManager()->removeEventListener(Events::onFlush, $listener);
             self::assertSame($source->getId(), $this->em->getConnection()->fetchOne('SELECT board_id FROM task_board_tasks WHERE id = ?', [$task->getId()]));
             self::ensureKernelShutdown();

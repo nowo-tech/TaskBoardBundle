@@ -144,7 +144,7 @@ final class MultiBoardHostSetupTest extends FunctionalTestCase
         self::assertSelectorTextContains('[data-testid="nowo-task-multi-row"]', '500');
         $this->client->request('GET', '/tools/task-board/tasks/export.csv?label=bulk');
         self::assertResponseIsSuccessful();
-        self::assertCount(501, explode("\n", trim((string) $this->client->getInternalResponse()->getContent())), 'the header and the 500 scanned matches');
+        self::assertCount(501, explode("\n", trim($this->client->getInternalResponse()->getContent())), 'the header and the 500 scanned matches');
         self::assertResponseHeaderSame('X-Task-Board-Export-Partial', '1');
         self::assertNull($this->client->getInternalResponse()->getHeader('X-Task-Board-Export-Truncated'));
         $this->client->request('GET', '/tools/task-board/tasks/export.csv');

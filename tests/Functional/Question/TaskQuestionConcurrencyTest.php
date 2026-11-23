@@ -17,6 +17,7 @@ use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskMember;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Question\Entity\TaskQuestion;
+use Nowo\TaskBoardBundle\Question\Entity\TaskQuestionAnswer;
 use Nowo\TaskBoardBundle\Question\TaskQuestionAnswerInput;
 use Nowo\TaskBoardBundle\Question\TaskQuestionConflictException;
 use Nowo\TaskBoardBundle\Question\TaskQuestionInput;
@@ -67,8 +68,8 @@ final class TaskQuestionConcurrencyTest extends QuestionTestCase
     public function testTwoFirstAnswersInsideAnOuterTransaction(): void
     {
         [$outcome, $answers] = $this->race(
-            fn (TaskQuestion $q) => $this->manager()->answer($this->carol, $q, new TaskQuestionAnswerInput([$q->getOptions()[0]->getId()])),
-            static fn (TaskQuestionManager $m, TaskQuestion $qB, AppUser $bobB) => $m->answer($bobB, $qB, new TaskQuestionAnswerInput([$qB->getOptions()[1]->getId()])),
+            fn (TaskQuestion $q): TaskQuestionAnswer => $this->manager()->answer($this->carol, $q, new TaskQuestionAnswerInput([$q->getOptions()[0]->getId()])),
+            static fn (TaskQuestionManager $m, TaskQuestion $qB, AppUser $bobB): TaskQuestionAnswer => $m->answer($bobB, $qB, new TaskQuestionAnswerInput([$qB->getOptions()[1]->getId()])),
         );
         self::assertSame('conflict(2)', $outcome, 'the second first answer loses');
         self::assertSame(1, $answers);
@@ -77,8 +78,8 @@ final class TaskQuestionConcurrencyTest extends QuestionTestCase
     public function testAStaleVersionInsideAnOuterTransaction(): void
     {
         [$outcome, $answers] = $this->race(
-            fn (TaskQuestion $q) => $this->manager()->answer($this->carol, $q, new TaskQuestionAnswerInput([$q->getOptions()[0]->getId()])),
-            static fn (TaskQuestionManager $m, TaskQuestion $qB, AppUser $bobB) => $m->answer($bobB, $qB, new TaskQuestionAnswerInput([$qB->getOptions()[1]->getId()]), 1),
+            fn (TaskQuestion $q): TaskQuestionAnswer => $this->manager()->answer($this->carol, $q, new TaskQuestionAnswerInput([$q->getOptions()[0]->getId()])),
+            static fn (TaskQuestionManager $m, TaskQuestion $qB, AppUser $bobB): TaskQuestionAnswer => $m->answer($bobB, $qB, new TaskQuestionAnswerInput([$qB->getOptions()[1]->getId()]), 1),
         );
         self::assertSame('conflict(2)', $outcome);
         self::assertSame(1, $answers);
@@ -88,7 +89,7 @@ final class TaskQuestionConcurrencyTest extends QuestionTestCase
     {
         [$outcome, $answers, $state] = $this->race(
             fn (TaskQuestion $q) => $this->manager()->withdraw($this->owner, $q, 'Not needed'),
-            static fn (TaskQuestionManager $m, TaskQuestion $qB, AppUser $bobB) => $m->answer($bobB, $qB, new TaskQuestionAnswerInput([$qB->getOptions()[1]->getId()])),
+            static fn (TaskQuestionManager $m, TaskQuestion $qB, AppUser $bobB): TaskQuestionAnswer => $m->answer($bobB, $qB, new TaskQuestionAnswerInput([$qB->getOptions()[1]->getId()])),
         );
         self::assertSame('refused(withdrawn)', $outcome);
         self::assertSame(0, $answers);
@@ -144,7 +145,7 @@ final class TaskQuestionConcurrencyTest extends QuestionTestCase
         } catch (Throwable $failure) {
             $answer = $failure::class . ': ' . $failure->getMessage();
         }
-        $ask = trim((string) stream_get_contents($pipes[1]) . (string) stream_get_contents($pipes[2]));
+        $ask = trim(stream_get_contents($pipes[1]) . stream_get_contents($pipes[2]));
         proc_close($process);
         self::assertSame('accepted', $answer, 'the answer waited for the ask, no deadlock');
         self::assertStringStartsWith('ask: counted', $ask, 'the ask finished, no deadlock');
@@ -217,7 +218,7 @@ final class TaskQuestionConcurrencyTest extends QuestionTestCase
         $this->em->getConnection()->executeStatement('UPDATE task_board_tasks SET revision = revision + 1 WHERE id = ?', [$task->getId()]);
         $old = $task->getRevision();
         $this->em->getEventManager()->addEventListener(Events::postLoad, new class($old) {
-            public function __construct(private int $old)
+            public function __construct(private readonly int $old)
             {
             }
 

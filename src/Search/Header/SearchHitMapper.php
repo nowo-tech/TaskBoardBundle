@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Search\Header;
 
+use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenant;
@@ -44,11 +45,11 @@ final readonly class SearchHitMapper
             $task->getId(),
             SearchText::line($task->getTitle()),
             $this->urls->generate($this->routes['task']['name'] ?? 'nowo_task_board_task', ['taskId' => $task->getId()] + $this->tenantParameter($tenant)),
-            $this->join([$number !== null ? ($board->getNumberPrefix() !== null ? $board->getNumberPrefix() . '-' : '#') . $number : null, SearchText::line($board->getName()), $tenant !== null ? SearchText::line($tenant->label) : null]),
+            $this->join([$number !== null ? ($board->getNumberPrefix() !== null ? $board->getNumberPrefix() . '-' : '#') . $number : null, SearchText::line($board->getName()), $tenant instanceof TaskBoardTenant ? SearchText::line($tenant->label) : null]),
             SearchText::excerpt($task->getDescription(), $words),
             $task->getUpdatedAt(),
             $board->getId(),
-            $column !== null ? SearchText::line($column->getName()) : null,
+            $column instanceof BoardColumn ? SearchText::line($column->getName()) : null,
             $task->isCompleted(),
             $assignees,
             $reference?->namesByNumber($task) === true,
@@ -62,7 +63,7 @@ final readonly class SearchHitMapper
             $board->getId(),
             SearchText::line($board->getName()),
             $this->urls->generate($this->routes['board']['name'] ?? 'nowo_task_board_board', ['boardId' => $board->getId()] + $this->tenantParameter($tenant)),
-            $tenant !== null ? SearchText::line($tenant->label) : '',
+            $tenant instanceof TaskBoardTenant ? SearchText::line($tenant->label) : '',
             SearchText::excerpt($board->getDescription(), []),
             $board->getUpdatedAt(),
         );
@@ -73,7 +74,7 @@ final readonly class SearchHitMapper
      */
     private function tenantParameter(?TaskBoardTenant $tenant): array
     {
-        return $tenant !== null ? ['tenantSlug' => $tenant->slug] : [];
+        return $tenant instanceof TaskBoardTenant ? ['tenantSlug' => $tenant->slug] : [];
     }
 
     /**

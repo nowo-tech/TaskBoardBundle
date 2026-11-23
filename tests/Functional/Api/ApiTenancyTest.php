@@ -10,6 +10,8 @@ use Nowo\TaskBoardBundle\Api\TaskApiLevel;
 use Nowo\TaskBoardBundle\Api\TaskApiPrincipal;
 use Nowo\TaskBoardBundle\Api\TaskApiRefusal;
 use Nowo\TaskBoardBundle\Api\TaskApiWhere;
+use Nowo\TaskBoardBundle\Entity\Task;
+use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Tests\Functional\Api\App\ApiTestHost;
 use Nowo\TaskBoardBundle\Tests\Functional\Api\App\ScriptedTenantResolver;
 
@@ -21,7 +23,7 @@ final class ApiTenancyTest extends ApiTestCase
 {
     protected function setUp(): void
     {
-        static::$hostConfig = ['tenancy' => [
+        self::$hostConfig = ['tenancy' => [
             'enabled'      => true,
             'resolver'     => 'app.tenant_resolver',
             'tenant_paths' => [['path' => '/t/{tenantSlug}', 'name_prefix' => 't_']],
@@ -47,7 +49,7 @@ final class ApiTenancyTest extends ApiTestCase
         $principal = new TaskApiPrincipal($this->owner, TaskApiLevel::Full, TaskApiWhere::everything(), 'id', 'name');
 
         self::assertSame($mine->getId(), $this->guard()->board($principal, $mine->getId(), TaskApiCapability::ReadOwn)->getId());
-        foreach ([fn () => $this->guard()->board($principal, $theirs->getId(), TaskApiCapability::ReadOwn), fn () => $this->guard()->task($principal, $theirTask->getId(), TaskApiCapability::ReadOwn), fn () => $this->guard()->board($principal, $loose->getId(), TaskApiCapability::ReadOwn)] as $call) {
+        foreach ([fn (): TaskBoard => $this->guard()->board($principal, $theirs->getId(), TaskApiCapability::ReadOwn), fn (): Task => $this->guard()->task($principal, $theirTask->getId(), TaskApiCapability::ReadOwn), fn (): TaskBoard => $this->guard()->board($principal, $loose->getId(), TaskApiCapability::ReadOwn)] as $call) {
             try {
                 $call();
                 self::fail('404 expected');

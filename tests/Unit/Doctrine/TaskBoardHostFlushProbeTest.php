@@ -19,6 +19,7 @@ use Nowo\TransactionDoctrine\HostFlushProbe;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use ReflectionProperty;
+use Symfony\Bridge\Doctrine\ContainerAwareEventManager;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Event\RequestEvent;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
@@ -41,7 +42,7 @@ final class TaskBoardHostFlushProbeTest extends TestCase
     {
         $probe = new TaskBoardHostFlushProbe();
         $flush = ['function' => 'flush', 'class' => EntityManager::class];
-        $head  = [['function' => 'preFlush', 'class' => TaskBoardHostFlushProbe::class], ['function' => 'dispatchEvent', 'class' => 'Symfony\\Bridge\\Doctrine\\ContainerAwareEventManager'], ['function' => 'commit', 'class' => UnitOfWork::class], $flush];
+        $head  = [['function' => 'preFlush', 'class' => TaskBoardHostFlushProbe::class], ['function' => 'dispatchEvent', 'class' => ContainerAwareEventManager::class], ['function' => 'commit', 'class' => UnitOfWork::class], $flush];
 
         self::assertTrue($probe->calledByTaskBoard([...$head, ['function' => 'flush', 'class' => RecoveringFlusher::class]]), 'a TaskBoard class');
         self::assertTrue($probe->calledByTaskBoard([...$head, ['function' => 'flush', 'class' => EntityManagerDecorator::class], ['function' => 'wrapInTransaction', 'class' => EntityManager::class], ['function' => 'run', 'class' => DoctrineTransactionRunner::class], ['function' => '{closure}', 'class' => TaskBoardEraser::class]]), 'past decorators, Doctrine and the shared runners');

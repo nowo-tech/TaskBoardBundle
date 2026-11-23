@@ -33,7 +33,7 @@ final class TaskEventDeferralTest extends TestCase
 
         $result = $deferral->defer(static function () use ($deferral, &$seen): int {
             $deferral->dispatch((object) ['name' => 'a'], 'e');
-            $deferral->defer(static fn () => $deferral->dispatch((object) ['name' => 'b'], 'e'));
+            $deferral->defer(static fn (): object => $deferral->dispatch((object) ['name' => 'b'], 'e'));
             self::assertSame(['direct'], $seen, 'held until the outermost call returns');
 
             return 7;
@@ -44,7 +44,7 @@ final class TaskEventDeferralTest extends TestCase
         try {
             $deferral->defer(static function () use ($deferral): void {
                 $deferral->dispatch((object) ['name' => 'lost'], 'e');
-                $deferral->defer(static fn () => throw new RuntimeException('inner'));
+                $deferral->defer(static fn (): never => throw new RuntimeException('inner'));
             });
             self::fail('The failure reaches the caller.');
         } catch (RuntimeException $exception) {
@@ -53,7 +53,7 @@ final class TaskEventDeferralTest extends TestCase
         self::assertSame(['direct', 'a', 'b'], $seen, 'dropped');
 
         try {
-            $deferral->defer(static function () use ($deferral): void {
+            $deferral->defer(static function () use ($deferral): never {
                 $deferral->dispatch((object) ['name' => 'lost too'], 'e');
                 throw new RuntimeException('outer');
             });

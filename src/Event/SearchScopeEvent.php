@@ -109,7 +109,7 @@ final class SearchScopeEvent extends Event
     public function onlyTenants(array $tenantKeys): void
     {
         // @igor-ignore - Request-scoped Event DTO; not a shared worker service.
-        $this->onlyTenants = self::narrow($this->onlyTenants, $tenantKeys);
+        $this->onlyTenants = $this->narrow($this->onlyTenants, $tenantKeys);
     }
 
     /**
@@ -120,7 +120,7 @@ final class SearchScopeEvent extends Event
     public function excludeTenants(array $tenantKeys): void
     {
         // @igor-ignore - Request-scoped Event DTO; not a shared worker service.
-        $this->excludedTenants += self::set($tenantKeys);
+        $this->excludedTenants += $this->set($tenantKeys);
     }
 
     /**
@@ -131,7 +131,7 @@ final class SearchScopeEvent extends Event
     public function onlyBoards(array $boardIds): void
     {
         // @igor-ignore - Request-scoped Event DTO; not a shared worker service.
-        $this->onlyBoards = self::narrow($this->onlyBoards, $boardIds);
+        $this->onlyBoards = $this->narrow($this->onlyBoards, $boardIds);
     }
 
     /**
@@ -142,7 +142,7 @@ final class SearchScopeEvent extends Event
     public function excludeBoards(array $boardIds): void
     {
         // @igor-ignore - Request-scoped Event DTO; not a shared worker service.
-        $this->excludedBoards += self::set($boardIds);
+        $this->excludedBoards += $this->set($boardIds);
     }
 
     /**
@@ -182,7 +182,7 @@ final class SearchScopeEvent extends Event
      */
     public function getOnlyTenants(): ?array
     {
-        return $this->onlyTenants === null ? null : array_map('strval', array_keys($this->onlyTenants));
+        return $this->onlyTenants === null ? null : array_map(strval(...), array_keys($this->onlyTenants));
     }
 
     /**
@@ -192,7 +192,7 @@ final class SearchScopeEvent extends Event
      */
     public function getExcludedTenants(): array
     {
-        return array_map('strval', array_keys($this->excludedTenants));
+        return array_map(strval(...), array_keys($this->excludedTenants));
     }
 
     /**
@@ -202,7 +202,7 @@ final class SearchScopeEvent extends Event
      */
     public function getOnlyBoards(): ?array
     {
-        return $this->onlyBoards === null ? null : array_map('strval', array_keys($this->onlyBoards));
+        return $this->onlyBoards === null ? null : array_map(strval(...), array_keys($this->onlyBoards));
     }
 
     /**
@@ -212,7 +212,7 @@ final class SearchScopeEvent extends Event
      */
     public function getExcludedBoards(): array
     {
-        return array_map('strval', array_keys($this->excludedBoards));
+        return array_map(strval(...), array_keys($this->excludedBoards));
     }
 
     /**
@@ -221,9 +221,9 @@ final class SearchScopeEvent extends Event
      *
      * @return array<string, true>
      */
-    private static function narrow(?array $current, array $values): array
+    private function narrow(?array $current, array $values): array
     {
-        $given = self::set($values);
+        $given = $this->set($values);
 
         return $current === null ? $given : array_intersect_key($current, $given);
     }
@@ -233,9 +233,9 @@ final class SearchScopeEvent extends Event
      *
      * @return array<string, true>
      */
-    private static function set(array $values): array
+    private function set(array $values): array
     {
-        $values = array_map('strval', $values);
+        $values = array_map(strval(...), $values);
 
         return array_fill_keys(array_values(array_filter($values, static fn (string $value): bool => $value !== '')), true);
     }

@@ -12,6 +12,7 @@ use LogicException;
 use Nowo\TaskBoardBundle\Avatar\TaskMemberAvatars;
 use Nowo\TaskBoardBundle\Board\BoardScope;
 use Nowo\TaskBoardBundle\Board\BoardScopeProviderInterface;
+use Nowo\TaskBoardBundle\Calendar\CalendarAnnotations;
 use Nowo\TaskBoardBundle\Calendar\CalendarDateRange;
 use Nowo\TaskBoardBundle\Calendar\CalendarDayAnnotator;
 use Nowo\TaskBoardBundle\Calendar\CalendarEvent;
@@ -121,6 +122,7 @@ use Nowo\TaskBoardBundle\Support\TaskTree;
 use Nowo\TaskBoardBundle\Support\UserIdResolver;
 use Nowo\TaskBoardBundle\Support\UserLabel;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncLimitCheckerInterface;
+use Nowo\TaskBoardBundle\Template\Entity\TaskTemplate;
 use Nowo\TaskBoardBundle\Template\TaskTemplateManager;
 use Nowo\TaskBoardBundle\Tenancy\FirstBoardProvisionerInterface;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenant;
@@ -491,7 +493,7 @@ final class TaskBoardManageController extends AbstractController
         $query    = $this->currentRequest()?->query;
         $asked    = $query?->get(TaskTemplatePickerType::FIELD_TEMPLATE);
         $template = is_string($asked) && $asked !== '' ? $this->taskTemplates->usable($user, $board, $asked) : null;
-        if ($template !== null) {
+        if ($template instanceof TaskTemplate) {
             $this->taskTemplates->prefill($template, $board, $data);
             $title = $query?->get(TaskTemplatePickerType::FIELD_TITLE);
             if (is_string($title)) {
@@ -504,7 +506,7 @@ final class TaskBoardManageController extends AbstractController
             'selected'  => $template?->getId(),
         ]);
 
-        return ['taskTemplatePicker' => $picker->createView(), 'openAddTask' => $template !== null];
+        return ['taskTemplatePicker' => $picker->createView(), 'openAddTask' => $template instanceof TaskTemplate];
     }
 
     /**
@@ -1119,7 +1121,7 @@ final class TaskBoardManageController extends AbstractController
             'board'    => $board,
             'calendar' => $calendar = $this->calendarBuilder->build($mode, $date, $weekStart, $tasks, $editable, $annotations, $events),
             // Since 2.14.0: a drag snaps to the next working day of the viewer (with a provider only).
-            'skipNonWorkingDays' => $this->skipNonWorkingDays && $annotations !== null,
+            'skipNonWorkingDays' => $this->skipNonWorkingDays && $annotations instanceof CalendarAnnotations,
             'calendarModes'      => CalendarMode::cases(),
             'calendarQuery'      => $filter->toQuery(),
             'calendarFiltered'   => $filter->isActive(),
@@ -1363,7 +1365,7 @@ final class TaskBoardManageController extends AbstractController
      * where there is no tenant to tell (`scope: board`, or no tenancy). Unknown, retired and unreadable answer the same 404. An
      * alias of a task moved to another tenant goes to that tenant's page, for whoever may read it there.
      */
-    #[Route('/tools/task-board/n/{number}', name: 'nowo_task_board_task_by_number', methods: ['GET'], requirements: ['number' => TaskBoardRouteLoader::NUMBER_REQUIREMENT])]
+    #[Route('/tools/task-board/n/{number}', name: 'nowo_task_board_task_by_number', requirements: ['number' => TaskBoardRouteLoader::NUMBER_REQUIREMENT], methods: ['GET'])]
     public function taskByNumber(string $number, Request $request): RedirectResponse
     {
         $user  = $this->requireUser();

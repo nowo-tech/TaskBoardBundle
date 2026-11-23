@@ -174,7 +174,7 @@ final readonly class TaskQuestionManager
                 throw new TaskQuestionRefusedException(TaskQuestionRefusedException::TASK_CLOSED, 'open_questions');
             }
             $this->entityManager->persist($question);
-            $this->recorder->record($task, $asker, TaskChangeType::QuestionAsked, null, $text, self::context($question));
+            $this->recorder->record($task, $asker, TaskChangeType::QuestionAsked, null, $text, $this->context($question));
         }, $question, true, static fn (): object => new TaskQuestionAskedEvent(TaskQuestionSnapshot::of($question), Snapshots::task($task), Snapshots::board($task->getBoard()), ActorId::of($asker)), TaskBoardEvents::TASK_QUESTION_ASKED);
 
         return $question;
@@ -246,7 +246,7 @@ final readonly class TaskQuestionManager
         if (!$this->access->canWithdrawQuestion($user, $question)) {
             throw new TaskQuestionRefusedException(TaskQuestionRefusedException::FORBIDDEN);
         }
-        $reason = self::plain($reason);
+        $reason = $this->plain($reason);
         if ($reason === '' || mb_strlen($reason) > TaskQuestion::REASON_MAX) {
             throw new TaskQuestionRefusedException(TaskQuestionRefusedException::INVALID_QUESTION, 'reason');
         }
@@ -254,7 +254,7 @@ final readonly class TaskQuestionManager
         $this->write(function () use ($question, $task, $user, $reason, $version): void {
             $this->lock($question, $version, false);
             $question->withdraw($user, $reason, $this->clock->now());
-            $this->recorder->record($task, $user, TaskChangeType::QuestionWithdrawn, null, $reason, self::context($question));
+            $this->recorder->record($task, $user, TaskChangeType::QuestionWithdrawn, null, $reason, $this->context($question));
         }, $question, false, static fn (): object => new TaskQuestionWithdrawnEvent(TaskQuestionSnapshot::of($question), Snapshots::task($task), Snapshots::board($task->getBoard()), ActorId::of($user)), TaskBoardEvents::TASK_QUESTION_WITHDRAWN);
     }
 
@@ -433,7 +433,7 @@ final readonly class TaskQuestionManager
         return Text::cut(str_replace("\n", ' ', implode(' · ', $parts)), self::SUMMARY_MAX);
     }
 
-    private static function context(TaskQuestion $question): string
+    private function context(TaskQuestion $question): string
     {
         return 'question:' . $question->getId();
     }
@@ -455,7 +455,7 @@ final readonly class TaskQuestionManager
             $superseded = $question->getCurrentAnswer();
             $answer     = new TaskQuestionAnswer($question, $optionIds, $other, $subject, $user, $user === null ? $name : UserLabel::of($user), $via, $this->clock->now());
             $question->answer($answer);
-            $this->recorder->recordAs($task, $user, $name, TaskChangeType::QuestionAnswered, $superseded instanceof TaskQuestionAnswer ? self::summary($superseded) : null, self::summary($answer), self::context($question));
+            $this->recorder->recordAs($task, $user, $name, TaskChangeType::QuestionAnswered, $superseded instanceof TaskQuestionAnswer ? self::summary($superseded) : null, self::summary($answer), $this->context($question));
 
             return [$answer, $superseded];
         }, $question, false, static fn (array $given): object => new TaskQuestionAnsweredEvent(
@@ -612,7 +612,7 @@ final readonly class TaskQuestionManager
     private function checkedQuestion(object $asker, Task $task, TaskQuestionInput $input): array
     {
         $invalid = static fn (string $field): TaskQuestionRefusedException => new TaskQuestionRefusedException(TaskQuestionRefusedException::INVALID_QUESTION, $field);
-        $text    = self::plain($input->text);
+        $text    = $this->plain($input->text);
         if ($text === '' || mb_strlen($text) > TaskQuestion::TEXT_MAX) {
             throw $invalid('text');
         }
@@ -625,8 +625,8 @@ final readonly class TaskQuestionManager
         $labels  = [];
         $starred = 0;
         foreach ($input->options as $option) {
-            $label       = self::plain($option->label);
-            $description = self::plain((string) $option->description);
+            $label       = $this->plain($option->label);
+            $description = $this->plain((string) $option->description);
             if ($label === '' || mb_strlen($label) > TaskQuestionOption::LABEL_MAX || mb_strlen($description) > TaskQuestionOption::DESCRIPTION_MAX || in_array(mb_strtolower($label), $labels, true)) {
                 throw $invalid('options');
             }
@@ -700,7 +700,7 @@ final readonly class TaskQuestionManager
     }
 
     /** One line of plain text: trimmed, line breaks and tabs as spaces. */
-    private static function plain(string $text): string
+    private function plain(string $text): string
     {
         return trim(str_replace(["\r\n", "\r", "\n", "\t"], ' ', $text));
     }

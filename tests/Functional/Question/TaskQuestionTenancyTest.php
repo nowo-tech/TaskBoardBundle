@@ -44,7 +44,7 @@ final class TaskQuestionTenancyTest extends QuestionTestCase
 
     protected function setUp(): void
     {
-        self::$taskBoardConfig = self::$taskBoardConfig !== [] ? self::$taskBoardConfig : self::config();
+        self::$taskBoardConfig = self::$taskBoardConfig !== [] ? self::$taskBoardConfig : $this->config();
         parent::setUp();
         MemberTenantResolver::$members = [
             'acme'   => ['owner@example.com', 'bob@example.com'],
@@ -140,7 +140,7 @@ final class TaskQuestionTenancyTest extends QuestionTestCase
      */
     public function testAShareeSeesTheirQuestionsInATenantTheyMayNotList(): void
     {
-        self::$taskBoardConfig = self::config() + ['security' => ['access_checker' => 'app.tenant_create_checker']];
+        self::$taskBoardConfig = $this->config() + ['security' => ['access_checker' => 'app.tenant_create_checker']];
         self::ensureKernelShutdown();
         $this->setUp();
         $carol  = $this->user('carol@example.com');
@@ -169,7 +169,7 @@ final class TaskQuestionTenancyTest extends QuestionTestCase
     }
 
     /** @return array<string, mixed> */
-    private static function config(): array
+    private function config(): array
     {
         return [
             'task_questions' => ['enabled' => true, 'recipient_resolver' => 'app.question_recipients'],

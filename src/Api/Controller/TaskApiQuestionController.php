@@ -137,10 +137,10 @@ final readonly class TaskApiQuestionController
             'due_date'    => $question->dueOn?->format('Y-m-d'),
             'asked_by'    => $question->askedById === null && $question->askedByName === null ? null : ['id' => $question->askedById, 'name' => $question->askedByName],
             'asked_at'    => self::ms($question->askedAt),
-            'answer'      => $question->currentAnswer === null ? null : self::answerOf($question->currentAnswer),
+            'answer'      => $question->currentAnswer instanceof TaskQuestionAnswerSnapshot ? self::answerOf($question->currentAnswer) : null,
             'answers'     => array_map(self::answerOf(...), array_reverse($question->answers)),
-            'withdrawn'   => $question->withdrawnAt === null ? null : ['reason' => $question->withdrawReason, 'by' => $question->withdrawnById === null && $question->withdrawnByName === null ? null : ['id' => $question->withdrawnById, 'name' => $question->withdrawnByName], 'at' => self::ms($question->withdrawnAt)],
-            'published'   => $question->publishedUrl === null ? null : ['url' => $question->publishedUrl, 'label' => $question->publishedLabel, 'at' => $question->publishedAt === null ? null : self::ms($question->publishedAt)],
+            'withdrawn'   => $question->withdrawnAt instanceof DateTimeImmutable ? ['reason' => $question->withdrawReason, 'by' => $question->withdrawnById === null && $question->withdrawnByName === null ? null : ['id' => $question->withdrawnById, 'name' => $question->withdrawnByName], 'at' => self::ms($question->withdrawnAt)] : null,
+            'published'   => $question->publishedUrl === null ? null : ['url' => $question->publishedUrl, 'label' => $question->publishedLabel, 'at' => $question->publishedAt instanceof DateTimeImmutable ? self::ms($question->publishedAt) : null],
             'version'     => $question->version,
         ];
     }
@@ -159,7 +159,7 @@ final readonly class TaskApiQuestionController
             'answered_by'   => $answer->answeredById === null && $answer->answeredByName === null ? null : ['id' => $answer->answeredById, 'name' => $answer->answeredByName],
             'via'           => $answer->via,
             'answered_at'   => self::ms($answer->answeredAt),
-            'superseded_at' => $answer->supersededAt === null ? null : self::ms($answer->supersededAt),
+            'superseded_at' => $answer->supersededAt instanceof DateTimeImmutable ? self::ms($answer->supersededAt) : null,
         ];
     }
 

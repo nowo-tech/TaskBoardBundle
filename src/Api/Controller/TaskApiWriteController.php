@@ -141,7 +141,7 @@ final readonly class TaskApiWriteController
         // Since 2.22.0 (Beacon spec 241 T020): a replayed attempt of a write unit (the same request) gets the file the host
         // already stored, never a second copy; the access checks run again.
         $kept   = $request->attributes->get(self::STORED_ATTACHMENT);
-        $key    = $upload !== null && $upload->isValid() ? $taskId . '|' . hash_file('sha256', $upload->getPathname()) : null;
+        $key    = $upload instanceof UploadedFile && $upload->isValid() ? $taskId . '|' . hash_file('sha256', $upload->getPathname()) : null;
         $stored = is_array($kept) && $key !== null && ($kept[0] ?? null) === $key && ($kept[1] ?? null) instanceof TaskApiAttachment ? $kept[1] : null;
         // @igor-ignore - Call on a stateless readonly service (persists through Doctrine); no state kept in the worker.
         [$task, $attachment, $committed] = $this->tasks->addAttachment($this->principal($request), $taskId, $upload, $stored);

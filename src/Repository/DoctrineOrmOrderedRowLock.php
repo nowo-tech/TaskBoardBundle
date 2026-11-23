@@ -70,7 +70,7 @@ final readonly class DoctrineOrmOrderedRowLock implements OrderedRowLockInterfac
 
             // Audit SF-L5: a MySQL deadlock inside the flush's savepoint surfaces as 1305 (the savepoint is gone), with the
             // 1213 only in the chain; the host's retry looks for the deadlock itself.
-            throw self::lockConflictIn($failure) ?? $failure;
+            throw $this->lockConflictIn($failure) ?? $failure;
         }
 
         return $result;
@@ -151,8 +151,8 @@ final readonly class DoctrineOrmOrderedRowLock implements OrderedRowLockInterfac
                 continue;
             }
             // An enum field reads as its value here and is kept as the case in the original data.
-            $now = self::plain($metadata->getFieldValue($task, $name));
-            $was = self::plain($original[$name]);
+            $now = $this->plain($metadata->getFieldValue($task, $name));
+            $was = $this->plain($original[$name]);
             // Values (dates) compare by value, references and scalars by identity.
             if (($now instanceof DateTimeInterface && $was instanceof DateTimeInterface) ? $now != $was : $now !== $was) {
                 return true;
@@ -162,12 +162,12 @@ final readonly class DoctrineOrmOrderedRowLock implements OrderedRowLockInterfac
         return false;
     }
 
-    private static function plain(mixed $value): mixed
+    private function plain(mixed $value): mixed
     {
         return $value instanceof BackedEnum ? $value->value : $value;
     }
 
-    private static function lockConflictIn(Throwable $failure): ?Throwable
+    private function lockConflictIn(Throwable $failure): ?Throwable
     {
         for ($cause = $failure; $cause instanceof Throwable; $cause = $cause->getPrevious()) {
             if ($cause instanceof DeadlockException || $cause instanceof LockWaitTimeoutException) {

@@ -51,7 +51,7 @@ final class DddUsers implements UserProviderInterface, TaskBoardUserDirectoryInt
         return $user instanceof DddUser;
     }
 
-    public function authenticate(TaskApiRequestContext $request): TaskApiPrincipal|TaskApiAuthFailure
+    public function authenticate(TaskApiRequestContext $request): TaskApiAuthFailure
     {
         return TaskApiAuthFailure::Invalid; // the look-alike test calls the API services in-process
     }

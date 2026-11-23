@@ -14,6 +14,8 @@ use Nowo\TaskBoardBundle\Event\TaskQuestionAskedEvent;
 use Nowo\TaskBoardBundle\Event\TaskQuestionWithdrawnEvent;
 use Nowo\TaskBoardBundle\Question\Entity\TaskQuestion;
 use Nowo\TaskBoardBundle\Question\Entity\TaskQuestionAnswer;
+use Nowo\TaskBoardBundle\Question\Entity\TaskQuestionOption;
+use Nowo\TaskBoardBundle\Question\Entity\TaskQuestionRecipient;
 use Nowo\TaskBoardBundle\Question\TaskQuestionAnswerInput;
 use Nowo\TaskBoardBundle\Question\TaskQuestionChoiceMode;
 use Nowo\TaskBoardBundle\Question\TaskQuestionConflictException;
@@ -46,11 +48,11 @@ final class TaskQuestionManagerTest extends QuestionTestCase
 
         self::assertSame(TaskQuestionState::Open, $question->getState());
         self::assertSame(1, $question->getVersion());
-        self::assertSame(['Hetzner', 'AWS', 'OVH'], array_map(static fn ($o): string => $o->getLabel(), $question->getOptions()));
+        self::assertSame(['Hetzner', 'AWS', 'OVH'], array_map(static fn (TaskQuestionOption $o): string => $o->getLabel(), $question->getOptions()));
         self::assertTrue($question->getOptions()[0]->isRecommended());
         self::assertSame($question, $question->getOptions()[0]->getQuestion());
         self::assertSame('EU, cheap', $question->getOptions()[0]->getDescription());
-        self::assertSame([$this->subject($this->bob)], array_map(static fn ($r): string => $r->getSubjectId(), $question->getRecipients()));
+        self::assertSame([$this->subject($this->bob)], array_map(static fn (TaskQuestionRecipient $r): string => $r->getSubjectId(), $question->getRecipients()));
         self::assertSame('bob@example.com', $question->getRecipients()[0]->getLabel());
         self::assertSame($this->owner, $question->getAskedBy());
         self::assertNull($question->getCurrentAnswer());
@@ -124,17 +126,17 @@ final class TaskQuestionManagerTest extends QuestionTestCase
     public function testAskingNeedsTheRightAnOpenTaskAndRoom(): void
     {
         $stranger = $this->user('stranger@example.com');
-        $this->expectRefusal(TaskQuestionRefusedException::FORBIDDEN, fn () => $this->manager()->ask($stranger, $this->task, new TaskQuestionInput('Q', [$this->subject($this->bob)])));
+        $this->expectRefusal(TaskQuestionRefusedException::FORBIDDEN, fn (): TaskQuestion => $this->manager()->ask($stranger, $this->task, new TaskQuestionInput('Q', [$this->subject($this->bob)])));
 
         self::$taskBoardConfig = ['task_questions' => ['enabled' => true, 'max_open_per_task' => 1]];
         self::ensureKernelShutdown();
         $this->setUp();
         $this->ask();
-        $this->expectRefusal(TaskQuestionRefusedException::TASK_CLOSED, fn () => $this->ask(), 'open_questions');
+        $this->expectRefusal(TaskQuestionRefusedException::TASK_CLOSED, fn (): TaskQuestion => $this->ask(), 'open_questions');
 
         $this->task->archive();
         $this->em->flush();
-        $this->expectRefusal(TaskQuestionRefusedException::TASK_CLOSED, fn () => $this->ask(), 'task');
+        $this->expectRefusal(TaskQuestionRefusedException::TASK_CLOSED, fn (): TaskQuestion => $this->ask(), 'task');
     }
 
     public function testARecipientAnswersAndALaterAnswerSupersedesWithTheVersionRead(): void
@@ -161,7 +163,7 @@ final class TaskQuestionManagerTest extends QuestionTestCase
             self::assertSame(2, $conflict->currentVersion);
         }
         // A stale version too.
-        $this->expectConflict(fn () => $this->manager()->answer($this->bob, $question, new TaskQuestionAnswerInput([$aws->getId()]), 1));
+        $this->expectConflict(fn (): TaskQuestionAnswer => $this->manager()->answer($this->bob, $question, new TaskQuestionAnswerInput([$aws->getId()]), 1));
 
         $second = $this->manager()->answer($this->bob, $question, new TaskQuestionAnswerInput([], 'Neither: on premises'), 2);
         self::assertSame(3, $question->getVersion());
@@ -176,7 +178,7 @@ final class TaskQuestionManagerTest extends QuestionTestCase
         $rows = $task->getChangeHistory()->filter(static fn ($e): bool => $e->getChangeType() === TaskChangeType::QuestionAnswered)->getValues();
         self::assertCount(2, $rows);
         // Both entries carry the same second: read them by content, not by position (MySQL orders ties as it likes).
-        $values = array_map(static fn ($e): array => [$e->getOldValue(), $e->getNewValue()], $rows);
+        $values = array_map(static fn (TaskChangeHistory $e): array => [$e->getOldValue(), $e->getNewValue()], $rows);
         self::assertContains([null, 'Hetzner'], $values);
         self::assertContains(['Hetzner', 'Neither: on premises'], $values);
 
@@ -226,9 +228,9 @@ final class TaskQuestionManagerTest extends QuestionTestCase
     {
         $question = $this->ask();
         $option   = $question->getOptions()[0]->getId();
-        $this->expectRefusal(TaskQuestionRefusedException::FORBIDDEN, fn () => $this->manager()->answer($this->owner, $question, new TaskQuestionAnswerInput([$option])));
+        $this->expectRefusal(TaskQuestionRefusedException::FORBIDDEN, fn (): TaskQuestionAnswer => $this->manager()->answer($this->owner, $question, new TaskQuestionAnswerInput([$option])));
         $stranger = $this->user('stranger@example.com');
-        $this->expectRefusal(TaskQuestionRefusedException::FORBIDDEN, fn () => $this->manager()->answer($stranger, $question, new TaskQuestionAnswerInput([$option])));
+        $this->expectRefusal(TaskQuestionRefusedException::FORBIDDEN, fn (): TaskQuestionAnswer => $this->manager()->answer($stranger, $question, new TaskQuestionAnswerInput([$option])));
         self::assertTrue($question->isOpen());
     }
 
@@ -250,18 +252,18 @@ final class TaskQuestionManagerTest extends QuestionTestCase
         self::assertSame('Decided in the call', $this->events[0][1]->getReason());
 
         // Final: no answer, no second withdraw.
-        $this->expectRefusal(TaskQuestionRefusedException::WITHDRAWN, fn () => $this->manager()->answer($this->bob, $question, new TaskQuestionAnswerInput([$question->getOptions()[0]->getId()])));
+        $this->expectRefusal(TaskQuestionRefusedException::WITHDRAWN, fn (): TaskQuestionAnswer => $this->manager()->answer($this->bob, $question, new TaskQuestionAnswerInput([$question->getOptions()[0]->getId()])));
         $this->expectRefusal(TaskQuestionRefusedException::WITHDRAWN, fn () => $this->manager()->withdraw($this->owner, $question, 'Again'));
-        $this->expectRefusal(TaskQuestionRefusedException::WITHDRAWN, fn () => $this->manager()->answerAsSubject($question->getId(), $this->subject($this->bob), 'Bob', new TaskQuestionAnswerInput([$question->getOptions()[0]->getId()])));
+        $this->expectRefusal(TaskQuestionRefusedException::WITHDRAWN, fn (): TaskQuestionAnswer => $this->manager()->answerAsSubject($question->getId(), $this->subject($this->bob), 'Bob', new TaskQuestionAnswerInput([$question->getOptions()[0]->getId()])));
     }
 
     public function testAnExternalRecipientAnswersThroughTheHostsLink(): void
     {
         $question = $this->ask(other: true);
         $bob      = $this->subject($this->bob);
-        $this->expectRefusal(TaskQuestionRefusedException::FORBIDDEN, fn () => $this->manager()->answerAsSubject($question->getId(), 'contact:9', 'Eve', new TaskQuestionAnswerInput([], 'x')));
-        $this->expectRefusal(TaskQuestionRefusedException::FORBIDDEN, fn () => $this->manager()->answerAsSubject('missing', $bob, 'Eve', new TaskQuestionAnswerInput([], 'x')));
-        $this->expectRefusal(TaskQuestionRefusedException::FORBIDDEN, fn () => $this->manager()->answerAsSubject('', $bob, 'Eve', new TaskQuestionAnswerInput([], 'x')));
+        $this->expectRefusal(TaskQuestionRefusedException::FORBIDDEN, fn (): TaskQuestionAnswer => $this->manager()->answerAsSubject($question->getId(), 'contact:9', 'Eve', new TaskQuestionAnswerInput([], 'x')));
+        $this->expectRefusal(TaskQuestionRefusedException::FORBIDDEN, fn (): TaskQuestionAnswer => $this->manager()->answerAsSubject('missing', $bob, 'Eve', new TaskQuestionAnswerInput([], 'x')));
+        $this->expectRefusal(TaskQuestionRefusedException::FORBIDDEN, fn (): TaskQuestionAnswer => $this->manager()->answerAsSubject('', $bob, 'Eve', new TaskQuestionAnswerInput([], 'x')));
 
         $answer = $this->manager()->answerAsSubject($question->getId(), $bob, '  ', new TaskQuestionAnswerInput([], 'From the client portal'), null, 'weird');
         self::assertNull($answer->getAnsweredBy());

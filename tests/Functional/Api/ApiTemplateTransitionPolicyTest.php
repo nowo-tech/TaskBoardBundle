@@ -11,6 +11,7 @@ use Nowo\TaskBoardBundle\Template\TaskTemplateData;
 use Nowo\TaskBoardBundle\Template\TaskTemplateManager;
 use Nowo\TaskBoardBundle\Tests\Functional\Api\App\ApiTestHost;
 use Nowo\TaskBoardBundle\Tests\Functional\Api\App\RecordingTransitionPolicy;
+use Nowo\TaskBoardBundle\ValueObject\ColumnTransition;
 
 use function array_keys;
 use function array_map;
@@ -86,7 +87,7 @@ final class ApiTemplateTransitionPolicyTest extends ApiTestCase
         self::assertResponseIsSuccessful();
         self::assertSame('Doing', $this->json()['status']['status']);
         self::assertSame('Listo', $this->json()['description'], 'the template still filled the description');
-        self::assertSame(['Doing'], array_map(static fn ($transition): string => $transition->to->name, RecordingTransitionPolicy::$asked));
+        self::assertSame(['Doing'], array_map(static fn (ColumnTransition $transition): string => $transition->to->name, RecordingTransitionPolicy::$asked));
     }
 
     private function templates(): TaskTemplateManager

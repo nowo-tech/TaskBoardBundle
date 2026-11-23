@@ -14,6 +14,8 @@ use Nowo\TaskBoardBundle\Form\TaskQuestionAnswerFormType;
 use Nowo\TaskBoardBundle\Form\TaskQuestionFormType;
 use Nowo\TaskBoardBundle\Form\TaskQuestionWithdrawFormType;
 use Nowo\TaskBoardBundle\Question\Entity\TaskQuestion;
+use Nowo\TaskBoardBundle\Question\Entity\TaskQuestionAnswer;
+use Nowo\TaskBoardBundle\Question\Entity\TaskQuestionRecipient;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Support\ActorId;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenant;
@@ -223,7 +225,7 @@ final readonly class TaskQuestionView
         if (!$question->isWithdrawn() && $this->access->canAnswerQuestion($user, $question, $subjects)) {
             $current = $question->getCurrentAnswer();
             $data    = new TaskQuestionAnswerFormData(
-                $current === null ? null : ($question->isMultiple() ? $current->getSelectedOptionIds() : ($current->getSelectedOptionIds()[0] ?? null)),
+                $current instanceof TaskQuestionAnswer ? ($question->isMultiple() ? $current->getSelectedOptionIds() : ($current->getSelectedOptionIds()[0] ?? null)) : null,
                 $current?->getOtherText(),
                 (string) $question->getVersion(),
             );
@@ -251,14 +253,14 @@ final readonly class TaskQuestionView
         return [
             'question'     => $question,
             'answer'       => $question->getCurrentAnswer(),
-            'superseded'   => array_values(array_filter($question->getAnswers(), static fn ($a): bool => $a->isSuperseded())),
+            'superseded'   => array_values(array_filter($question->getAnswers(), static fn (TaskQuestionAnswer $a): bool => $a->isSuperseded())),
             'overdue'      => $question->isOverdue($today),
             'answerForm'   => $answer,
             'withdrawForm' => $withdraw,
             'publishForm'  => $publish,
             'publishLabel' => $publishLabel,
             'answerLinks'  => ($asker || $manages) && !$question->isWithdrawn() ? $this->answerLinks($question) : [],
-            'mine'         => array_values(array_filter($subjects, static fn (string $subject): bool => in_array($subject, array_map(static fn ($r): string => $r->getSubjectId(), $question->getRecipients()), true))) !== [],
+            'mine'         => array_values(array_filter($subjects, static fn (string $subject): bool => in_array($subject, array_map(static fn (TaskQuestionRecipient $r): string => $r->getSubjectId(), $question->getRecipients()), true))) !== [],
         ];
     }
 

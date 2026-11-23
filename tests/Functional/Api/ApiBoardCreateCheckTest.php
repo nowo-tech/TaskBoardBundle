@@ -17,7 +17,7 @@ final class ApiBoardCreateCheckTest extends ApiTestCase
 
     protected function setUp(): void
     {
-        static::$hostConfig = ['security' => self::$plainChecker ? ['access_checker' => 'app.plain_checker'] : ['create_roles' => ['ROLE_ADMIN']]];
+        self::$hostConfig = ['security' => self::$plainChecker ? ['access_checker' => 'app.plain_checker'] : ['create_roles' => ['ROLE_ADMIN']]];
         parent::setUp();
         ApiTestHost::$tenants = ['tenant-a'];
     }
