@@ -98,6 +98,11 @@ description, priority, estimate, dates, tags, colour). `TaskManager::update()`:
 - answers `TaskChangedException`: the page flashes "The task changed meanwhile: nothing was saved. Try again." and
   shows the task as it is now. Nothing is written and no history row is recorded.
 
+Custom fields (2.31): the form also posts the values it showed (`customFieldBase`). A field the person did not touch
+is not written; one the person changed that someone else changed too refuses the save before anything is written;
+`TaskCustomFieldManager` locks the task's row before reading a value, so a change committed between those checks and
+the write is skipped and reported ("was not saved: someone changed it meanwhile"), never overwritten.
+
 A move of the card alone does not change the digest: the edit is saved and the task stays in its new column (2.2.1).
 A deadlock or lock wait timeout on the task row answers the platform's 409 `CONFLICT_001` (see below). Writes without a
 digest (Task API, host ports, host forms without the `base_digest` option) behave as before.

@@ -967,6 +967,7 @@ task_board.custom_field.operator.set: "ist gesetzt"
 task_board.custom_field.operator.not_set: "ist nicht gesetzt"
 task_board.custom_field.operator.in: "ist eines von"
 task_board.custom_field.refused: "Der Wert von „%field%“ wurde nicht gespeichert: er passt nicht zum Feld."
+task_board.custom_field.changed_meanwhile: "„%field%“ wurde nicht gespeichert: jemand hat es inzwischen geändert. Prüfe den Wert und versuche es erneut."
 # Since 2.22.0: the task and column menus (context menus).
 task_board.menu.label: "Aktionen für „%task%“"
 task_board.menu.column_label: "Aktionen für die Spalte „%column%“"

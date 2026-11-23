@@ -967,6 +967,7 @@ task_board.custom_field.operator.set: "está preenchido"
 task_board.custom_field.operator.not_set: "não está preenchido"
 task_board.custom_field.operator.in: "é um de"
 task_board.custom_field.refused: "O valor de «%field%» não foi guardado: não serve para o campo."
+task_board.custom_field.changed_meanwhile: "«%field%» não foi guardado: alguém o alterou entretanto. Verifique o valor e tente de novo."
 # Since 2.22.0: the task and column menus (context menus).
 task_board.menu.label: "Ações de “%task%”"
 task_board.menu.column_label: "Ações da coluna “%column%”"

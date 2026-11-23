@@ -1501,10 +1501,17 @@ final class TaskBoardManageController extends AbstractController
             $data = $taskForm->getData();
             $this->keepTheColumnUnlessChanged($taskForm, $request, $data, $task);
             try {
+                // Since 2.31.0 (REQ-RUNTIME-003 rule 4): a custom field changed meanwhile refuses the save before anything is written.
+                $this->customFieldForm?->assertUnchanged($taskForm, $task);
                 $this->taskManager->update($task, $data, $user);
                 // Since 2.19.0 (FR-028): the custom field rows, each through TaskCustomFieldManager::setField().
-                foreach ($this->customFieldForm?->save($taskForm, $task, $user) ?? [] as $refusedField) {
+                $changedFields = [];
+                foreach ($this->customFieldForm?->save($taskForm, $task, $user, $changedFields) ?? [] as $refusedField) {
                     $this->addFlash('warning', $this->translator->trans('task_board.custom_field.refused', ['%field%' => $refusedField], 'NowoTaskBoardBundle'));
+                }
+                // Since 2.31.0 (REQ-RUNTIME-003 rule 4): a custom field someone else changed between the checks and its write.
+                foreach ($changedFields as $changedField) {
+                    $this->addFlash('warning', $this->translator->trans('task_board.custom_field.changed_meanwhile', ['%field%' => $changedField], 'NowoTaskBoardBundle'));
                 }
                 $this->logWrite('task_update', ['task_id' => $taskId]);
                 $this->addFlash('success', 'task_board.flash.task_updated');

@@ -967,6 +967,7 @@ task_board.custom_field.operator.set: "est renseigné"
 task_board.custom_field.operator.not_set: "n'est pas renseigné"
 task_board.custom_field.operator.in: "est l'un de"
 task_board.custom_field.refused: "La valeur de « %field% » n'a pas été enregistrée : elle ne convient pas au champ."
+task_board.custom_field.changed_meanwhile: "« %field% » n'a pas été enregistré : quelqu'un l'a modifié entre-temps. Vérifiez sa valeur et réessayez."
 # Since 2.22.0: the task and column menus (context menus).
 task_board.menu.label: "Actions pour « %task% »"
 task_board.menu.column_label: "Actions pour la colonne « %column% »"
