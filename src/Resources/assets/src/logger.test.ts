@@ -13,6 +13,7 @@ describe('createBundleLogger', () => {
   let consoleError: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
+    delete (globalThis as { __NOWO_SCRIPT_LOADED__?: Set<string> }).__NOWO_SCRIPT_LOADED__;
     consoleLog = vi.fn();
     consoleDebug = vi.fn();
     consoleInfo = vi.fn();
@@ -52,6 +53,26 @@ describe('createBundleLogger', () => {
     log.scriptLoaded();
     expect(consoleLog).toHaveBeenCalledTimes(1);
     expect(consoleLog.mock.calls[0]?.[0]).toContain('script loaded');
+  });
+
+  it('scriptLoaded() called twice logs once (REQ-ASSETS-005 once-guard)', () => {
+    const log = createBundleLogger('test', { buildTime: '2026-11-24 10:00 UTC' });
+    log.scriptLoaded();
+    log.scriptLoaded();
+    expect(consoleLog).toHaveBeenCalledTimes(1);
+  });
+
+  it('a second copy of the script (a new logger with the same name) logs nothing more', () => {
+    createBundleLogger('test').scriptLoaded();
+    createBundleLogger('test').scriptLoaded();
+    expect(consoleLog).toHaveBeenCalledTimes(1);
+  });
+
+  it('each bundle name logs its own line once', () => {
+    createBundleLogger('one').scriptLoaded();
+    createBundleLogger('two').scriptLoaded();
+    createBundleLogger('one').scriptLoaded();
+    expect(consoleLog).toHaveBeenCalledTimes(2);
   });
 
   it('setDebug() enables debug; debug() logs when enabled', () => {

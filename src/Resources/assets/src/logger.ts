@@ -14,7 +14,8 @@
  *      buildTime: typeof __MY_BUNDLE_BUILD_TIME__ !== 'undefined' ? __MY_BUNDLE_BUILD_TIME__ : undefined,
  *    });
  *
- * 2. Log that the script loaded (call once at startup; includes build id if provided):
+ * 2. Log that the script loaded (includes build id if provided; printed once per name and page, even when the
+ *    script runs twice):
  *
  *    log.scriptLoaded();
  *
@@ -44,6 +45,17 @@
  * =============================================================================
  */
 
+/**
+ * The bundle names whose "script loaded" line was already printed on this page. Kept on `globalThis` so a script that
+ * runs twice (Turbo visits, two copies of the bundle) logs once per name (REQ-ASSETS-005).
+ */
+function loadedNames(): Set<string> {
+  const holder = globalThis as { __NOWO_SCRIPT_LOADED__?: Set<string> };
+  holder.__NOWO_SCRIPT_LOADED__ ??= new Set<string>();
+
+  return holder.__NOWO_SCRIPT_LOADED__;
+}
+
 /** True when the page asked for a silent console (`<html data-nowo-console="quiet">` or `globalThis.NOWO_CONSOLE = 'quiet'`). */
 function isQuiet(): boolean {
   try {
@@ -60,7 +72,7 @@ export type BundleLoggerOptions = {
 };
 
 export type BundleLogger = {
-  /** Call once at startup. Logs "script loaded" and optional build time. Shown unless the quiet switch is set. */
+  /** Logs "script loaded" and optional build time, once per name and page. Shown unless the quiet switch is set. */
   scriptLoaded: () => void;
   /** When false, debug/info/warn/error are no-ops (only scriptLoaded is shown). */
   setDebug: (enabled: boolean) => void;
@@ -106,6 +118,9 @@ export function createBundleLogger(name: string, options: BundleLoggerOptions = 
   return {
     scriptLoaded(): void {
       if (isQuiet()) return;
+      const loaded = loadedNames();
+      if (loaded.has(name)) return;
+      loaded.add(name);
       if (buildTime !== undefined && buildTime !== '') {
         console.log(
           `%c${EMOJI.script} ${prefix} script loaded, build: %c${buildTime}`,
