@@ -639,28 +639,18 @@ Grouped by feature; each row names the semantic requirement of [`spec.md`](spec.
 | `Repository/TaskCalendarRepositoryInterface.php` | FR-ORM-010 |
 | `Repository/TaskDependentsLookupInterface.php` | FR-ORM-010 |
 | `Repository/TenantBoardSlugLookupInterface.php` | FR-ORM-010 |
-| `Resources/assets/src/anchor-utils.test.ts` | FR-ASSET-010 |
 | `Resources/assets/src/anchor-utils.ts` | FR-ASSET-010 |
-| `Resources/assets/src/ask-confirm.test.ts` | FR-ASSET-010 |
 | `Resources/assets/src/ask-confirm.ts` | FR-ASSET-010 |
-| `Resources/assets/src/board-create-steps-controller.test.ts` | FR-ASSET-010 |
 | `Resources/assets/src/board-create-steps-controller.ts` | FR-ASSET-010 |
-| `Resources/assets/src/board-openers.test.ts` | FR-ASSET-010 |
 | `Resources/assets/src/board-openers.ts` | FR-ASSET-010 |
 | `Resources/assets/src/calendar-controller.ts` | FR-ASSET-010 |
-| `Resources/assets/src/calendar-utils.test.ts` | FR-ASSET-010 |
 | `Resources/assets/src/calendar-utils.ts` | FR-ASSET-010 |
 | `Resources/assets/src/container-browser-controller.ts` | FR-ASSET-010 |
 | `Resources/assets/src/dialog-utils.ts` | FR-ASSET-010 |
-| `Resources/assets/src/edit-column-current-icon.test.ts` | FR-ASSET-010 |
-| `Resources/assets/src/edit-column-delete-warning.test.ts` | FR-ASSET-010 |
-| `Resources/assets/src/edit-column-humans-only.test.ts` | FR-ASSET-010 |
 | `Resources/assets/src/filter-fold-controller.ts` | FR-ASSET-010 |
 | `Resources/assets/src/filter-fold-utils.ts` | FR-ASSET-010 |
-| `Resources/assets/src/filter-fold.test.ts` | FR-ASSET-010 |
 | `Resources/assets/src/select-anchor-controller.ts` | FR-ASSET-010 |
 | `Resources/assets/src/sync-progress-controller.ts` | FR-ASSET-010 |
-| `Resources/assets/src/sync-utils.test.ts` | FR-ASSET-010 |
 | `Resources/assets/src/sync-utils.ts` | FR-ASSET-010 |
 | `Resources/config/doctrine-xml/api/TaskApiIdempotencyRecord.orm.xml` | FR-ORM-010 |
 | `Resources/config/doctrine-xml/core/BoardColumn.orm.xml` | FR-ORM-010 |
@@ -1155,12 +1145,12 @@ removed (their rows are gone).
 | Legacy assets (`src/Resources/public/`) | 2 |
 | Twig views (`src/Resources/views/`) | 39 |
 | Config & translations | 9 |
-| Additions 1.23–2.20 (API, sync, ports, numbers, calendar, recurrence, folders, fields, templates) | 643 |
+| Additions 1.23–2.20 (API, sync, ports, numbers, calendar, recurrence, folders, fields, templates) | 633 |
 | Additions 2.21-2.30 (locks, menus, API conflicts, questions, calendar sources, header search, host ports) | 135 |
 | Additions 2.31–3.0 (dialogs on demand, validators domain, edit-form revision lock, script banner, question counts, 3.0 port removal) | 19 |
-| **Rows in this file** | **1081** |
+| **Rows in this file** | **1071** |
 
-Production files under `src/` (everything tracked except co-located Vitest files): **1071**, all named in this inventory (one row per file; a few rows name a file by directory glob in the older sections).
+Production files under `src/` (everything tracked except co-located Vitest files): **1071**, all named in this inventory, one row per file (rows = production files; the co-located Vitest files below have no row).
 
 Excluded (25 co-located Vitest files, test artifacts): `Resources/assets/src/anchor-utils.test.ts`, `Resources/assets/src/ask-confirm.test.ts`, `Resources/assets/src/board-create-steps-controller.test.ts`, `Resources/assets/src/board-openers.test.ts`, `Resources/assets/src/calendar-utils.test.ts`, `Resources/assets/src/column-collapse.test.ts`, `Resources/assets/src/css-vars.test.ts`, `Resources/assets/src/edit-column-current-icon.test.ts`, `Resources/assets/src/edit-column-delete-warning.test.ts`, `Resources/assets/src/edit-column-humans-only.test.ts`, `Resources/assets/src/filter-fold.test.ts`, `Resources/assets/src/gantt-scale.test.ts`, `Resources/assets/src/list-filter-utils.test.ts`, `Resources/assets/src/list-sort-utils.test.ts`, `Resources/assets/src/logger.test.ts`, `Resources/assets/src/mention-utils.test.ts`, `Resources/assets/src/option-filter-utils.test.ts`, `Resources/assets/src/storage.test.ts`, `Resources/assets/src/sync-utils.test.ts`, `Resources/assets/src/task-board-css.test.ts`, `Resources/assets/src/task-board.test.ts`, `Resources/assets/src/task-menu-shared.test.ts`, `Resources/assets/src/task-nav-utils.test.ts`, `Resources/assets/src/task-questions.test.ts`, `Resources/assets/src/time-utils.test.ts`.
 

@@ -285,7 +285,7 @@ the board.
 
 ## Success Criteria
 
-- **SC-001**: **939/939** tracked `src/` files mapped in [`code-inventory.md`](code-inventory.md) (audited 2026-11-16 on 2.20.0; `git ls-files src | wc -l`, 20 of them co-located Vitest files).
+- **SC-001**: **1071/1071** production files (1096 tracked, 25 co-located Vitest excluded) mapped in [`code-inventory.md`](code-inventory.md), audited 2026-11-24 on 3.0.0 (`git ls-files src | wc -l`; `git ls-files src | grep -vc '\.test\.ts$'`).
 - **SC-002**: Config keys match `Configuration.php` and Flex recipe defaults.
 - **SC-003**: PHPUnit + Vitest + PHPStan pass in CI.
 - **SC-004**: Demo with TimeTrack: board + timer + aggregated time on task.
