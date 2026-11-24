@@ -162,6 +162,12 @@ flat (`BundleEntityDetacher`, REQ-RUNTIME-003 rule 2): the application's manager
 Up to 2.x without `database.private_entity_manager` they wrote through the application's manager and detached only
 the TaskBoard rows no application entity referenced; that mode was removed in 3.0.
 
+A TaskBoard row the application loaded through its own manager is read again by id at the entry of every public
+write service (`TaskBoardEntityManager::attach()`, audits ZAS-1 / ZAS-V1 / ZAS-W1 / ZAS-X1): TaskBoard writes and
+locks its own copy, never the application's instance, so the application's next flush cannot write a stale copy over
+TaskBoard's change, and an audit event or a returned count always describes a write that was really made. A row that
+is gone or not flushed yet is refused before anything is written.
+
 A manager that a failed flush closed is replaced (`RecoveringFlusher`), as before. The import detaches its own batch
 classes only (1.22.2).
 
