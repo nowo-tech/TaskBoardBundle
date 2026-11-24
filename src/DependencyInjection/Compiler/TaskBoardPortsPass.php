@@ -83,6 +83,9 @@ final class TaskBoardPortsPass implements CompilerPassInterface
     /** Container parameter holding the configured `sync.actor_resolver` service id ('' when none). */
     public const ACTOR_RESOLVER_PARAMETER = 'nowo_task_board.sync.actor_resolver';
 
+    /** Since 3.0.0 (audit ZBG-L1): the public twin alias's target when the configured resolver's class is runtime-only. */
+    public const CONFIGURED_ACTOR_PROVIDER = 'nowo_task_board.sync.configured_actor_provider';
+
     /**
      * `seam`: the bundle's internal entity-typed interface (the 2.14 host interface until 3.0); `twin`: the framework-free
      * interface a host implements.
@@ -173,8 +176,9 @@ final class TaskBoardPortsPass implements CompilerPassInterface
     /**
      * Since 2.15.1 (audit OM TB-I1): the public {@see SyncActorProviderInterface} alias the extension points at the
      * bundle's default resolver follows `sync.actor_resolver` when that service implements the twin, so a host that
-     * configured a stricter resolver autowires its own and never the laxer default. A configured service whose class is
-     * not known before compilation leaves the alias on the default.
+     * configured a stricter resolver autowires its own and never the laxer default. Since 3.0.0 (audit ZBG-L1): a
+     * configured service whose class is not known before compilation (factory-built or synthetic) gets the alias through
+     * {@see Ports::actorProvider()}, which returns that service or fails closed, never the default.
      */
     private function pointActorProviderAlias(ContainerBuilder $container): void
     {
@@ -187,7 +191,15 @@ final class TaskBoardPortsPass implements CompilerPassInterface
         }
         $target = $this->resolve($container, $configured);
         $class  = $this->classOf($container, $target);
-        if ($class === null || !is_a($class, SyncActorProviderInterface::class, true)) {
+        if ($class === null) {
+            $container->setDefinition(self::CONFIGURED_ACTOR_PROVIDER, (new Definition(SyncActorProviderInterface::class))
+                ->setFactory([Ports::class, 'actorProvider'])
+                ->setArguments([new Reference($target)]));
+            $container->setAlias(SyncActorProviderInterface::class, self::CONFIGURED_ACTOR_PROVIDER)->setPublic(true);
+
+            return;
+        }
+        if (!is_a($class, SyncActorProviderInterface::class, true)) {
             return;
         }
         $container->setAlias(SyncActorProviderInterface::class, $target)->setPublic(true);

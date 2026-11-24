@@ -919,7 +919,7 @@ final class Configuration implements ConfigurationInterface
                     ->children()
                         ->booleanNode('after_host_commit')
                             ->defaultFalse()
-                            ->info('Opt-in (recommended for DDD hosts; planned as the 3.0 default). With database.private_entity_manager: true and doctrine/dbal 4: when the application wrapped a TaskBoard write in its own transaction, the task, member, comment, time, dependency, link and column change events wait for that transaction\'s commit (and are dropped on its rollback). Without an open transaction they are dispatched at once. false (default): dispatched after the bundle\'s own write, inside the application\'s transaction when there is one (2.28 behaviour). Ignored without the private entity manager or with doctrine/dbal 3.')
+                            ->info('Opt-in (recommended for DDD hosts; false stays the default in 3.0, a 3.x minor warns when it is unset and 4.0 makes true the default). With doctrine/dbal 4: when the application wrapped a TaskBoard write in its own transaction, the task, member, comment, time, dependency, link and column change events wait for that transaction\'s commit (and are dropped on its rollback). Without an open transaction they are dispatched at once. false (default): dispatched after the bundle\'s own write, inside the application\'s transaction when there is one (2.28 behaviour). Ignored with doctrine/dbal 3.')
                         ->end()
                     ->end()
                 ->end()

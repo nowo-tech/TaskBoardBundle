@@ -237,12 +237,23 @@ UPGRADING "To 3.0.0".
   manual entries to nothing. CI: a job runs the suite against TimeTrack 2.0.
 - `Number\TaskNumberBackfiller`: the `$logger` argument (2.27, for the removed mode) is ignored (deprecated, removed in
   4.0).
+- `composer.json` `conflict`: `nowo-tech/time-track-bundle` `<1.23 || >=3.0` (TaskBoard 3.0 is tested with TimeTrack
+  1.23+ and 2.x; an untested TimeTrack 3 is refused, audit ZBG-L2).
+- `docs/UPGRADING.md`: the 3.0 section is headed `## To 3.0.0` (anchor `#to-300`), the name every 3.0 error message
+  points to; the release promotion keeps it (audit ZBG-I2).
 - Code style (REQ-CS-009): the PHP-CS-Fixer ruleset is `@PER-CS` + `@PER-CS:risky` instead of `@PSR12` (`@Symfony` and
   the house overrides stay; the fixer changes no file). The Flex-managed `demo/*/config/bundles.php` and
   `reference.php` are excluded from the finder.
 
 ### Fixed
 
+- Audit ZBG-L1: when `sync.actor_resolver` names a factory-built or synthetic service (class unknown at compile time),
+  the public `SyncActorProviderInterface` alias now resolves to that service through a fail-closed factory
+  (`Port\Ports::actorProvider()`, internal): a service that does not implement `SyncActorProviderInterface` throws a
+  `LogicException` naming it. Before, the alias stayed on the bundle's more permissive default resolver
+  (`ConnectionCreatorActorResolver`), so a host handler that injected it bypassed the configured rule (since 2.15.1).
+- Audit ZBG-I1: the help text of `events.after_host_commit` describes 3.0 (the default stays `false`; no mention of the
+  removed application's-manager mode).
 - Browser console (REQ-ASSETS-005): the `📦 [task-board] script loaded, build: …` line is printed once per page, also
   when the script runs twice (a Turbo visit, two copies of the bundle).
 

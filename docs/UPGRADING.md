@@ -5,6 +5,7 @@ This document describes how to upgrade between versions of TaskBoard Bundle.
 ## Table of contents
 
 - [Unreleased](#unreleased)
+- [To 3.0.0](#to-300)
   - [Before you upgrade](#before-you-upgrade)
   - [Default flips](#default-flips)
   - [Private manager only](#private-manager-only)
@@ -221,6 +222,8 @@ This document describes how to upgrade between versions of TaskBoard Bundle.
 
 ## Unreleased
 
+## To 3.0.0
+
 ```bash
 composer require nowo-tech/task-board-bundle:^3.0 -W
 ```
@@ -378,7 +381,8 @@ instead and keep the configuration key as it is; the bundle asks it through its 
   (`Nowo\TaskBoardBundle\Import\TaskImportLinkFinderInterface: '@App\Import\MyLinkFinder'`).
 - **Injecting a port:** code that injected a removed interface to ask it (for example `SyncActorResolverInterface` in
   a sync handler) injects the framework-free one instead: `SyncActorProviderInterface` is a public alias that follows
-  `sync.actor_resolver`. The framework-free ports take snapshots, not entities: build the board's with
+  `sync.actor_resolver` (also a factory-built or synthetic service since 3.0: it then resolves to that service, or
+  fails with a `LogicException` when it does not implement `SyncActorProviderInterface`, never to the default). The framework-free ports take snapshots, not entities: build the board's with
   `ValueObject\TaskBoardSnapshot::of($board)` (new in 3.0, the same mapping the bundle uses):
 
   ```php

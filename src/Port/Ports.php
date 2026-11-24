@@ -249,6 +249,16 @@ final class Ports
         };
     }
 
+    /**
+     * Since 3.0.0 (audit ZBG-L1): the public {@see SyncActorProviderInterface} alias when `sync.actor_resolver` names a
+     * service whose class is only known at runtime (factory-built or synthetic): the configured service when it
+     * implements the twin, else a {@see LogicException}. Never the bundle's default resolver.
+     */
+    public static function actorProvider(object $service): SyncActorProviderInterface
+    {
+        return $service instanceof SyncActorProviderInterface ? $service : throw self::neither($service, SyncActorProviderInterface::class);
+    }
+
     public static function limitChecker(object $service): SyncLimitCheckerInterface
     {
         return match (true) {

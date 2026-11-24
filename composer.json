@@ -118,7 +118,7 @@
         "symfony/mercure": "Planned: push provider sync progress instead of polling."
     },
     "conflict": {
-        "nowo-tech/time-track-bundle": "<1.23"
+        "nowo-tech/time-track-bundle": "<1.23 || >=3.0"
     },
     "minimum-stability": "stable",
     "prefer-stable": true,

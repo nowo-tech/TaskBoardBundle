@@ -214,6 +214,52 @@ final class TaskBoardPortsPassTest extends TestCase
         self::assertSame(ConnectionCreatorActorResolver::class, (string) $container->getAlias(SyncActorProviderInterface::class));
     }
 
+    /**
+     * Audit ZBG-L1: a factory-built or synthetic resolver (class unknown before compilation) takes the twin alias through
+     * a fail-closed factory: the configured service when it implements the twin, an exception otherwise, never the
+     * bundle's default.
+     */
+    public function testAFactoryBuiltActorResolverTakesTheTwinAliasThroughAFailClosedFactory(): void
+    {
+        $container = $this->actorContainer(TwinActorResolver::class);
+        $container->getDefinition('app.actor')->setFactory([ActorResolverFactory::class, 'twin']);
+
+        (new TaskBoardPortsPass())->process($container);
+
+        $alias = $container->getAlias(SyncActorProviderInterface::class);
+        self::assertSame(TaskBoardPortsPass::CONFIGURED_ACTOR_PROVIDER, (string) $alias);
+        self::assertTrue($alias->isPublic());
+        $definition = $container->getDefinition(TaskBoardPortsPass::CONFIGURED_ACTOR_PROVIDER);
+        self::assertSame([Ports::class, 'actorProvider'], $definition->getFactory());
+        self::assertEquals([new Reference('app.actor')], $definition->getArguments());
+
+        $container->compile();
+        self::assertInstanceOf(TwinActorResolver::class, $container->get(SyncActorProviderInterface::class));
+    }
+
+    public function testAFactoryBuiltSeamOnlyActorResolverFailsClosedOnTheTwinAlias(): void
+    {
+        $container = $this->actorContainer(LegacyActorResolver::class);
+        $container->getDefinition('app.actor')->setFactory([ActorResolverFactory::class, 'legacy']);
+
+        (new TaskBoardPortsPass())->process($container);
+        $container->compile();
+
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage(SyncActorProviderInterface::class);
+        $container->get(SyncActorProviderInterface::class);
+    }
+
+    public function testASyntheticActorResolverTakesTheTwinAliasThroughTheFactory(): void
+    {
+        $container = $this->actorContainer(TwinActorResolver::class);
+        $container->getDefinition('app.actor')->setClass(null)->setSynthetic(true);
+
+        (new TaskBoardPortsPass())->process($container);
+
+        self::assertSame(TaskBoardPortsPass::CONFIGURED_ACTOR_PROVIDER, (string) $container->getAlias(SyncActorProviderInterface::class));
+    }
+
     public function testNoConfiguredActorResolverLeavesTheTwinAliasOnTheDefault(): void
     {
         $container = $this->actorContainer(TwinActorResolver::class);
@@ -280,6 +326,19 @@ final class TwinActorResolver implements SyncActorProviderInterface
     public function actorFor(TaskBoardSnapshot $board, ?string $actorId = null): ?object
     {
         return null;
+    }
+}
+
+final class ActorResolverFactory
+{
+    public static function twin(): TwinActorResolver
+    {
+        return new TwinActorResolver();
+    }
+
+    public static function legacy(): LegacyActorResolver
+    {
+        return new LegacyActorResolver();
     }
 }
 
