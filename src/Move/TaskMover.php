@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Move;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Doctrine\LockConflict;
+use Nowo\TaskBoardBundle\Doctrine\TaskBoardEntityManager;
 use Nowo\TaskBoardBundle\Doctrine\TransactionRollback;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
@@ -52,6 +53,9 @@ final readonly class TaskMover implements TaskMoverInterface
         private bool $syncEnabled = false,
         // Since 2.19.0 (audit PW-L6).
         private ?TaskCustomFieldManager $customFields = null,
+        // Since 3.0.0 (audit ZAS-V1): TaskBoard rows the application's manager holds are read again by id at each write
+        // entry (none: a service built by hand works on the rows it is given, as in 2.x).
+        private ?TaskBoardEntityManager $rows = null,
     ) {
     }
 
@@ -62,7 +66,9 @@ final readonly class TaskMover implements TaskMoverInterface
      */
     public function move(Task $task, TaskBoard $target, array $columnMap, string $fingerprint, object $actor): TaskMovePlan
     {
-        $plan = $this->planner->plan($task, $target, $columnMap, $actor);
+        $task   = $this->own($task);
+        $target = $this->own($target);
+        $plan   = $this->planner->plan($task, $target, $columnMap, $actor);
         if ($plan->fingerprint !== $fingerprint) {
             throw new TaskCopyRefusedException('stale');
         }
@@ -209,5 +215,17 @@ final readonly class TaskMover implements TaskMoverInterface
         $connection = $this->entityManager->getRepository(TaskBoardConnection::class)->findOneBy(['board' => $board]);
 
         return $connection instanceof TaskBoardConnection && $connection->getRunningRunId() !== null;
+    }
+
+    /**
+     * @template T of object
+     *
+     * @param T $row
+     *
+     * @return T
+     */
+    private function own(object $row): object
+    {
+        return $this->rows instanceof TaskBoardEntityManager ? $this->rows->attach($row) : $row;
     }
 }

@@ -10,6 +10,7 @@ use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
 use InvalidArgumentException;
 use Nowo\TaskBoardBundle\Doctrine\RecoveringFlusher;
+use Nowo\TaskBoardBundle\Doctrine\TaskBoardEntityManager;
 use Nowo\TaskBoardBundle\Doctrine\TransactionRollback;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
@@ -68,6 +69,9 @@ final readonly class TaskCustomFieldManager
         private TaskBoardRestructurePolicyInterface $policy,
         private TaskChangeRecorder $changeRecorder,
         private ?ManagerRegistry $managerRegistry = null,
+        // Since 3.0.0 (audit ZAS-V1): TaskBoard rows the application's manager holds are read again by id at each write
+        // entry (none: a service built by hand works on the rows it is given, as in 2.x).
+        private ?TaskBoardEntityManager $rows = null,
     ) {
     }
 
@@ -187,6 +191,7 @@ final readonly class TaskCustomFieldManager
      */
     public function define(object $actor, ?TaskBoard $board, ?string $tenantKey, string $name, CustomFieldType $type, array $options = [], ?int $position = null): TaskCustomField
     {
+        $board     = $board instanceof TaskBoard ? $this->own($board) : null;
         $tenantKey = $board instanceof TaskBoard ? $board->getTenantKey() : $tenantKey;
         $this->requireRight($actor, $board, $tenantKey);
         try {
@@ -212,11 +217,14 @@ final readonly class TaskCustomFieldManager
      */
     public function update(object $actor, TaskCustomField $field, string $name, ?array $options, int $position): TaskCustomField
     {
+        $field = $this->own($field);
         $this->requireRight($actor, $field->getBoard(), $field->getTenantKey());
         $this->write(function () use ($field, $name, $options, $position): void {
             try {
+                // @igor-ignore - Request data: the row the caller passed, or TaskBoard's own copy of it (own(), audit ZAS-V1); not service state.
                 $field->setName($name)->setPosition($position);
                 if ($options !== null) {
+                    // @igor-ignore - Request data: the row the caller passed, or TaskBoard's own copy of it (own(), audit ZAS-V1); not service state.
                     $field->setOptions($options);
                 }
             } catch (InvalidArgumentException) {
@@ -242,6 +250,7 @@ final readonly class TaskCustomFieldManager
      */
     public function delete(object $actor, TaskCustomField $field): void
     {
+        $field = $this->own($field);
         $this->requireRight($actor, $field->getBoard(), $field->getTenantKey());
         $this->write(function () use ($field): void {
             foreach ($this->entityManager->getRepository(TaskCustomFieldValue::class)->findBy(['field' => $field]) as $value) {
@@ -260,6 +269,7 @@ final readonly class TaskCustomFieldManager
      */
     public function setField(Task $task, string $fieldId, mixed $value, object $actor): void
     {
+        $task = $this->own($task);
         $this->writeValue($task, $fieldId, $value, $actor, null);
     }
 
@@ -275,6 +285,7 @@ final readonly class TaskCustomFieldManager
      */
     public function setFieldUnlessChanged(Task $task, string $fieldId, mixed $value, object $actor, callable $unchanged): void
     {
+        $task = $this->own($task);
         $this->writeValue($task, $fieldId, $value, $actor, $unchanged);
     }
 
@@ -342,6 +353,8 @@ final readonly class TaskCustomFieldManager
      */
     public function followBoardMove(Task $task, TaskBoard $from, object $actor): array
     {
+        $task   = $this->own($task);
+        $from   = $this->own($from);
         $target = $task->getBoard();
         $theirs = [];
         foreach ($this->fieldsFor($target) as $field) {
@@ -560,5 +573,17 @@ final readonly class TaskCustomFieldManager
 
             throw $failure;
         }
+    }
+
+    /**
+     * @template T of object
+     *
+     * @param T $row
+     *
+     * @return T
+     */
+    private function own(object $row): object
+    {
+        return $this->rows instanceof TaskBoardEntityManager ? $this->rows->attach($row) : $row;
     }
 }

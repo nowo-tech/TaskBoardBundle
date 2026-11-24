@@ -204,6 +204,17 @@ UPGRADING "To 3.0.0".
   application's manager holds again by id at their entry (new optional constructor argument, autowired): TaskBoard
   writes its own copy and never changes the application's instance or its collections, so the application's next flush
   neither fails on TaskBoard's new row nor writes a row TaskBoard wrote or refused.
+- Audit ZAS-V1: the same re-read at the entry of `TaskBoardEditor::update()`, `TaskTimeBillableService::change()`,
+  `ColumnSetManager::applyToBoard()` / `delete()`, `TaskBoardEraser` (`eraseTask()`, `emptyBoard()`, `deleteBoard()`),
+  `TaskQuestionManager` (ask, answer, withdraw, publish), `TaskCustomFieldManager` (define, update, delete, setField,
+  setFieldUnlessChanged, followBoardMove), `TaskRecurrenceManager` (create and the series writes), `TaskTemplateManager`
+  (createForBoard, update, delete, replaceAll), `TaskMover::move()`, `TaskBoardFolderManager` (update, delete,
+  moveBoard, applyColumns), `BoardConfigurationApplier::apply()`, `BoardColumnsApplier::apply()`, `TaskCopier` (copy,
+  copyChecked) and `Sync\TaskBoardSyncService` (link, updateStatusColumnMap, unlink, run, runLinked). `TaskBoardEraser`
+  dispatches `TaskErasedEvent` (whose storage refs the host deletes) only after the flush that deleted the task
+  succeeds: a failed erase no longer makes the host delete the files of a task that still exists.
+- Audit ZAS-V2: a TaskBoard row the application persisted but did not flush is refused as `… not saved yet. Flush it
+  first …` instead of `… no longer exists`.
 - Audit ZAS-3: with TimeTrack 2.0, a TimeTrack scope port that is not served as `TimesheetScopePolicyInterface` fails
   the build (new internal `DependencyInjection\Compiler\TimeTrackScopePortPass`) instead of resolving the scope of
   manual entries to nothing. CI: a job runs the suite against TimeTrack 2.0.

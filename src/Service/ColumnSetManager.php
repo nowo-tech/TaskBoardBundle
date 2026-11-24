@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Service;
 
+use Nowo\TaskBoardBundle\Doctrine\TaskBoardEntityManager;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\ColumnSet;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
@@ -31,6 +32,9 @@ final readonly class ColumnSetManager
         private ?EventDispatcherInterface $eventDispatcher = null,
         // Since 2.19.0 (audit PW-D1-L2): a board whose folder shares its statuses takes a set under the shared rules.
         private ?FolderStatusSets $statusSets = null,
+        // Since 3.0.0 (audit ZAS-V1): TaskBoard rows the application's manager holds are read again by id at each write
+        // entry (none: a service built by hand works on the rows it is given, as in 2.x).
+        private ?TaskBoardEntityManager $rows = null,
     ) {
     }
 
@@ -83,6 +87,7 @@ final readonly class ColumnSetManager
      */
     public function applyToBoard(ColumnSet $set, TaskBoard $board, ?object $actor = null): array
     {
+        $board = $this->own($board);
         // Audit PW-D1-L2: on a board whose folder shares its statuses the new columns change every board of the folder:
         // the shared-columns rights first (no actor: refused), then the set is carried to the other boards.
         $shared = $this->statusSets instanceof FolderStatusSets && $board->getFolder()?->getStatusSet() !== null;
@@ -100,6 +105,7 @@ final readonly class ColumnSetManager
         $added = [];
         foreach ($set->getItems() as $item) {
             $column = new BoardColumn($board, $item['name'], ++$position, $item['color'], ColumnIcon::normalize($item['icon']));
+            // @igor-ignore - Request data: the row the caller passed, or TaskBoard's own copy of it (own(), audit ZAS-V1); not service state.
             $board->addColumn($column);
             $added[] = $column;
         }
@@ -117,7 +123,7 @@ final readonly class ColumnSetManager
     public function delete(ColumnSet $set): void
     {
         // @igor-ignore - Persistence call on a stateless repository; no worker state.
-        $this->setRepository->remove($set);
+        $this->setRepository->remove($this->own($set));
     }
 
     private function query(object $user, ?TaskBoard $board, ?string $tenantKey): ColumnSetQueryEvent
@@ -126,5 +132,17 @@ final readonly class ColumnSetManager
         $this->eventDispatcher?->dispatch($event, TaskBoardEvents::COLUMN_SET_QUERY);
 
         return $event;
+    }
+
+    /**
+     * @template T of object
+     *
+     * @param T $row
+     *
+     * @return T
+     */
+    private function own(object $row): object
+    {
+        return $this->rows instanceof TaskBoardEntityManager ? $this->rows->attach($row) : $row;
     }
 }

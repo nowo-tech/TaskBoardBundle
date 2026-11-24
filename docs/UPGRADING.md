@@ -317,19 +317,25 @@ to check). What breaks in code that worked in 2.x without the option:
 - **A TaskBoard row you loaded through your own manager** (`$em->getRepository(Task::class)` when that is your manager,
   a route `EntityValueResolver`, a query of yours) belongs to your manager:
   - the write services `TaskManager` (create, update, move, reschedule, priority, tags, complete, archive, restore),
-    `BoardColumnManager`, `TaskMemberAssigner`, `TaskTimeLogger`, `TaskDependencyManager`, `TaskLinkAttacher` and
-    `TaskCommentManager` read it again by id at their entry and write TaskBoard's own copy: your instance and its
-    collections are never changed (so your next `flush()` neither fails on TaskBoard's new row nor writes it), and your
-    instance does not show TaskBoard's change until you load it again. A row that no longer exists is refused
-    (`… no longer exists`);
-  - any other TaskBoard service (custom fields, recurrence, templates, questions, folders, copy and move, sync, ...)
-    expects rows loaded through TaskBoard: pass ids (`TaskCommandsInterface`, `TaskBoardQueryInterface`) or rows from
+    `BoardColumnManager`, `TaskMemberAssigner`, `TaskTimeLogger`, `TaskDependencyManager`, `TaskLinkAttacher`,
+    `TaskCommentManager`, `TaskBoardEditor`, `TaskTimeBillableService`, `ColumnSetManager` (applyToBoard, delete),
+    `TaskBoardEraser`, `TaskQuestionManager`, `TaskCustomFieldManager`, `TaskRecurrenceManager`, `TaskTemplateManager`,
+    `TaskMover`, `TaskBoardFolderManager`, `BoardConfigurationApplier`, `BoardColumnsApplier`, `TaskCopier` and the sync
+    service (`TaskBoardSyncService`) read it again by id at their entry and write TaskBoard's own copy: your instance
+    and its collections are never changed (so your next `flush()` neither fails on TaskBoard's new row nor writes it),
+    and your instance does not show TaskBoard's change until you load it again. A row that no longer exists is refused
+    (`… no longer exists`), one you persisted but did not flush too (`… not saved yet. Flush it first …`);
+  - any other TaskBoard service (the sync writers, import, the folder restructurer, ...) works by id or on rows it loads
+    itself: pass ids (`TaskCommandsInterface`, `TaskBoardQueryInterface`, `TaskBoardRestructurer`) or rows from
     TaskBoard's repositories. Handed to a write that persists it, your row fails with `TaskBoard: the … handed to
     TaskBoard was loaded through the application's entity manager …` instead of a duplicate INSERT; after that
     exception, `$entityManager->refresh()` or drop the instance before you flush your manager (the service may have
     changed it in memory before the refusal);
   - set on a to-one association of a new TaskBoard row, it is replaced by TaskBoard's reference to the same id;
   - your own changes to it stay pending in your manager and are written by your `flush()`, never by TaskBoard.
+- **`TASK_ERASED` after the flush (audit ZAS-V1).** `TaskBoardEraser` now dispatches each `TaskErasedEvent` after the
+  flush that deleted its task (2.x: before it), so a failed flush announces nothing. Inside an outer transaction (an API
+  delete, a write of yours) the rollback rule of 2.22 (SU2-I4) still holds: delete stored files after the commit.
 - **Your users on TaskBoard rows.** The security user (or any user your manager holds) is referenced by id on the rows
   TaskBoard writes, as since 2.15. Since 3.0 a user that is not saved yet (persisted but not flushed, or without an id)
   fails before anything is written: `TaskBoard: the App\Entity\User on … is not saved yet …` — flush it first. Users you

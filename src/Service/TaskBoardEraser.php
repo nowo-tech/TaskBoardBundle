@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Service;
 
 use Doctrine\ORM\EntityManagerInterface;
+use Nowo\TaskBoardBundle\Doctrine\TaskBoardEntityManager;
 use Nowo\TaskBoardBundle\Doctrine\TaskBoardSavepoint;
 use Nowo\TaskBoardBundle\Dto\EraseCursor;
 use Nowo\TaskBoardBundle\Dto\EraseProgress;
@@ -125,6 +126,7 @@ final readonly class TaskBoardEraser implements TaskBoardEraserInterface
      */
     public function eraseTask(Task $task, object $actor): int
     {
+        $task  = $this->own($task);
         $board = $task->getBoard();
         if (!$this->accessChecker->canManageBoard($actor, $board)) {
             throw new AccessDeniedException('The task may not be erased.');
@@ -144,18 +146,48 @@ final readonly class TaskBoardEraser implements TaskBoardEraserInterface
         $boardId = $board->getId();
         $deleted = 0;
         foreach (array_reverse($levels) as $level) {
+            $events = [];
             foreach ($level as $erased) {
-                $this->eventDispatcher?->dispatch(new TaskErasedEvent($erased->getId(), $boardId, $erased->getTitle(), $refs[$erased->getId()] ?? [], count($erased->getTimeEntries())), TaskBoardEvents::TASK_ERASED);
+                $events[] = new TaskErasedEvent($erased->getId(), $boardId, $erased->getTitle(), $refs[$erased->getId()] ?? [], count($erased->getTimeEntries()));
+                // @igor-ignore - Request data: the row the caller passed, or TaskBoard's own copy of it (own(), audit ZAS-V1); not service state.
                 $board->getTasks()->removeElement($erased);
                 $erased->getParent()?->getSubtasks()->removeElement($erased);
                 $this->entityManager->remove($erased);
                 ++$deleted;
             }
             $this->entityManager->flush();
+            // Since 3.0.0 (audit ZAS-V1): announced only once the rows are gone, so a failed flush never makes the host
+            // delete the files of a task that still exists.
+            $this->dispatchErased($events);
         }
         $this->logger->info('TaskBoard task erased', ['bundle' => 'nowo_task_board', 'board_id' => $boardId, 'tasks' => $deleted]);
 
         return $deleted;
+    }
+
+    /**
+     * @param list<TaskErasedEvent> $events
+     */
+    private function dispatchErased(array $events): void
+    {
+        foreach ($events as $event) {
+            $this->eventDispatcher?->dispatch($event, TaskBoardEvents::TASK_ERASED);
+        }
+    }
+
+    /**
+     * Since 3.0.0 (audit ZAS-V1): a TaskBoard row the application's manager holds is read again by id (the private
+     * manager only; a hand-built eraser on another manager works on the rows it is given, as in 2.x).
+     *
+     * @template T of object
+     *
+     * @param T $row
+     *
+     * @return T
+     */
+    private function own(object $row): object
+    {
+        return $this->entityManager instanceof TaskBoardEntityManager ? $this->entityManager->attach($row) : $row;
     }
 
     /**
@@ -260,6 +292,7 @@ final readonly class TaskBoardEraser implements TaskBoardEraserInterface
 
     private function erase(TaskBoard $board, object $actor, int $batchSize, ?EraseCursor $cursor, bool $deleteBoard): EraseProgress
     {
+        $board = $this->own($board);
         if (!$this->accessChecker->canManageBoard($actor, $board)) {
             throw new AccessDeniedException('The board may not be erased.');
         }
@@ -285,16 +318,20 @@ final readonly class TaskBoardEraser implements TaskBoardEraserInterface
                     $phase = $deleteBoard ? EraseCursor::PHASE_COLUMNS : EraseCursor::PHASE_BOARD;
                     break;
                 }
+                $events = [];
                 foreach ($leaves as $task) {
-                    $taskId = $task->getId();
-                    $this->eventDispatcher?->dispatch(new TaskErasedEvent($taskId, $boardId, $task->getTitle(), $refs[$taskId] ?? [], count($task->getTimeEntries())), TaskBoardEvents::TASK_ERASED);
+                    $taskId   = $task->getId();
+                    $events[] = new TaskErasedEvent($taskId, $boardId, $task->getTitle(), $refs[$taskId] ?? [], count($task->getTimeEntries()));
                     unset($refs[$taskId]);
+                    // @igor-ignore - Request data: the row the caller passed, or TaskBoard's own copy of it (own(), audit ZAS-V1); not service state.
                     $board->getTasks()->removeElement($task);
                     $task->getParent()?->getSubtasks()->removeElement($task);
                     // PreRemove detaches the manual time entries (task = null, snapshots refreshed): never deleted.
                     $this->entityManager->remove($task);
                 }
                 $this->entityManager->flush();
+                // Since 3.0.0 (audit ZAS-V1): after the flush only (see eraseTask()).
+                $this->dispatchErased($events);
                 $deleted += count($leaves);
                 // Out of time: stop, unless the board is empty (finish now: no unfinished cursor of an empty board).
                 if ($this->clock->now()->getTimestamp() >= $deadline && ($remaining = $this->remaining($board)) > 0) {
@@ -307,6 +344,7 @@ final readonly class TaskBoardEraser implements TaskBoardEraserInterface
         if ($deleteBoard && $phase === EraseCursor::PHASE_COLUMNS) {
             foreach ($board->getColumns()->toArray() as $column) {
                 if ($column instanceof BoardColumn) {
+                    // @igor-ignore - Request data: the row the caller passed, or TaskBoard's own copy of it (own(), audit ZAS-V1); not service state.
                     $board->getColumns()->removeElement($column);
                     $this->entityManager->remove($column);
                     ++$columns;

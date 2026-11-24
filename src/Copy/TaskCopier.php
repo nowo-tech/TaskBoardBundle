@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Copy;
 use DateInterval;
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
+use Nowo\TaskBoardBundle\Doctrine\TaskBoardEntityManager;
 use Nowo\TaskBoardBundle\Dto\TaskFormData;
 use Nowo\TaskBoardBundle\Dto\TaskMemberFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
@@ -80,6 +81,9 @@ final readonly class TaskCopier
         private ?TaskEventDeferral $events = null,
         // Since 2.20.0 (Beacon spec 234, T004): `max_subtask_depth`; a copy never creates a task past it.
         private TaskTreeLimits $treeLimits = new TaskTreeLimits(),
+        // Since 3.0.0 (audit ZAS-V1): TaskBoard rows the application's manager holds are read again by id at each write
+        // entry (none: a service built by hand works on the rows it is given, as in 2.x).
+        private ?TaskBoardEntityManager $rows = null,
     ) {
     }
 
@@ -155,6 +159,7 @@ final readonly class TaskCopier
      */
     public function copy(Task $source, TaskCopyOptions $options, object $actor, ?string $fingerprint = null): TaskCopyResult
     {
+        $source = $this->own($source);
         if ($fingerprint !== null && $this->preview($source, $options, $actor)->fingerprint !== $fingerprint) {
             throw new TaskCopyRefusedException('stale');
         }
@@ -170,6 +175,7 @@ final readonly class TaskCopier
      */
     public function copyChecked(Task $source, TaskCopyOptions $options, object $actor, array $tree): TaskCopyResult
     {
+        $source = $this->own($source);
         $target = $options->targetBoard ?? $source->getBoard();
         // @igor-ignore - Closure runs synchronously inside wrapInTransaction() and is never stored.
         $write = fn (): TaskCopyResult => $this->entityManager->wrapInTransaction(function () use ($source, $options, $actor, $target, $tree): TaskCopyResult {
@@ -366,5 +372,17 @@ final readonly class TaskCopier
     private function synced(array $ids): bool
     {
         return $this->syncEnabled && $this->entityManager->getRepository(TaskSyncItem::class)->count(['task' => $ids]) > 0;
+    }
+
+    /**
+     * @template T of object
+     *
+     * @param T $row
+     *
+     * @return T
+     */
+    private function own(object $row): object
+    {
+        return $this->rows instanceof TaskBoardEntityManager ? $this->rows->attach($row) : $row;
     }
 }
