@@ -28,6 +28,8 @@ use Nowo\TaskBoardBundle\Enum\TaskLinkType;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Event\TaskErasedEvent;
+use Nowo\TaskBoardBundle\Import\TaskImportOrchestrator;
+use Nowo\TaskBoardBundle\Import\TaskImportSource;
 use Nowo\TaskBoardBundle\Service\BoardColumnManagerInterface;
 use Nowo\TaskBoardBundle\Service\ColumnSetManager;
 use Nowo\TaskBoardBundle\Service\TaskBoardCreatorInterface;
@@ -361,6 +363,24 @@ final class HostEntitiesAcrossManagersTest extends FunctionalTestCase
         $this->expectExceptionMessage('not saved yet');
 
         $this->privateManager()->attach($column);
+    }
+
+    /** Since 3.0.0 (audit ZAS-X2): an import into a board the application holds writes TaskBoard's rows once. */
+    public function testImportingIntoABoardTheApplicationHoldsLeavesTheApplicationsInstanceAlone(): void
+    {
+        $board     = $this->board('Import target');
+        $hostBoard = $this->host->find(TaskBoard::class, $board->getId());
+        self::assertInstanceOf(TaskBoard::class, $hostBoard);
+        self::assertCount(0, $hostBoard->getTasks());
+        $importer = self::getContainer()->get(TaskImportOrchestrator::class);
+        self::assertInstanceOf(TaskImportOrchestrator::class, $importer);
+
+        $importer->import($hostBoard, TaskImportSource::ClickUpCsv, "Task ID,Task Name,Status\nt1,Imported one,To do", 'one.csv', $this->owner);
+
+        self::assertCount(0, $hostBoard->getTasks(), 'the application\'s instance is unchanged');
+        self::assertSame(1, $this->rows(Task::class, 'board_id = ? AND title = ?', [$board->getId(), 'Imported one']));
+        $this->host->flush();
+        self::assertSame(1, $this->rows(Task::class, 'board_id = ? AND title = ?', [$board->getId(), 'Imported one']));
     }
 
     /** A row the application's manager holds that no longer exists is refused clearly. */

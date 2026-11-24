@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Tests\Functional\Sync\People;
 use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
+use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncDirectory;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPerson;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPersonMapping;
@@ -14,7 +15,10 @@ use Nowo\TaskBoardBundle\Sync\People\PeopleMappingService;
 use Nowo\TaskBoardBundle\Sync\People\PersonMappingDecision;
 use Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleDirectoryService;
 use Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleReassigner;
+use Nowo\TaskBoardBundle\Sync\Provider\ProviderCredential;
 use Nowo\TaskBoardBundle\Sync\Provider\RemotePerson;
+use Nowo\TaskBoardBundle\Sync\Testing\InMemoryTaskProvider;
+use Nowo\TaskBoardBundle\Tests\Functional\App\TestCredentialResolver;
 
 /**
  * Since 3.0.0 (audit ZAS-W1): the people services read a person, directory or board the application's manager holds
@@ -88,6 +92,67 @@ final class HostHeldPeopleRowsTest extends PeopleFunctionalTestCase
         self::assertSame(1, $this->rowService(PeopleMappingService::class)->markUnmappedAsFormer($hostDirectory, $hostBoard, $this->owner));
 
         self::assertSame(TaskSyncPersonMapping::External, $this->reread(TaskSyncPerson::class, $person->getId())->getMapping());
+    }
+
+    public function testReassigningAPersonTheApplicationHoldsIsWritten(): void
+    {
+        [, , $person] = $this->setUpPeople();
+        $hostPerson   = $this->host()->find(TaskSyncPerson::class, $person->getId());
+        self::assertInstanceOf(TaskSyncPerson::class, $hostPerson);
+
+        self::assertTrue($this->rowService(TaskSyncPeopleReassigner::class)->reassign($hostPerson, null, $this->owner)->isDone());
+
+        self::assertSame(TaskSyncPersonMapping::External, $this->reread(TaskSyncPerson::class, $person->getId())->getMapping());
+        self::assertSame(TaskSyncPersonMapping::Unmatched, $hostPerson->getMapping(), 'the application\'s instance is unchanged');
+        self::assertCount(1, $this->eventsNamed(TaskBoardEvents::SYNC_PERSON_REASSIGNED));
+    }
+
+    public function testSavingTheMappingOfADirectoryTheApplicationHoldsIsWritten(): void
+    {
+        [$board, $directory, $person] = $this->setUpPeople();
+        $hostDirectory                = $this->host()->find(TaskSyncDirectory::class, $directory->getId());
+        $hostBoard                    = $this->host()->find(TaskBoard::class, $board->getId());
+        self::assertInstanceOf(TaskSyncDirectory::class, $hostDirectory);
+        self::assertInstanceOf(TaskBoard::class, $hostBoard);
+
+        $result = $this->rowService(PeopleMappingService::class)->save($hostDirectory, $hostBoard, [$person->getId() => PeopleMappingService::NOT_MAPPED], $this->owner);
+
+        self::assertSame([], $result->errors);
+        self::assertNotNull($this->reread(TaskSyncPerson::class, $person->getId())->getMappedBy(), 'the decision is written');
+        self::assertNotNull($this->reread(TaskSyncDirectory::class, $directory->getId())->getReviewedAt());
+        self::assertNull($hostDirectory->getReviewedAt(), 'the application\'s instance is unchanged');
+    }
+
+    /** Since 3.0.0 (audit ZAS-X1): the directory is attached to TaskBoard's copy of a connection the application holds. */
+    public function testAttachingTheDirectoryOfAConnectionTheApplicationHoldsIsWritten(): void
+    {
+        $connection     = $this->connection($this->board());
+        $hostConnection = $this->host()->find(TaskBoardConnection::class, $connection->getId());
+        self::assertInstanceOf(TaskBoardConnection::class, $hostConnection);
+
+        $directory = $this->rowService(TaskSyncPeopleDirectoryService::class)->directoryFor($hostConnection, (new InMemoryTaskProvider())->withWorkspace(self::WS), new ProviderCredential(TestCredentialResolver::$secret, 'conn-1'));
+
+        self::assertInstanceOf(TaskSyncDirectory::class, $directory);
+        self::assertNull($hostConnection->getDirectory(), 'the application\'s instance is unchanged');
+        self::assertSame($directory->getId(), $this->reread(TaskBoardConnection::class, $connection->getId())->getDirectory()?->getId());
+    }
+
+    /** Since 3.0.0 (audit ZAS-X1): a directory the application holds is pruned through TaskBoard's copy. */
+    public function testPruningADirectoryTheApplicationHoldsIsWritten(): void
+    {
+        $board     = $this->board();
+        $service   = $this->rowService(TaskSyncPeopleDirectoryService::class);
+        $directory = $service->directoryForDraft($board, 'clickup', self::WS);
+        $person    = $service->session($directory, $board)->person(new RemotePerson('9078', 'Nobody refers'), TaskSyncPerson::KIND_MEMBER);
+        $this->em->flush();
+        $hostDirectory = $this->host()->find(TaskSyncDirectory::class, $directory->getId());
+        self::assertInstanceOf(TaskSyncDirectory::class, $hostDirectory);
+
+        self::assertSame(1, $service->pruneDirectory($hostDirectory));
+
+        $this->em->clear();
+        self::assertNull($this->em->find(TaskSyncPerson::class, $person->getId()));
+        self::assertNull($this->em->find(TaskSyncDirectory::class, $directory->getId()));
     }
 
     /**
