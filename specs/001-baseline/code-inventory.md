@@ -2,7 +2,7 @@
 
 **Baseline spec**: [`spec.md`](spec.md)  
 **Package**: `nowo-tech/task-board-bundle`  
-**Last audited**: 2026-11-22 (v2.30.0: every tracked file of `src/`, releases 1.10–2.30; 2026-11-16: 2.20.0)
+**Last audited**: 2026-11-24 (3.0.0: every tracked file of `src/`, releases 1.10–3.0; 2026-11-22: v2.30.0)
 
 Production scope excludes Vitest sources (`*.test.ts`).
 
@@ -10,13 +10,11 @@ Production scope excludes Vitest sources (`*.test.ts`).
 
 | Source file | Spec section | Requirement IDs |
 | --- | --- | --- |
-| `Assignee/TaskAssigneeProviderInterface.php` | Assignable users per board (since 1.10) | FR-ASSIGNEE-001 |
-| `Bridge/TimeTrack/TaskBoardTaskProvider.php` | TimeTrack bridge | FR-BRIDGE-001 |
-| `Bridge/TimeTrack/TaskBoardTeamContextProvider.php` | TimeTrack bridge | FR-BRIDGE-001 |
+| `Port/Internal/TaskAssigneeProviderInterface.php` | Assignable users per board (since 1.10) | FR-ASSIGNEE-001 |
 | `Command/TaskBoardImportCommand.php` | Import CLI (`--force` deprecated since 1.22) | FR-CLI-001, FR-IMPORT-013 |
 | `Comment/DefaultTaskMentionCandidatesResolver.php` | Comment @mention candidates (since 1.16) | FR-COMMENT-002 |
 | `Comment/MentionCandidate.php` | Comment @mention candidates (since 1.16) | FR-COMMENT-002 |
-| `Comment/TaskMentionCandidatesResolverInterface.php` | Comment @mention candidates (since 1.16) | FR-COMMENT-002 |
+| `Port/Internal/TaskMentionCandidatesResolverInterface.php` | Comment @mention candidates (since 1.16) | FR-COMMENT-002 |
 | `Controller/TaskBoardManageController.php` | Manage UI controller (bounded pages, logged writes since 1.21) | FR-CTRL-001, FR-PERF-001, FR-OBS-001 |
 | `DependencyInjection/Compiler/TwigPathsPass.php` | Twig namespace | FR-TWIG-001 |
 | `DependencyInjection/Configuration.php` | Config tree (`import.*` since 1.22) | FR-CFG-001, FR-IMPORT-015 |
@@ -118,7 +116,7 @@ Production scope excludes Vitest sources (`*.test.ts`).
 | `Import/TaskBoard/TaskBoardJsonImporter.php` | Native TaskBoard CSV / JSON format and subtask import (since 1.18) | FR-IMPORT-005, FR-IMPORT-007 |
 | `Import/TaskBoard/TaskBoardRowMapper.php` | Native TaskBoard CSV / JSON format and subtask import (since 1.18) | FR-IMPORT-005, FR-IMPORT-007, FR-IMPORT-012 |
 | `Import/TaskImportOrchestrator.php` | Import orchestrator (logged since 1.21, idempotent upsert since 1.22) | FR-IMPORT-001, FR-OBS-001, FR-IMPORT-008, FR-IMPORT-009, FR-IMPORT-010, FR-IMPORT-011, FR-IMPORT-014, FR-IMPORT-015 |
-| `Import/TaskImportLinkLookupInterface.php` | Import contracts (since 1.22) | FR-IMPORT-010 |
+| `Port/Internal/TaskImportLinkLookupInterface.php` | Import contracts (since 1.22) | FR-IMPORT-010 |
 | `Import/TaskImportSource.php` | Import contracts (provider / scope since 1.22) | FR-IMPORT-002, FR-IMPORT-008, FR-IMPORT-014 |
 | `Import/TaskImportUserResolverInterface.php` | Import contracts | FR-IMPORT-002 |
 | `Import/TaskImporterInterface.php` | Import contracts | FR-IMPORT-002 |
@@ -203,7 +201,7 @@ Files added by the 1.27.0 stack. The coverage summary below is the 2026-11-03 au
 | `Resources/views/manage/connection_people.html.twig` | People page | FR-SYNC-PEOPLE-001 |
 | `Resources/views/manage/_connection_people_summary.html.twig` | People page | FR-SYNC-PEOPLE-001 |
 | `Sync/Event/PeopleMappingChangedEvent.php` | People page | FR-SYNC-PEOPLE-001 |
-| `Sync/Hook/PeopleInviterInterface.php` | People page | FR-SYNC-PEOPLE-001 |
+| `Port/Internal/PeopleInviterInterface.php` | People page | FR-SYNC-PEOPLE-001 |
 | `Sync/People/PeopleMappingResult.php` | People page | FR-SYNC-PEOPLE-001 |
 | `Sync/People/PeopleMappingRow.php` | People page | FR-SYNC-PEOPLE-001 |
 | `Sync/People/PeopleMappingService.php` | People page | FR-SYNC-PEOPLE-001 |
@@ -348,15 +346,15 @@ Grouped by feature; each row names the semantic requirement of [`spec.md`](spec.
 | `Api/Hook/EmptyTaskApiWorkspace.php` | FR-API-003 |
 | `Api/Hook/ManualTaskApiTimeEntries.php` | FR-API-003 |
 | `Api/Hook/TaskApiAttachmentStoreInterface.php` | FR-API-003 |
-| `Api/Hook/TaskApiAttachmentsInterface.php` | FR-API-003 |
-| `Api/Hook/TaskApiAuthenticatorInterface.php` | FR-API-003 |
+| `Port/Internal/TaskApiAttachmentsInterface.php` | FR-API-003 |
+| `Port/Internal/TaskApiAuthenticatorInterface.php` | FR-API-003 |
 | `Api/Hook/TaskApiCommentEditPolicyInterface.php` | FR-API-003 |
 | `Api/Hook/TaskApiIdempotencyStoreInterface.php` | FR-API-003 |
 | `Api/Hook/TaskApiMembersInterface.php` | FR-API-003 |
 | `Api/Hook/TaskApiPlanGateInterface.php` | FR-API-003 |
 | `Api/Hook/TaskApiRateLimiterInterface.php` | FR-API-003 |
 | `Api/Hook/TaskApiRequestAuthenticatorInterface.php` | FR-API-003 |
-| `Api/Hook/TaskApiTimeEntriesInterface.php` | FR-API-003 |
+| `Port/Internal/TaskApiTimeEntriesInterface.php` | FR-API-003 |
 | `Api/Hook/TaskApiTimeEntryBillableInterface.php` | FR-API-003 |
 | `Api/Hook/TaskApiTimeStoreInterface.php` | FR-API-003 |
 | `Api/Hook/TaskApiUsersInterface.php` | FR-API-003 |
@@ -430,7 +428,7 @@ Grouped by feature; each row names the semantic requirement of [`spec.md`](spec.
 | `Calendar/CalendarViewer.php` | FR-CAL-001 |
 | `Command/TaskBoardApplyDefaultColumnIconsCommand.php` | FR-BOARD-010 |
 | `Command/TaskBoardSyncCommand.php` | FR-SYNC-010 |
-| `Comment/TaskCommentCauseLabelerInterface.php` | FR-PORT-001 |
+| `Port/Internal/TaskCommentCauseLabelerInterface.php` | FR-PORT-001 |
 | `Comment/TaskCommentCauseTextInterface.php` | FR-PORT-001 |
 | `Comment/TaskMentionCandidatesProviderInterface.php` | FR-PORT-001 |
 | `Configuration/BoardColumnSpec.php` | FR-FOLDER-001 |
@@ -554,9 +552,8 @@ Grouped by feature; each row names the semantic requirement of [`spec.md`](spec.
 | `Form/TaskRecurrenceFormType.php` | FR-SVC-010 |
 | `Form/TaskScheduleFormType.php` | FR-SVC-010 |
 | `Form/TaskTemplatePickerType.php` | FR-SVC-010 |
-| `History/TaskChangeCauseLabelerInterface.php` | FR-PORT-001 |
+| `Port/Internal/TaskChangeCauseLabelerInterface.php` | FR-PORT-001 |
 | `History/TaskChangeCauseTextInterface.php` | FR-PORT-001 |
-| `Import/BoardAwareTaskImportUserResolverInterface.php` | FR-SVC-010 |
 | `Import/BoardScopedTaskImportUserResolverInterface.php` | FR-SVC-010 |
 | `Import/ClickUp/ClickUpTaskMapper.php` | FR-SVC-010 |
 | `Import/ImportHelpLinkResolver.php` | FR-SVC-010 |
@@ -570,7 +567,7 @@ Grouped by feature; each row names the semantic requirement of [`spec.md`](spec.
 | `Member/NoMemberBadges.php` | FR-MEMBER-001 |
 | `Move/DefaultTaskBoardTargets.php` | FR-MOVE-001 |
 | `Move/TaskBoardTargetIdsInterface.php` | FR-MOVE-001 |
-| `Move/TaskBoardTargetsInterface.php` | FR-MOVE-001 |
+| `Port/Internal/TaskBoardTargetsInterface.php` | FR-MOVE-001 |
 | `Move/TaskMovePlan.php` | FR-MOVE-001 |
 | `Move/TaskMovePlanner.php` | FR-MOVE-001 |
 | `Move/TaskMover.php` | FR-MOVE-001 |
@@ -729,7 +726,6 @@ Grouped by feature; each row names the semantic requirement of [`spec.md`](spec.
 | `Resources/views/manage/_connection_tree_error.html.twig` | FR-UI-020 |
 | `Resources/views/manage/_connection_unlink_dialog.html.twig` | FR-UI-020 |
 | `Resources/views/manage/_import_help_link.html.twig` | FR-UI-020 |
-| `Resources/views/manage/_legacy_layout.html.twig` | FR-UI-020 |
 | `Resources/views/manage/_list_filter_fold.html.twig` | FR-UI-020 |
 | `Resources/views/manage/_list_row_cells.html.twig` | FR-UI-020 |
 | `Resources/views/manage/_member_label_suffix.html.twig` | FR-UI-020 |
@@ -833,35 +829,35 @@ Grouped by feature; each row names the semantic requirement of [`spec.md`](spec.
 | `Sync/File/RemoteFileFetcher.php` | FR-SYNC-012 |
 | `Sync/File/UrlGuardInterface.php` | FR-SYNC-012 |
 | `Sync/Hook/AttributionOnlyPolicyInterface.php` | FR-SYNC-011 |
-| `Sync/Hook/AttributionOnlyResolverInterface.php` | FR-SYNC-011 |
+| `Port/Internal/AttributionOnlyResolverInterface.php` | FR-SYNC-011 |
 | `Sync/Hook/ConnectionChoice.php` | FR-SYNC-011 |
 | `Sync/Hook/ConnectionCreatorActorResolver.php` | FR-SYNC-011 |
 | `Sync/Hook/DefaultSyncPersonResolver.php` | FR-SYNC-011 |
 | `Sync/Hook/ImportedTimeEntryReceiverInterface.php` | FR-SYNC-011 |
-| `Sync/Hook/ImportedTimeEntrySinkInterface.php` | FR-SYNC-011 |
-| `Sync/Hook/InlineImageRewriterInterface.php` | FR-SYNC-011 |
+| `Port/Internal/ImportedTimeEntrySinkInterface.php` | FR-SYNC-011 |
+| `Port/Internal/InlineImageRewriterInterface.php` | FR-SYNC-011 |
 | `Sync/Hook/InlineSyncRunner.php` | FR-SYNC-011 |
 | `Sync/Hook/LimitRefusal.php` | FR-SYNC-011 |
 | `Sync/Hook/MapInlineImageRewriter.php` | FR-SYNC-011 |
 | `Sync/Hook/NullSyncLimitChecker.php` | FR-SYNC-011 |
 | `Sync/Hook/NullTaskAttachmentStorage.php` | FR-SYNC-011 |
 | `Sync/Hook/OwnerlessTimeEntryReceiverInterface.php` | FR-SYNC-011 |
-| `Sync/Hook/OwnerlessTimeEntrySinkInterface.php` | FR-SYNC-011 |
+| `Port/Internal/OwnerlessTimeEntrySinkInterface.php` | FR-SYNC-011 |
 | `Sync/Hook/PeopleInvitationInterface.php` | FR-SYNC-011 |
-| `Sync/Hook/ProviderCredentialResolverInterface.php` | FR-SYNC-011 |
+| `Port/Internal/ProviderCredentialResolverInterface.php` | FR-SYNC-011 |
 | `Sync/Hook/ProviderCredentialSourceInterface.php` | FR-SYNC-011 |
 | `Sync/Hook/StoredAttachment.php` | FR-SYNC-011 |
 | `Sync/Hook/SyncActorProviderInterface.php` | FR-SYNC-011 |
-| `Sync/Hook/SyncActorResolverInterface.php` | FR-SYNC-011 |
-| `Sync/Hook/SyncLimitCheckerInterface.php` | FR-SYNC-011 |
+| `Port/Internal/SyncActorResolverInterface.php` | FR-SYNC-011 |
+| `Port/Internal/SyncLimitCheckerInterface.php` | FR-SYNC-011 |
 | `Sync/Hook/SyncPersonDirectoryInterface.php` | FR-SYNC-011 |
 | `Sync/Hook/SyncPersonMatch.php` | FR-SYNC-011 |
-| `Sync/Hook/SyncPersonResolverInterface.php` | FR-SYNC-011 |
+| `Port/Internal/SyncPersonResolverInterface.php` | FR-SYNC-011 |
 | `Sync/Hook/SyncQuotaPolicyInterface.php` | FR-SYNC-011 |
 | `Sync/Hook/SyncRunnerInterface.php` | FR-SYNC-011 |
 | `Sync/Hook/SyncedFileStorageInterface.php` | FR-SYNC-011 |
 | `Sync/Hook/SyncedImageRewriterInterface.php` | FR-SYNC-011 |
-| `Sync/Hook/TaskAttachmentStorageInterface.php` | FR-SYNC-011 |
+| `Port/Internal/TaskAttachmentStorageInterface.php` | FR-SYNC-011 |
 | `Sync/Http/ProviderHttpClient.php` | FR-SYNC-010 |
 | `Sync/Http/SleeperInterface.php` | FR-SYNC-010 |
 | `Sync/Http/SystemSleeper.php` | FR-SYNC-010 |
@@ -945,7 +941,7 @@ Grouped by feature; each row names the semantic requirement of [`spec.md`](spec.
 | `Template/TaskTemplatePermissionInterface.php` | FR-TPL-002 |
 | `Template/TaskTemplateScope.php` | FR-TPL-002 |
 | `Template/TaskTemplateSnapshot.php` | FR-TPL-002 |
-| `Tenancy/FirstBoardProvisionerInterface.php` | FR-PORT-001 |
+| `Port/Internal/FirstBoardProvisionerInterface.php` | FR-PORT-001 |
 | `Tenancy/FirstBoardProvisioningInterface.php` | FR-PORT-001 |
 | `Transition/AllowAllColumnTransitionPolicy.php` | FR-TRANS-001 |
 | `Transition/ColumnTransitionPolicyInterface.php` | FR-TRANS-001 |
@@ -974,7 +970,7 @@ Grouped by feature; each row names the semantic requirement of [`spec.md`](spec.
 | `ValueObject/TaskTextQuery.php` | FR-TRANS-001 |
 | `View/NullTaskBoardDefaultViewResolver.php` | FR-PORT-001 |
 | `View/TaskBoardDefaultViewPolicyInterface.php` | FR-PORT-001 |
-| `View/TaskBoardDefaultViewResolverInterface.php` | FR-PORT-001 |
+| `Port/Internal/TaskBoardDefaultViewResolverInterface.php` | FR-PORT-001 |
 
 ## Additions 2.21-2.30 (locks, menus, API conflicts, questions, calendar sources, header search, host ports)
 
@@ -1087,8 +1083,6 @@ Grouped by feature; each row names the semantic requirement of [`spec.md`](spec.
 | `Search/Header/TaskSearchExtras.php` | FR-SRCH-010 |
 | `Search/Header/TaskTextMatch.php` | FR-SRCH-010 |
 | `Search/Header/TaskTextMatchFunction.php` | FR-SRCH-010 |
-| `Doctrine/RolledBackHostRows.php` | FR-ORM-011 |
-| `Doctrine/TaskBoardHostFlushProbe.php` | FR-ORM-011 |
 | `Doctrine/HostCommitEventRelay.php` | FR-ORM-011 |
 | `Bridge/TimeTrack/TaskBoardTaskDirectory.php` | FR-TT-001 |
 | `Bridge/TimeTrack/TaskBoardTeamDirectory.php` | FR-TT-001 |
@@ -1120,22 +1114,54 @@ Grouped by feature; each row names the semantic requirement of [`spec.md`](spec.
 | `View/TaskView.php` | FR-ID-001 |
 | `View/Views.php` | FR-ID-001 |
 
+## Additions 2.31–3.0 (dialogs on demand, validators domain, edit-form revision lock, script banner, question counts, 3.0 port removal)
+
+Each row names the semantic requirement of [`spec.md`](spec.md#additions-231-30). In 3.0.0 the 22 entity-typed host
+interfaces moved to `@internal` seams under `Port/Internal/` (their rows above now name the new path, FR-ARCH-301), and
+`Bridge/TimeTrack/TaskBoardTaskProvider.php`, `Bridge/TimeTrack/TaskBoardTeamContextProvider.php`,
+`Doctrine/RolledBackHostRows.php`, `Doctrine/TaskBoardHostFlushProbe.php` and
+`Import/BoardAwareTaskImportUserResolverInterface.php` and `Resources/views/manage/_legacy_layout.html.twig` were
+removed (their rows are gone).
+
+| Source file | Requirement IDs |
+| --- | --- |
+| `DependencyInjection/Compiler/RemovedPortsPass.php` | FR-ARCH-301 |
+| `DependencyInjection/Compiler/TimeTrackScopePortPass.php` | FR-ARCH-302 |
+| `Question/TaskQuestionCountsInterface.php` | FR-QUEST-003 |
+| `Resources/assets/src/logger.ts` | FR-ASSET-011 |
+| `Resources/translations/validators.de.yaml` | FR-VAL-001 |
+| `Resources/translations/validators.en.yaml` | FR-VAL-001 |
+| `Resources/translations/validators.es.yaml` | FR-VAL-001 |
+| `Resources/translations/validators.fr.yaml` | FR-VAL-001 |
+| `Resources/translations/validators.it.yaml` | FR-VAL-001 |
+| `Resources/translations/validators.nl.yaml` | FR-VAL-001 |
+| `Resources/translations/validators.pt.yaml` | FR-VAL-001 |
+| `Resources/views/manage/_task_dependency_dialog.html.twig` | FR-UI-021 |
+| `Resources/views/manage/_task_question_dialog.html.twig` | FR-UI-021 |
+| `Resources/views/manage/_task_time_dialog.html.twig` | FR-UI-021 |
+| `Resources/views/manage/dialog/_cancel.html.twig` | FR-UI-021 |
+| `Resources/views/manage/dialog/fragment.html.twig` | FR-UI-021 |
+| `Resources/views/manage/dialog/page.html.twig` | FR-UI-021 |
+| `Service/TaskRevisionLockInterface.php` | FR-LOCK-002 |
+| `Support/TaskContentDigest.php` | FR-LOCK-002 |
+
 ## Coverage summary
 
 | Section | Rows |
 | --- | ---: |
-| PHP classes (`src/**/*.php`) | 182 |
+| PHP classes (`src/**/*.php`) | 180 |
 | Provider sync additions in 1.27.0 (`src/`) | 28 |
 | TypeScript & CSS (`src/Resources/assets/src/`) | 26 |
 | Legacy assets (`src/Resources/public/`) | 2 |
 | Twig views (`src/Resources/views/`) | 39 |
 | Config & translations | 9 |
-| Additions 1.23–2.20 (API, sync, ports, numbers, calendar, recurrence, folders, fields, templates) | 645 |
-| Additions 2.21-2.30 (locks, menus, API conflicts, questions, calendar sources, header search, host ports) | 137 |
-| **Rows in this file** | **1068** |
+| Additions 1.23–2.20 (API, sync, ports, numbers, calendar, recurrence, folders, fields, templates) | 643 |
+| Additions 2.21-2.30 (locks, menus, API conflicts, questions, calendar sources, header search, host ports) | 135 |
+| Additions 2.31–3.0 (dialogs on demand, validators domain, edit-form revision lock, script banner, question counts, 3.0 port removal) | 19 |
+| **Rows in this file** | **1081** |
 
-Production files under `src/` (everything tracked except co-located Vitest files): **1058**, all named in this inventory (one row per file; a few rows name a file by directory glob in the older sections).
+Production files under `src/` (everything tracked except co-located Vitest files): **1071**, all named in this inventory (one row per file; a few rows name a file by directory glob in the older sections).
 
-Excluded (23 co-located Vitest files, test artifacts): `Resources/assets/src/anchor-utils.test.ts`, `Resources/assets/src/ask-confirm.test.ts`, `Resources/assets/src/board-create-steps-controller.test.ts`, `Resources/assets/src/board-openers.test.ts`, `Resources/assets/src/calendar-utils.test.ts`, `Resources/assets/src/column-collapse.test.ts`, `Resources/assets/src/css-vars.test.ts`, `Resources/assets/src/edit-column-current-icon.test.ts`, `Resources/assets/src/edit-column-delete-warning.test.ts`, `Resources/assets/src/edit-column-humans-only.test.ts`, `Resources/assets/src/filter-fold.test.ts`, `Resources/assets/src/gantt-scale.test.ts`, `Resources/assets/src/list-filter-utils.test.ts`, `Resources/assets/src/list-sort-utils.test.ts`, `Resources/assets/src/mention-utils.test.ts`, `Resources/assets/src/option-filter-utils.test.ts`, `Resources/assets/src/storage.test.ts`, `Resources/assets/src/sync-utils.test.ts`, `Resources/assets/src/task-board-css.test.ts`, `Resources/assets/src/task-menu-shared.test.ts`, `Resources/assets/src/task-nav-utils.test.ts`, `Resources/assets/src/task-questions.test.ts`, `Resources/assets/src/time-utils.test.ts`.
+Excluded (25 co-located Vitest files, test artifacts): `Resources/assets/src/anchor-utils.test.ts`, `Resources/assets/src/ask-confirm.test.ts`, `Resources/assets/src/board-create-steps-controller.test.ts`, `Resources/assets/src/board-openers.test.ts`, `Resources/assets/src/calendar-utils.test.ts`, `Resources/assets/src/column-collapse.test.ts`, `Resources/assets/src/css-vars.test.ts`, `Resources/assets/src/edit-column-current-icon.test.ts`, `Resources/assets/src/edit-column-delete-warning.test.ts`, `Resources/assets/src/edit-column-humans-only.test.ts`, `Resources/assets/src/filter-fold.test.ts`, `Resources/assets/src/gantt-scale.test.ts`, `Resources/assets/src/list-filter-utils.test.ts`, `Resources/assets/src/list-sort-utils.test.ts`, `Resources/assets/src/logger.test.ts`, `Resources/assets/src/mention-utils.test.ts`, `Resources/assets/src/option-filter-utils.test.ts`, `Resources/assets/src/storage.test.ts`, `Resources/assets/src/sync-utils.test.ts`, `Resources/assets/src/task-board-css.test.ts`, `Resources/assets/src/task-board.test.ts`, `Resources/assets/src/task-menu-shared.test.ts`, `Resources/assets/src/task-nav-utils.test.ts`, `Resources/assets/src/task-questions.test.ts`, `Resources/assets/src/time-utils.test.ts`.
 
-Audit command: `git ls-files src | wc -l` → **1081** (2026-11-22, v2.30.0); `git ls-files src | grep -vc '\.test\.ts$'` → **1058** production files.
+Audit command: `git ls-files src | wc -l` → **1096** (2026-11-24, 3.0.0); `git ls-files src | grep -vc '\.test\.ts$'` → **1071** production files.
