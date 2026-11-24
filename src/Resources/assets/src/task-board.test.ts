@@ -11,6 +11,7 @@ vi.mock('@hotwired/stimulus', async (importOriginal) => {
 
 describe('task-board entry', () => {
     afterEach(() => {
+        delete (globalThis as { __NOWO_SCRIPT_LOADED__?: Set<string> }).__NOWO_SCRIPT_LOADED__;
         vi.unstubAllGlobals();
         vi.restoreAllMocks();
         vi.resetModules();
@@ -25,6 +26,17 @@ describe('task-board entry', () => {
         expect(lines).toHaveLength(1);
         expect(lines[0]).toContain('[task-board] script loaded');
         expect(lines[0]).not.toContain('build: ');
+    });
+
+    it('logs once when the entry is evaluated twice (Turbo visit, second copy)', async () => {
+        const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+        await import('./task-board');
+        vi.resetModules();
+        await import('./task-board');
+
+        const lines = log.mock.calls.map((call) => String(call[0])).filter((line) => line.includes('script loaded'));
+        expect(lines).toHaveLength(1);
     });
 
     it('includes the injected build id (also stamped on the root element)', async () => {
