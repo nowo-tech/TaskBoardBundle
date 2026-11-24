@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\Sync\People;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Normalizer;
+use Nowo\TaskBoardBundle\Doctrine\TaskBoardEntityManager;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Port\Internal\PeopleInviterInterface;
@@ -63,6 +64,9 @@ final readonly class PeopleMappingService
         private ?EventDispatcherInterface $eventDispatcher = null,
         private int $candidateLimit = 200,
         private float $reapplySeconds = 10.0,
+        // Since 3.0.0 (audit ZAS-W1): TaskBoard rows the application's manager holds are read again by id at each write
+        // entry (none: a service built by hand works on the rows it is given, as in 2.x).
+        private ?TaskBoardEntityManager $rows = null,
     ) {
     }
 
@@ -128,6 +132,8 @@ final readonly class PeopleMappingService
      */
     public function save(TaskSyncDirectory $directory, TaskBoard $board, array $choices, object $actor): PeopleMappingResult
     {
+        $directory = $this->own($directory);
+        $board     = $this->own($board);
         $this->directories->assertCanManage($directory, $actor, $board);
         $deadline   = microtime(true) + $this->reapplySeconds;
         $candidates = $this->candidates($board);
@@ -210,6 +216,8 @@ final readonly class PeopleMappingService
      */
     public function markUnmappedAsFormer(TaskSyncDirectory $directory, TaskBoard $board, object $actor): int
     {
+        $directory = $this->own($directory);
+        $board     = $this->own($board);
         $this->directories->assertCanManage($directory, $actor, $board);
         $decisions = [];
         foreach ($this->people->forDirectory($directory, PersonFilter::mappings(TaskSyncPersonMapping::Unmatched, TaskSyncPersonMapping::Suggested), self::MAX_BULK_PEOPLE) as $person) {
@@ -361,5 +369,17 @@ final readonly class PeopleMappingService
         $this->entityManager->flush();
 
         return $total;
+    }
+
+    /**
+     * @template T of object
+     *
+     * @param T $row
+     *
+     * @return T
+     */
+    private function own(object $row): object
+    {
+        return $this->rows instanceof TaskBoardEntityManager ? $this->rows->attach($row) : $row;
     }
 }

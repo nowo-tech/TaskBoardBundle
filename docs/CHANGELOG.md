@@ -213,6 +213,12 @@ UPGRADING "To 3.0.0".
   copyChecked) and `Sync\TaskBoardSyncService` (link, updateStatusColumnMap, unlink, run, runLinked). `TaskBoardEraser`
   dispatches `TaskErasedEvent` (whose storage refs the host deletes) only after the flush that deleted the task
   succeeds: a failed erase no longer makes the host delete the files of a task that still exists.
+- Audit ZAS-W1 / ZAS-W2: the people and sync-field writes `TaskSyncPeopleReassigner` (reassign, cancelReassign),
+  `TaskSyncPeopleDirectoryService` (anonymise, markReviewed, applyMapping), `PeopleMappingService` (save,
+  markUnmappedAsFormer) and `SyncFieldValueEraser::eraseField()` read a person, directory, board or task the
+  application's manager holds again by id too, so an anonymisation or an erased field line is really written before its
+  audit event or count; `TaskImportOrchestrator::import()` re-reads the board and parent task it is given. A service
+  built by hand without the manager keeps the 2.x behaviour.
 - Audit ZAS-V2: a TaskBoard row the application persisted but did not flush is refused as `… not saved yet. Flush it
   first …` instead of `… no longer exists`.
 - Audit ZAS-3: with TimeTrack 2.0, a TimeTrack scope port that is not served as `TimesheetScopePolicyInterface` fails

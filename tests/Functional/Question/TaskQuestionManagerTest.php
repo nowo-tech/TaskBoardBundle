@@ -80,6 +80,27 @@ final class TaskQuestionManagerTest extends QuestionTestCase
         self::assertSame([$this->subject($this->bob)], $event->question->subjectIds());
     }
 
+    /** Since 3.0.0 (audit ZAS-W2): a task and a question the application's manager holds are written through TaskBoard's copies. */
+    public function testAskingAndWithdrawingOnRowsTheApplicationHoldsIsWritten(): void
+    {
+        $host = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $host);
+        $hostTask = $host->find(Task::class, $this->task->getId());
+        self::assertInstanceOf(Task::class, $hostTask);
+
+        $question     = $this->ask($hostTask);
+        $hostQuestion = $host->find(TaskQuestion::class, $question->getId());
+        self::assertInstanceOf(TaskQuestion::class, $hostQuestion);
+        $this->manager()->withdraw($this->owner, $hostQuestion, 'Not needed');
+
+        self::assertSame(TaskQuestionState::Open, $hostQuestion->getState(), 'the application\'s instance is unchanged');
+        $host->flush();
+        $this->em->clear();
+        $loaded = $this->query()->forTask($this->reloadTask());
+        self::assertCount(1, $loaded);
+        self::assertSame(TaskQuestionState::Withdrawn, $loaded[0]->getState());
+    }
+
     public function testTheInputIsCheckedBeforeAnythingIsWritten(): void
     {
         $bob   = $this->subject($this->bob);

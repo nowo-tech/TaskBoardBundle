@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Tests\Functional\Move;
 
 use DateTimeImmutable;
+use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Nowo\TaskBoardBundle\Copy\TaskCopier;
 use Nowo\TaskBoardBundle\Copy\TaskCopyOptions;
@@ -26,6 +27,8 @@ use Nowo\TaskBoardBundle\Sync\Field\SyncFieldValueEraser;
 use Nowo\TaskBoardBundle\Sync\View\SyncFieldViewProvider;
 use Nowo\TaskBoardBundle\Sync\View\SyncPeopleViewProvider;
 use Nowo\TaskBoardBundle\Tests\Functional\Sync\SyncFunctionalTestCase;
+
+use function count;
 
 /**
  * Spec 217, FR-012 and SC-005: a synced task moved off its board is detached for good, a move waits for a running sync, and
@@ -230,6 +233,54 @@ final class TaskMoveSyncTest extends SyncFunctionalTestCase
             }
         }
         self::assertSame(['FK_3BD8DF5A4F92A733'], $names);
+    }
+
+    /** Since 3.0.0 (audit ZAS-W2): a task and target board the application's manager holds are moved through TaskBoard's copies. */
+    public function testMovingATaskTheApplicationHoldsIsWrittenAndLeavesItsInstanceAlone(): void
+    {
+        $task       = $this->task($this->board('From', ['To do', 'Done']), 'Held move');
+        $target     = $this->board('To', ['To do', 'Done']);
+        $hostTask   = $this->hostManager()->find(Task::class, $task->getId());
+        $hostTarget = $this->hostManager()->find(TaskBoard::class, $target->getId());
+        self::assertInstanceOf(Task::class, $hostTask);
+        self::assertInstanceOf(TaskBoard::class, $hostTarget);
+        $from = $hostTask->getBoard()->getId();
+
+        $this->mover()->move($hostTask, $hostTarget, [], $this->planner()->plan($hostTask, $hostTarget)->fingerprint, $this->owner);
+
+        self::assertSame($from, $hostTask->getBoard()->getId(), 'the application\'s instance is unchanged');
+        $this->em->clear();
+        $this->refreshOwner();
+        self::assertSame($target->getId(), $this->em->find(Task::class, $task->getId())?->getBoard()->getId());
+    }
+
+    /** Since 3.0.0 (audit ZAS-W2): copying a task the application's manager holds writes the copy once. */
+    public function testCopyingATaskTheApplicationHoldsIsWrittenOnce(): void
+    {
+        $board    = $this->board('Copied', ['To do', 'Done']);
+        $task     = $this->task($board, 'Held copy');
+        $hostTask = $this->hostManager()->find(Task::class, $task->getId());
+        self::assertInstanceOf(Task::class, $hostTask);
+        $before = count($hostTask->getBoard()->getTasks());
+        $copier = self::getContainer()->get(TaskCopier::class);
+        self::assertInstanceOf(TaskCopier::class, $copier);
+
+        $copy = $copier->copy($hostTask, new TaskCopyOptions(title: 'Held copy (copy)'), $this->owner);
+
+        self::assertSame($before, count($hostTask->getBoard()->getTasks()), 'the application\'s instance is unchanged');
+        $this->hostManager()->flush();
+        $this->em->clear();
+        $this->refreshOwner();
+        self::assertCount(1, $this->em->getRepository(Task::class)->findBy(['title' => 'Held copy (copy)']));
+        self::assertInstanceOf(Task::class, $this->em->find(Task::class, $copy->task->getId()));
+    }
+
+    private function hostManager(): EntityManagerInterface
+    {
+        $host = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $host);
+
+        return $host;
     }
 
     private function planner(): TaskMovePlanner
