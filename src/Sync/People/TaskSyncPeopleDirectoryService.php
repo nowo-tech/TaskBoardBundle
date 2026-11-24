@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\Sync\People;
 
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
+use Nowo\TaskBoardBundle\Doctrine\TaskBoardEntityManager;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Port\Internal\AttributionOnlyResolverInterface;
@@ -50,6 +51,9 @@ final readonly class TaskSyncPeopleDirectoryService
         private TaskBoardResourceAccessChecker $accessChecker,
         private ?EventDispatcherInterface $eventDispatcher = null,
         private ClockInterface $clock = new NativeClock(),
+        // Since 3.0.0 (audit ZAS-W1): TaskBoard rows the application's manager holds are read again by id at each write
+        // entry (none: a service built by hand works on the rows it is given, as in 2.x).
+        private ?TaskBoardEntityManager $rows = null,
     ) {
     }
 
@@ -202,8 +206,10 @@ final readonly class TaskSyncPeopleDirectoryService
      */
     public function applyMapping(TaskSyncDirectory $directory, array $decisions, object $actor, ?TaskBoard $draftBoard = null): array
     {
-        $boards  = $this->assertCanManage($directory, $actor, $draftBoard);
-        $changed = [];
+        $directory  = $this->own($directory);
+        $draftBoard = $draftBoard instanceof TaskBoard ? $this->own($draftBoard) : null;
+        $boards     = $this->assertCanManage($directory, $actor, $draftBoard);
+        $changed    = [];
         foreach ($decisions as $decision) {
             $person = $this->people->findPerson($decision->personId);
             if (!$person instanceof TaskSyncPerson || $person->getDirectory()->getId() !== $directory->getId()) {
@@ -244,6 +250,8 @@ final readonly class TaskSyncPeopleDirectoryService
     /** The People step was saved: the first import may run (`SyncOptions::requirePeopleMapping`). */
     public function markReviewed(TaskSyncDirectory $directory, object $actor, ?TaskBoard $draftBoard = null): void
     {
+        $directory  = $this->own($directory);
+        $draftBoard = $draftBoard instanceof TaskBoard ? $this->own($draftBoard) : null;
         $this->assertCanManage($directory, $actor, $draftBoard);
         $directory->markReviewed($this->managed($actor), $this->clock->now());
         $this->entityManager->flush();
@@ -261,6 +269,7 @@ final readonly class TaskSyncPeopleDirectoryService
     /** "Forget this person": name and e-mail cleared; references and the mapping stay. */
     public function anonymise(TaskSyncPerson $person, object $actor): void
     {
+        $person = $this->own($person);
         $this->assertCanManage($person->getDirectory(), $actor, null);
         $this->forget($person, SyncUser::id($actor));
         $this->entityManager->flush();
@@ -408,5 +417,17 @@ final readonly class TaskSyncPeopleDirectoryService
         } catch (Throwable) {
             return $user;
         }
+    }
+
+    /**
+     * @template T of object
+     *
+     * @param T $row
+     *
+     * @return T
+     */
+    private function own(object $row): object
+    {
+        return $this->rows instanceof TaskBoardEntityManager ? $this->rows->attach($row) : $row;
     }
 }

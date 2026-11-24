@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Tests\Functional\Field;
 
 use DateTimeImmutable;
+use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Api\Operation\TaskApiReadOperations;
 use Nowo\TaskBoardBundle\Api\TaskApiLevel;
 use Nowo\TaskBoardBundle\Api\TaskApiPrincipal;
 use Nowo\TaskBoardBundle\Api\TaskApiWhere;
+use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskChangeHistory;
 use Nowo\TaskBoardBundle\Entity\TaskCustomField;
@@ -294,6 +296,31 @@ final class CustomFieldsTest extends ApiTestCase
         sort($titles);
 
         return $titles;
+    }
+
+    /** Since 3.0.0 (audit ZAS-W2): a task and a field the application's manager holds are written through TaskBoard's copies. */
+    public function testValuesAndFieldsTheApplicationHoldsAreWritten(): void
+    {
+        $fields = $this->fields();
+        $field  = $fields->define($this->owner, $this->board, null, 'Held field', CustomFieldType::Text);
+        $task   = $this->task($this->board, 'Held value');
+        $host   = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $host);
+        $hostTask  = $host->find(Task::class, $task->getId());
+        $hostField = $host->find(TaskCustomField::class, $field->getId());
+        self::assertInstanceOf(Task::class, $hostTask);
+        self::assertInstanceOf(TaskCustomField::class, $hostField);
+
+        $fields->setField($hostTask, $field->getId(), 'written', $this->owner);
+        $fields->update($this->owner, $hostField, 'Renamed field', null, $hostField->getPosition());
+
+        self::assertSame('Held field', $hostField->getName(), 'the application\'s instance is unchanged');
+        $host->flush();
+        $this->em->clear();
+        self::assertSame('Renamed field', $fields->find($field->getId())?->getName());
+        $values = $fields->valuesOf([$task->getId()])[$task->getId()] ?? [];
+        self::assertCount(1, $values);
+        self::assertSame('written', $fields->display($values[0]));
     }
 
     private function fields(): TaskCustomFieldManager

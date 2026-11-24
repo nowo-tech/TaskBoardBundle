@@ -11,6 +11,7 @@ use Doctrine\Persistence\ManagerRegistry;
 use InvalidArgumentException;
 use LogicException;
 use Nowo\TaskBoardBundle\Doctrine\RecoveringFlusher;
+use Nowo\TaskBoardBundle\Doctrine\TaskBoardEntityManager;
 use Nowo\TaskBoardBundle\Doctrine\TransactionRollback;
 use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
@@ -109,6 +110,9 @@ final readonly class TaskImportOrchestrator
         // Since 2.20.0 (audit PX-M2): a matched task's parent changes through the port, on locked, committed rows (the
         // rules and the locks of the Task API); none (a hand-built orchestrator): the loaded tree is checked.
         private ?TaskReparenterInterface $reparenter = null,
+        // Since 3.0.0 (audit ZAS-W2): TaskBoard rows the application's manager holds are read again by id at each write
+        // entry (none: a service built by hand works on the rows it is given, as in 2.x).
+        private ?TaskBoardEntityManager $rows = null,
     ) {
     }
 
@@ -121,7 +125,9 @@ final readonly class TaskImportOrchestrator
         TaskImportOptions $options = new TaskImportOptions(),
         ?Task $parentTask = null,
     ): TaskImportResult {
-        $context = [
+        $board      = $this->own($board);
+        $parentTask = $parentTask instanceof Task ? $this->own($parentTask) : null;
+        $context    = [
             'bundle'   => 'nowo_task_board',
             'board_id' => $board->getId(),
             'task_id'  => $parentTask?->getId(),
@@ -895,5 +901,17 @@ final readonly class TaskImportOrchestrator
         if (ColumnTypes::isDone($column, ColumnTypes::ordered($board))) {
             $task->markCompleted();
         }
+    }
+
+    /**
+     * @template T of object
+     *
+     * @param T $row
+     *
+     * @return T
+     */
+    private function own(object $row): object
+    {
+        return $this->rows instanceof TaskBoardEntityManager ? $this->rows->attach($row) : $row;
     }
 }

@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\Sync\People;
 
 use DateInterval;
 use Doctrine\ORM\EntityManagerInterface;
+use Nowo\TaskBoardBundle\Doctrine\TaskBoardEntityManager;
 use Nowo\TaskBoardBundle\Doctrine\TaskBoardSavepoint;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
@@ -69,6 +70,9 @@ final readonly class TaskSyncPeopleReassigner
         private ?TaskBoardUsers $users = null,
         // Since 2.23.0 (audit TE-L2): with task_questions.enabled, the user's questions, answers and recipient rows too.
         private ?TaskQuestionManager $questions = null,
+        // Since 3.0.0 (audit ZAS-W1): TaskBoard rows the application's manager holds are read again by id at each write
+        // entry (none: a service built by hand works on the rows it is given, as in 2.x).
+        private ?TaskBoardEntityManager $rows = null,
     ) {
         $this->timeEntries = $timeEntries ?? new TaskTimeEntrySnapshotPurger($entityManager);
     }
@@ -82,6 +86,7 @@ final readonly class TaskSyncPeopleReassigner
      */
     public function reassign(TaskSyncPerson $person, ?object $newUser, object $actor, ?int $batchSize = null, ?ReassignCursor $cursor = null): ReassignReport
     {
+        $person    = $this->own($person);
         $directory = $person->getDirectory();
         $boards    = $this->directories->assertCanManage($directory, $actor, null);
         if (!$cursor instanceof ReassignCursor) {
@@ -97,6 +102,7 @@ final readonly class TaskSyncPeopleReassigner
             }
             // A re-association left unfinished (worker restart) resumes under its id; the walk is idempotent.
             $cursor = new ReassignCursor($pending ?? TaskSyncRun::newId(), SyncUser::id($person->getMappedUser()));
+            // @igor-ignore - Request data: the row the caller passed, or TaskBoard's own copy of it (own(), audit ZAS-W1); not service state.
             $person->setPendingReassign($cursor->reassignId, $newUser, $newUser === null);
             $mapping = $newUser === null ? TaskSyncPersonMapping::External : TaskSyncPersonMapping::Manual;
             if ($person->getMapping() !== $mapping || !SyncUser::same($person->getMappedUser(), $newUser)) {
@@ -115,6 +121,7 @@ final readonly class TaskSyncPeopleReassigner
 
         $report = $this->walk($person, $target, $actor, $this->people->connectionsOf($directory), $batchSize, $cursor);
         if ($report->isDone()) {
+            // @igor-ignore - Request data: the row the caller passed, or TaskBoard's own copy of it (own(), audit ZAS-W1); not service state.
             $person->setPendingReassign(null, null, false);
             $this->entityManager->flush();
             $this->eventDispatcher?->dispatch(new SyncPersonReassignedEvent($directory->getId(), $person->getId(), $cursor->previousUserId, SyncUser::id($target), SyncUser::id($actor), $cursor->reassignId, $report), TaskBoardEvents::SYNC_PERSON_REASSIGNED);
@@ -130,7 +137,9 @@ final readonly class TaskSyncPeopleReassigner
      */
     public function cancelReassign(TaskSyncPerson $person, object $actor): void
     {
+        $person = $this->own($person);
         $this->directories->assertCanManage($person->getDirectory(), $actor, null);
+        // @igor-ignore - Request data: the row the caller passed, or TaskBoard's own copy of it (own(), audit ZAS-W1); not service state.
         $person->setPendingReassign(null, null, false);
         $this->entityManager->flush();
     }
@@ -338,5 +347,17 @@ final readonly class TaskSyncPeopleReassigner
         }
 
         return $report->withCursor(null);
+    }
+
+    /**
+     * @template T of object
+     *
+     * @param T $row
+     *
+     * @return T
+     */
+    private function own(object $row): object
+    {
+        return $this->rows instanceof TaskBoardEntityManager ? $this->rows->attach($row) : $row;
     }
 }

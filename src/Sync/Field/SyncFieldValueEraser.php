@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Sync\Field;
 use Doctrine\ORM\EntityManagerInterface;
 use Generator;
 use InvalidArgumentException;
+use Nowo\TaskBoardBundle\Doctrine\TaskBoardEntityManager;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskDocument;
@@ -59,6 +60,9 @@ final readonly class SyncFieldValueEraser
         private EntityManagerInterface $entityManager,
         private SyncFieldSuppression $suppression,
         private ClockInterface $clock = new NativeClock(),
+        // Since 3.0.0 (audit ZAS-W1): TaskBoard rows the application's manager holds are read again by id at each write
+        // entry (none: a service built by hand works on the rows it is given, as in 2.x).
+        private ?TaskBoardEntityManager $rows = null,
     ) {
     }
 
@@ -103,6 +107,7 @@ final readonly class SyncFieldValueEraser
      */
     public function eraseField(Task $task, string $fieldName): int
     {
+        $task  = $this->own($task);
         $query = $this->entityManager->createQueryBuilder()
             ->select('v.id AS id', 'v.value AS value')
             ->from(TaskSyncFieldValue::class, 'v')->join(TaskSyncField::class, 'f', 'WITH', 'f = v.field')
@@ -336,5 +341,17 @@ final readonly class SyncFieldValueEraser
                 }
             }
         } while (count($page) === self::PAGE);
+    }
+
+    /**
+     * @template T of object
+     *
+     * @param T $row
+     *
+     * @return T
+     */
+    private function own(object $row): object
+    {
+        return $this->rows instanceof TaskBoardEntityManager ? $this->rows->attach($row) : $row;
     }
 }

@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\Tests\Functional\Sync;
 
 use DateInterval;
 use DateTimeImmutable;
+use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
@@ -494,6 +495,33 @@ final class BeaconAdoption129Test extends SyncPeopleFunctionalTestCase
         $eraser = self::getContainer()->get(SyncFieldValueEraser::class);
         self::assertInstanceOf(SyncFieldValueEraser::class, $eraser);
         self::assertSame(1, $eraser->eraseField($this->taskTitled('One'), 'Contact'));
+    }
+
+    /** Since 3.0.0 (audit ZAS-W1): a task the application's manager holds has its document line really erased. */
+    public function testEraseByTaskAndFieldOnATaskTheApplicationHoldsIsWritten(): void
+    {
+        $board = $this->boardWithColumns('To do');
+        $this->put(new RemoteTask(
+            task: new ImportedTaskDto(title: 'One', externalId: 't1', status: 'To do', priority: TaskPriority::Normal, hasPriority: false),
+            remoteUpdatedAt: new DateTimeImmutable('@1790000001'),
+            customFieldsText: "- **Contact**: zeb@people.test\n- **Other**: keep",
+        ));
+        $this->sync($board);
+        $host = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $host);
+        $hostTask = $host->find(Task::class, $this->taskTitled('One')->getId());
+        self::assertInstanceOf(Task::class, $hostTask);
+        $eraser = self::getContainer()->get(SyncFieldValueEraser::class);
+        self::assertInstanceOf(SyncFieldValueEraser::class, $eraser);
+
+        self::assertSame(1, $eraser->eraseField($hostTask, 'Contact'));
+
+        $this->em->clear();
+        $this->refreshOwner();
+        foreach ($this->taskTitled('One')->getDocuments() as $document) {
+            self::assertStringNotContainsString('zeb@', $document->getContent(), 'the erased line is written');
+        }
+        self::assertSame(0, $eraser->eraseField($this->taskTitled('One'), 'Contact'), 'nothing left');
     }
 
     /** 4. Saving "Not mapped" is a decision: the summary's count falls; the person can still match later. */

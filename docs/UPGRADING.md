@@ -320,17 +320,22 @@ to check). What breaks in code that worked in 2.x without the option:
     `BoardColumnManager`, `TaskMemberAssigner`, `TaskTimeLogger`, `TaskDependencyManager`, `TaskLinkAttacher`,
     `TaskCommentManager`, `TaskBoardEditor`, `TaskTimeBillableService`, `ColumnSetManager` (applyToBoard, delete),
     `TaskBoardEraser`, `TaskQuestionManager`, `TaskCustomFieldManager`, `TaskRecurrenceManager`, `TaskTemplateManager`,
-    `TaskMover`, `TaskBoardFolderManager`, `BoardConfigurationApplier`, `BoardColumnsApplier`, `TaskCopier` and the sync
-    service (`TaskBoardSyncService`) read it again by id at their entry and write TaskBoard's own copy: your instance
-    and its collections are never changed (so your next `flush()` neither fails on TaskBoard's new row nor writes it),
-    and your instance does not show TaskBoard's change until you load it again. A row that no longer exists is refused
-    (`… no longer exists`), one you persisted but did not flush too (`… not saved yet. Flush it first …`);
-  - any other TaskBoard service (the sync writers, import, the folder restructurer, ...) works by id or on rows it loads
-    itself: pass ids (`TaskCommandsInterface`, `TaskBoardQueryInterface`, `TaskBoardRestructurer`) or rows from
-    TaskBoard's repositories. Handed to a write that persists it, your row fails with `TaskBoard: the … handed to
-    TaskBoard was loaded through the application's entity manager …` instead of a duplicate INSERT; after that
-    exception, `$entityManager->refresh()` or drop the instance before you flush your manager (the service may have
-    changed it in memory before the refusal);
+    `TaskMover`, `TaskBoardFolderManager`, `BoardConfigurationApplier`, `BoardColumnsApplier`, `TaskCopier`,
+    `TaskImportOrchestrator` (the board and parent task you pass), the sync service (`TaskBoardSyncService`) and the
+    people services (`TaskSyncPeopleDirectoryService`, `TaskSyncPeopleReassigner`, `PeopleMappingService`,
+    `SyncFieldValueEraser::eraseField()`) read it again by id at their entry and write TaskBoard's own copy: your
+    instance and its collections are never changed (so your next `flush()` neither fails on TaskBoard's new row nor
+    writes it), and your instance does not show TaskBoard's change until you load it again. A row that no longer exists
+    is refused (`… no longer exists`), one you persisted but did not flush too (`… not saved yet. Flush it first …`);
+  - a service you build by hand (`new TaskManager(...)` and the like, without the autowired `?TaskBoardEntityManager
+    $rows` argument, null by default) keeps the 2.x behaviour: it works on the instances you pass and does not read them
+    again;
+  - any other TaskBoard service (the sync writers, `ImportedTaskUpdater`, the folder restructurer, ...) works by id or
+    on rows TaskBoard loaded itself: pass ids (`TaskCommandsInterface`, `TaskBoardQueryInterface`,
+    `TaskBoardRestructurer`) or rows from TaskBoard's repositories. Handed to a write that persists it, your row fails
+    with `TaskBoard: the … handed to TaskBoard was loaded through the application's entity manager …` instead of a
+    duplicate INSERT; after that exception, `$entityManager->refresh()` or drop the instance before you flush your
+    manager (the service may have changed it in memory before the refusal);
   - set on a to-one association of a new TaskBoard row, it is replaced by TaskBoard's reference to the same id;
   - your own changes to it stay pending in your manager and are written by your `flush()`, never by TaskBoard.
 - **`TASK_ERASED` after the flush (audit ZAS-V1).** `TaskBoardEraser` now dispatches each `TaskErasedEvent` after the
