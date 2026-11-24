@@ -230,6 +230,14 @@ UPGRADING "To 3.0.0".
   manual entries to nothing. CI: a job runs the suite against TimeTrack 2.0.
 - `Number\TaskNumberBackfiller`: the `$logger` argument (2.27, for the removed mode) is ignored (deprecated, removed in
   4.0).
+- Code style (REQ-CS-009): the PHP-CS-Fixer ruleset is `@PER-CS` + `@PER-CS:risky` instead of `@PSR12` (`@Symfony` and
+  the house overrides stay; the fixer changes no file). The Flex-managed `demo/*/config/bundles.php` and
+  `reference.php` are excluded from the finder.
+
+### Fixed
+
+- Browser console (REQ-ASSETS-005): the `📦 [task-board] script loaded, build: …` line is printed once per page, also
+  when the script runs twice (a Turbo visit, two copies of the bundle).
 
 ### Kept
 
