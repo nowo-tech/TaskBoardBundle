@@ -10,6 +10,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Copy\TaskColumnRule;
 use Nowo\TaskBoardBundle\Copy\TaskCopier;
 use Nowo\TaskBoardBundle\Copy\TaskCopyOptions;
+use Nowo\TaskBoardBundle\Doctrine\TaskBoardEntityManager;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Exception\TaskCopyRefusedException;
@@ -58,6 +59,9 @@ final readonly class TaskRecurrenceManager
         private bool $syncEnabled = false,
         // Since audit IC-I3.
         private ?TaskEventDeferral $events = null,
+        // Since 3.0.0 (audit ZAS-V1): TaskBoard rows the application's manager holds are read again by id at each write
+        // entry (none: a service built by hand works on the rows it is given, as in 2.x).
+        private ?TaskBoardEntityManager $rows = null,
     ) {
     }
 
@@ -103,6 +107,7 @@ final readonly class TaskRecurrenceManager
      */
     public function create(Task $task, TaskRecurrenceRule $rule, object $author, bool $nextOnCompletion = false, int $leadDays = 1, bool $copySubtasks = true, bool $copyMembers = true): TaskRecurrence
     {
+        $task = $this->own($task);
         $this->refuse($task, $copySubtasks);
         if ($this->seriesOf($task) instanceof TaskRecurrence) {
             throw new TaskCopyRefusedException('already_recurring');
@@ -127,6 +132,7 @@ final readonly class TaskRecurrenceManager
      */
     public function update(TaskRecurrence $series, TaskRecurrenceRule $rule, bool $nextOnCompletion, int $leadDays, bool $copySubtasks, bool $copyMembers): void
     {
+        $series = $this->own($series);
         $latest = $series->getLatestTask();
         if ($latest instanceof Task) {
             $this->refuse($latest, $copySubtasks);
@@ -140,7 +146,9 @@ final readonly class TaskRecurrenceManager
     /** Nothing is created while paused. */
     public function pause(TaskRecurrence $series, string $reason = TaskRecurrence::REASON_MANUAL): void
     {
+        $series = $this->own($series);
         if ($series->isActive()) {
+            // @igor-ignore - Request data: the row the caller passed, or TaskBoard's own copy of it (own(), audit ZAS-V1); not service state.
             $series->setStatus(TaskRecurrence::STATUS_PAUSED, $reason);
             $this->entityManager->flush();
         }
@@ -152,9 +160,11 @@ final readonly class TaskRecurrenceManager
      */
     public function resume(TaskRecurrence $series, object $actor): void
     {
+        $series = $this->own($series);
         if ($series->getStatus() !== TaskRecurrence::STATUS_PAUSED) {
             return;
         }
+        // @igor-ignore - Request data: the row the caller passed, or TaskBoard's own copy of it (own(), audit ZAS-V1); not service state.
         $series->setAuthor($actor)->setStatus(TaskRecurrence::STATUS_ACTIVE);
         $this->schedule($series, $this->today()->modify('-1 day'));
         $this->entityManager->flush();
@@ -163,6 +173,8 @@ final readonly class TaskRecurrenceManager
     /** Stops the series for good; its tasks stay. */
     public function stop(TaskRecurrence $series): void
     {
+        $series = $this->own($series);
+        // @igor-ignore - Request data: the row the caller passed, or TaskBoard's own copy of it (own(), audit ZAS-V1); not service state.
         $series->setStatus(TaskRecurrence::STATUS_STOPPED);
         $this->entityManager->flush();
     }
@@ -173,7 +185,9 @@ final readonly class TaskRecurrenceManager
      */
     public function skip(TaskRecurrence $series, ?string $date = null): bool
     {
+        $series = $this->own($series);
         if ($series->rule()->mode === TaskRecurrenceRule::MODE_AFTER_COMPLETION) {
+            // @igor-ignore - Request data: the row the caller passed, or TaskBoard's own copy of it (own(), audit ZAS-V1); not service state.
             $series->setSkipNext(true);
             $this->entityManager->flush();
 
@@ -193,7 +207,9 @@ final readonly class TaskRecurrenceManager
     /** Undoes a skip while that date's creation time has not come. False otherwise. */
     public function unskip(TaskRecurrence $series, ?string $date = null): bool
     {
+        $series = $this->own($series);
         if ($series->rule()->mode === TaskRecurrenceRule::MODE_AFTER_COMPLETION) {
+            // @igor-ignore - Request data: the row the caller passed, or TaskBoard's own copy of it (own(), audit ZAS-V1); not service state.
             $series->setSkipNext(false);
             $this->entityManager->flush();
 
@@ -293,6 +309,7 @@ final readonly class TaskRecurrenceManager
      */
     public function createOccurrence(TaskRecurrence $series, string $key, ?object $actor = null): ?Task
     {
+        $series = $this->own($series);
         $actor ??= $series->getAuthor();
         if (!$series->isActive() || $this->entityManager->getRepository(TaskOccurrence::class)->count(['recurrence' => $series, 'occurrenceKey' => $key]) > 0) {
             return null;
@@ -304,6 +321,7 @@ final readonly class TaskRecurrenceManager
         }
         $source = $this->source($series);
         if (!$source instanceof Task) {
+            // @igor-ignore - Request data: the row the caller passed, or TaskBoard's own copy of it (own(), audit ZAS-V1); not service state.
             $series->setStatus(TaskRecurrence::STATUS_ENDED);
             $this->entityManager->flush();
 
@@ -332,6 +350,7 @@ final readonly class TaskRecurrenceManager
                 $occurrence->setTask($copy);
                 $series->advance($copy);
                 if ($series->getReason() === TaskRecurrence::REASON_PLAN) {
+                    // @igor-ignore - Request data: the row the caller passed, or TaskBoard's own copy of it (own(), audit ZAS-V1); not service state.
                     $series->setStatus(TaskRecurrence::STATUS_ACTIVE);
                 }
                 $this->schedule($series, $series->getMode() === TaskRecurrenceRule::MODE_FIXED ? $date : null);
@@ -356,7 +375,9 @@ final readonly class TaskRecurrenceManager
      */
     public function block(TaskRecurrence $series): void
     {
+        $series = $this->own($series);
         if ($series->isActive()) {
+            // @igor-ignore - Request data: the row the caller passed, or TaskBoard's own copy of it (own(), audit ZAS-V1); not service state.
             $series->setStatus(TaskRecurrence::STATUS_ACTIVE, TaskRecurrence::REASON_PLAN);
             $this->entityManager->flush();
         }
@@ -546,5 +567,17 @@ final readonly class TaskRecurrenceManager
     private function today(): DateTimeImmutable
     {
         return $this->clock->now()->setTime(0, 0);
+    }
+
+    /**
+     * @template T of object
+     *
+     * @param T $row
+     *
+     * @return T
+     */
+    private function own(object $row): object
+    {
+        return $this->rows instanceof TaskBoardEntityManager ? $this->rows->attach($row) : $row;
     }
 }

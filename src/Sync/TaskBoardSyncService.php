@@ -11,6 +11,7 @@ use Doctrine\Persistence\ManagerRegistry;
 use LogicException;
 use Nowo\TaskBoardBundle\Doctrine\BundleEntityDetacher;
 use Nowo\TaskBoardBundle\Doctrine\RecoveringFlusher;
+use Nowo\TaskBoardBundle\Doctrine\TaskBoardEntityManager;
 use Nowo\TaskBoardBundle\Doctrine\TransactionRollback;
 use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
 use Nowo\TaskBoardBundle\Entity\Task;
@@ -115,6 +116,9 @@ final readonly class TaskBoardSyncService
         private ?FirstImportFinisher $createdColumns = null,
         // Since 2.15.1 (audit OM TB-M1): reopens the manager a failed run closed (worker mode).
         private ?ManagerRegistry $managerRegistry = null,
+        // Since 3.0.0 (audit ZAS-V1): TaskBoard rows the application's manager holds are read again by id at each write
+        // entry (none: a service built by hand works on the rows it is given, as in 2.x).
+        private ?TaskBoardEntityManager $rows = null,
     ) {
     }
 
@@ -128,6 +132,7 @@ final readonly class TaskBoardSyncService
      */
     public function link(TaskBoard $board, TaskProviderInterface $provider, ProviderCredential $credential, RemoteContainer $container, object $actor, array $options = [], iterable $statusColumnMap = []): TaskBoardConnection
     {
+        $board = $this->own($board);
         if ($this->store->findConnection($board) instanceof TaskBoardConnection) {
             throw new LogicException('The board is already linked.');
         }
@@ -175,6 +180,7 @@ final readonly class TaskBoardSyncService
      */
     public function updateStatusColumnMap(TaskBoard $board, iterable $statusColumnMap, ?object $actor = null): ?TaskBoardConnection
     {
+        $board      = $this->own($board);
         $connection = $this->store->findConnection($board);
         if (!$connection instanceof TaskBoardConnection) {
             return null;
@@ -199,6 +205,7 @@ final readonly class TaskBoardSyncService
     /** Removes the link and its sync state; the tasks, their import links and the stored files stay. */
     public function unlink(TaskBoard $board, object $actor): void
     {
+        $board      = $this->own($board);
         $connection = $this->store->findConnection($board);
         if (!$connection instanceof TaskBoardConnection) {
             return;
@@ -258,6 +265,7 @@ final readonly class TaskBoardSyncService
      */
     public function runLinked(TaskBoard $board, SyncOptions $options): SyncReport
     {
+        $board      = $this->own($board);
         $connection = $this->store->findConnection($board);
         if (!$connection instanceof TaskBoardConnection) {
             return $this->bare($board, '', SyncStatus::Failed, 'not_linked');
@@ -299,6 +307,7 @@ final readonly class TaskBoardSyncService
      */
     public function run(TaskBoard $board, TaskProviderInterface $provider, ProviderCredential $credential, string $listId, SyncOptions $options, ?SyncCursor $resume = null): SyncReport
     {
+        $board = $this->own($board);
         // A caller may pass an actor detached by an earlier clear (e.g. an uninitialised proxy): the access check and
         // its BOARD_ACCESS_CHECK listeners get the managed instance, which they may read safely.
         $actor = $this->attached($options->actor);
@@ -758,5 +767,17 @@ final readonly class TaskBoardSyncService
         }
 
         return $report;
+    }
+
+    /**
+     * @template T of object
+     *
+     * @param T $row
+     *
+     * @return T
+     */
+    private function own(object $row): object
+    {
+        return $this->rows instanceof TaskBoardEntityManager ? $this->rows->attach($row) : $row;
     }
 }

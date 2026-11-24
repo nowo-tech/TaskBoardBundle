@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Service;
 
 use Doctrine\ORM\EntityManagerInterface;
+use Nowo\TaskBoardBundle\Doctrine\TaskBoardEntityManager;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
 use Nowo\TaskBoardBundle\Enum\TaskChangeType;
@@ -39,6 +40,9 @@ final readonly class TaskTimeBillableService
         private ?EventDispatcherInterface $eventDispatcher = null,
         // Since 2.12.0 (audit MV-B-L2): the lock check and the save in one transaction (null: one after the other).
         private ?EntityManagerInterface $entityManager = null,
+        // Since 3.0.0 (audit ZAS-V1): TaskBoard rows the application's manager holds are read again by id at each write
+        // entry (none: a service built by hand works on the rows it is given, as in 2.x).
+        private ?TaskBoardEntityManager $rows = null,
     ) {
     }
 
@@ -49,6 +53,7 @@ final readonly class TaskTimeBillableService
      */
     public function change(Task $task, string $entryId, object $actor, ?bool $billable): TaskTimeEntry
     {
+        $task  = $this->own($task);
         $entry = null;
         foreach ($task->getTimeEntries() as $candidate) {
             if ($candidate->getId() === $entryId) {
@@ -106,5 +111,17 @@ final readonly class TaskTimeBillableService
     private function format(?bool $billable): ?string
     {
         return $billable === null ? null : ($billable ? 'true' : 'false');
+    }
+
+    /**
+     * @template T of object
+     *
+     * @param T $row
+     *
+     * @return T
+     */
+    private function own(object $row): object
+    {
+        return $this->rows instanceof TaskBoardEntityManager ? $this->rows->attach($row) : $row;
     }
 }

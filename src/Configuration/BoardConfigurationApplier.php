@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Configuration;
 
 use InvalidArgumentException;
+use Nowo\TaskBoardBundle\Doctrine\TaskBoardEntityManager;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskBoardFolder;
 use Nowo\TaskBoardBundle\Entity\TaskCustomField;
@@ -48,6 +49,9 @@ final readonly class BoardConfigurationApplier
         private TaskBoardRestructurePolicyInterface $policy,
         private TaskBoardRepositoryInterface $boards,
         private BoardTemplatesConfigurationInterface $templates = new NoBoardTemplates(),
+        // Since 3.0.0 (audit ZAS-V1): TaskBoard rows the application's manager holds are read again by id at each write
+        // entry (none: a service built by hand works on the rows it is given, as in 2.x).
+        private ?TaskBoardEntityManager $rows = null,
     ) {
     }
 
@@ -61,6 +65,7 @@ final readonly class BoardConfigurationApplier
      */
     public function apply(object $actor, TaskBoard $board, BoardConfiguration $configuration, array $columnMap = [], bool $dropFieldValues = false, ?ColumnTransitionVia $via = null): void
     {
+        $board = $this->own($board);
         if (!$this->policy->mayRestructureBoard($actor, Snapshots::board($board))) {
             throw new TaskBoardRestructureRefusedException(TaskBoardRestructureRefusedException::NOT_ALLOWED);
         }
@@ -87,6 +92,7 @@ final readonly class BoardConfigurationApplier
             $this->applyFields($actor, $board, $configuration->fields, $dropFieldValues);
             $this->templates->apply(Snapshots::board($board), $configuration->templates);
             // Checked above: the prefix is valid.
+            // @igor-ignore - Request data: the row the caller passed, or TaskBoard's own copy of it (own(), audit ZAS-V1); not service state.
             $board->setNumberPrefix($configuration->numberPrefix);
         });
     }
@@ -212,5 +218,17 @@ final readonly class BoardConfigurationApplier
     private function columnKeys(array $columns): string
     {
         return implode("\n", array_map(static fn (BoardColumnSpec $column): string => $column->name . '|' . $column->type->value, $columns));
+    }
+
+    /**
+     * @template T of object
+     *
+     * @param T $row
+     *
+     * @return T
+     */
+    private function own(object $row): object
+    {
+        return $this->rows instanceof TaskBoardEntityManager ? $this->rows->attach($row) : $row;
     }
 }

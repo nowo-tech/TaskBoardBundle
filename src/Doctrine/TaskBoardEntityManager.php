@@ -313,7 +313,7 @@ final class TaskBoardEntityManager extends EntityManagerDecorator implements Res
      *
      * @param T $row
      *
-     * @throws LogicException when the row no longer exists
+     * @throws LogicException when the row is not saved yet (since audit ZAS-V2) or no longer exists
      *
      * @return T
      */
@@ -323,9 +323,14 @@ final class TaskBoardEntityManager extends EntityManagerDecorator implements Res
         if ($live->contains($row) || !TaskBoardManagerRegistry::isBundleEntity($row::class) || !$this->heldByApplication($row)) {
             return $row;
         }
+        $uow = $this->source()->getUnitOfWork();
+        // Since 3.0.0 (audit ZAS-V2): a row the application persisted but did not flush has no TaskBoard copy yet.
+        if ($uow->isScheduledForInsert($row)) {
+            throw new LogicException(sprintf('TaskBoard: the %s handed to TaskBoard is held by the application\'s entity manager "%s" and not saved yet. Flush it first, or create it through TaskBoard\'s services.', TaskBoardManagerRegistry::realClass($row::class), $this->sourceManagerName));
+        }
         $class = $live->getClassMetadata($row::class)->getName();
         /** @var T|null $own */
-        $own = $live->find($class, $this->source()->getUnitOfWork()->getEntityIdentifier($row));
+        $own = $live->find($class, $uow->getEntityIdentifier($row));
 
         return $own ?? throw new LogicException(sprintf('TaskBoard: the %s handed to TaskBoard (loaded through the application\'s entity manager "%s") no longer exists.', TaskBoardManagerRegistry::realClass($row::class), $this->sourceManagerName));
     }

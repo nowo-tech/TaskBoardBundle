@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Template;
 
 use Doctrine\ORM\EntityManagerInterface;
+use Nowo\TaskBoardBundle\Doctrine\TaskBoardEntityManager;
 use Nowo\TaskBoardBundle\Dto\TaskFormData;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
@@ -48,6 +49,9 @@ final readonly class TaskTemplateManager
         private EntityManagerInterface $entityManager,
         private TaskTemplatePermissionInterface $permission,
         private ClockInterface $clock = new NativeClock(),
+        // Since 3.0.0 (audit ZAS-V1): TaskBoard rows the application's manager holds are read again by id at each write
+        // entry (none: a service built by hand works on the rows it is given, as in 2.x).
+        private ?TaskBoardEntityManager $rows = null,
     ) {
     }
 
@@ -57,6 +61,7 @@ final readonly class TaskTemplateManager
      */
     public function createForBoard(object $actor, TaskBoard $board, TaskTemplateData $data): TaskTemplate
     {
+        $board = $this->own($board);
         $this->requireManage($actor, TaskTemplateScope::board(Snapshots::board($board)));
         [$name, $body, $tags, $column] = $this->checked($data, $board);
         if (count($this->boardTemplates($board)) >= self::MAX_PER_SCOPE) {
@@ -102,6 +107,7 @@ final readonly class TaskTemplateManager
      */
     public function update(object $actor, TaskTemplate $template, TaskTemplateData $data): void
     {
+        $template = $this->own($template);
         $this->requireManage($actor, $this->scopeOf($template));
         [$name, $body, $tags, $column, $columnName] = $this->checked($data, $template->getBoard());
 
@@ -114,6 +120,7 @@ final readonly class TaskTemplateManager
      */
     public function delete(object $actor, TaskTemplate $template): void
     {
+        $template = $this->own($template);
         $this->requireManage($actor, $this->scopeOf($template));
 
         $this->entityManager->remove($template);
@@ -151,6 +158,7 @@ final readonly class TaskTemplateManager
      */
     public function replaceAll(object $actor, ?TaskBoard $board, ?string $tenantKey, array $templates): array
     {
+        $board = $board instanceof TaskBoard ? $this->own($board) : null;
         if (!$board instanceof TaskBoard && $tenantKey !== null && !ExactKey::isUsable($tenantKey)) {
             throw new InvalidTaskTemplateException('tenant_key', 'The tenant key must be valid UTF-8 of 1 to 191 characters, without whitespace at its edges and without control or format characters.');
         }
@@ -435,5 +443,17 @@ final readonly class TaskTemplateManager
         usort($templates, static fn (TaskTemplate $a, TaskTemplate $b): int => [$a->getName(), $a->getId()] <=> [$b->getName(), $b->getId()]);
 
         return $templates;
+    }
+
+    /**
+     * @template T of object
+     *
+     * @param T $row
+     *
+     * @return T
+     */
+    private function own(object $row): object
+    {
+        return $this->rows instanceof TaskBoardEntityManager ? $this->rows->attach($row) : $row;
     }
 }

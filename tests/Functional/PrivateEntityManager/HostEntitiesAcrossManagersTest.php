@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\Tests\Functional\PrivateEntityManager;
 
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\Events;
 use LogicException;
 use Nowo\TaskBoardBundle\Doctrine\TaskBoardEntityManager;
 use Nowo\TaskBoardBundle\Dto\BoardColumnFormData;
@@ -25,18 +26,26 @@ use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
 use Nowo\TaskBoardBundle\Enum\TaskDependencyType;
 use Nowo\TaskBoardBundle\Enum\TaskLinkType;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
+use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
+use Nowo\TaskBoardBundle\Event\TaskErasedEvent;
 use Nowo\TaskBoardBundle\Service\BoardColumnManagerInterface;
+use Nowo\TaskBoardBundle\Service\ColumnSetManager;
 use Nowo\TaskBoardBundle\Service\TaskBoardCreatorInterface;
+use Nowo\TaskBoardBundle\Service\TaskBoardEditorInterface;
+use Nowo\TaskBoardBundle\Service\TaskBoardEraserInterface;
 use Nowo\TaskBoardBundle\Service\TaskCommentManagerInterface;
 use Nowo\TaskBoardBundle\Service\TaskDependencyManager;
 use Nowo\TaskBoardBundle\Service\TaskLinkAttacher;
 use Nowo\TaskBoardBundle\Service\TaskManagerInterface;
 use Nowo\TaskBoardBundle\Service\TaskMemberAssigner;
+use Nowo\TaskBoardBundle\Service\TaskTimeBillableService;
 use Nowo\TaskBoardBundle\Service\TaskTimeLoggerInterface;
 use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\AppUser;
 use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\HostProject;
 use Nowo\TaskBoardBundle\Tests\Functional\FunctionalTestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
+use RuntimeException;
+use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 
 use function count;
 
@@ -230,6 +239,130 @@ final class HostEntitiesAcrossManagersTest extends FunctionalTestCase
         self::assertSame('Pending application change', $this->connectionValue('SELECT display_name FROM ' . $this->table(AppUser::class) . ' WHERE id = ?', [$owner->getId()]));
     }
 
+    /** Since 3.0.0 (audit ZAS-V1): renaming a board the application holds writes TaskBoard's copy only. */
+    public function testRenamingABoardTheApplicationHoldsLeavesTheApplicationsInstanceAlone(): void
+    {
+        $board     = $this->board('Held board');
+        $hostBoard = $this->host->find(TaskBoard::class, $board->getId());
+        self::assertInstanceOf(TaskBoard::class, $hostBoard);
+
+        $editor = self::getContainer()->get(TaskBoardEditorInterface::class);
+        self::assertInstanceOf(TaskBoardEditorInterface::class, $editor);
+        $editor->update($hostBoard, 'Renamed board', 'New text', $this->owner);
+
+        self::assertSame('Held board', $hostBoard->getName());
+        self::assertSame('Renamed board', $this->connectionValue('SELECT name FROM ' . $this->table(TaskBoard::class) . ' WHERE id = ?', [$board->getId()]));
+        $this->host->flush();
+        self::assertSame('Renamed board', $this->connectionValue('SELECT name FROM ' . $this->table(TaskBoard::class) . ' WHERE id = ?', [$board->getId()]));
+    }
+
+    /** Since 3.0.0 (audit ZAS-V1): the billable flag of a task the application holds is set on TaskBoard's copy. */
+    public function testChangingBillableOnATaskTheApplicationHoldsLeavesTheApplicationsInstanceAlone(): void
+    {
+        $task   = $this->task($this->board(), 'Billed');
+        $logger = self::getContainer()->get(TaskTimeLoggerInterface::class);
+        self::assertInstanceOf(TaskTimeLoggerInterface::class, $logger);
+        $entryId  = $logger->log($task, $this->owner, 45, new DateTimeImmutable('2026-11-20'))->getId();
+        $hostTask = $this->host->find(Task::class, $task->getId());
+        self::assertInstanceOf(Task::class, $hostTask);
+        $history = count($hostTask->getChangeHistory());
+        $initial = $hostTask->getTimeEntries()->first()?->getBillable();
+        $wanted  = $initial !== true;
+
+        $billable = self::getContainer()->get(TaskTimeBillableService::class);
+        self::assertInstanceOf(TaskTimeBillableService::class, $billable);
+        $billable->change($hostTask, $entryId, $this->owner, $wanted);
+
+        self::assertSame($history, count($hostTask->getChangeHistory()), "the application's instance is unchanged");
+        self::assertSame($initial, $hostTask->getTimeEntries()->first()?->getBillable());
+        self::assertSame(1, $this->rows(TaskChangeHistory::class, 'task_id = ? AND change_type = ?', [$task->getId(), 'time_billable']));
+        self::assertSame($wanted, (bool) $this->connectionValue('SELECT billable FROM ' . $this->table(TaskTimeEntry::class) . ' WHERE id = ?', [$entryId]));
+        $this->host->flush();
+        self::assertSame(1, $this->rows(TaskChangeHistory::class, 'task_id = ? AND change_type = ?', [$task->getId(), 'time_billable']));
+    }
+
+    /** Since 3.0.0 (audit ZAS-V1): a column set applied to a board the application holds adds TaskBoard's columns once. */
+    public function testApplyingAColumnSetToABoardTheApplicationHoldsLeavesTheApplicationsInstanceAlone(): void
+    {
+        $source  = $this->board('Source', ['Backlog', 'Review']);
+        $target  = $this->board('Target', ['To do']);
+        $manager = self::getContainer()->get(ColumnSetManager::class);
+        self::assertInstanceOf(ColumnSetManager::class, $manager);
+        $set       = $manager->saveFromBoard($this->em->find(TaskBoard::class, $source->getId()) ?? $source, 'Two columns', $this->owner);
+        $hostBoard = $this->host->find(TaskBoard::class, $target->getId());
+        self::assertInstanceOf(TaskBoard::class, $hostBoard);
+        self::assertCount(1, $hostBoard->getColumns());
+
+        self::assertCount(2, $manager->applyToBoard($set, $hostBoard, $this->owner));
+
+        self::assertCount(1, $hostBoard->getColumns(), 'the application\'s instance is unchanged');
+        self::assertSame(3, $this->rows(BoardColumn::class, 'board_id = ?', [$target->getId()]));
+        $this->host->flush();
+        self::assertSame(3, $this->rows(BoardColumn::class, 'board_id = ?', [$target->getId()]));
+    }
+
+    /**
+     * Since 3.0.0 (audit ZAS-V1): a task the application holds is erased through TaskBoard's copy, and its
+     * {@see TaskErasedEvent} (whose file refs the host deletes) fires only once the row is gone.
+     */
+    public function testErasingATaskTheApplicationHoldsAnnouncesItOnlyOnceItIsGone(): void
+    {
+        $task     = $this->task($this->board(), 'Erased');
+        $hostTask = $this->host->find(Task::class, $task->getId());
+        self::assertInstanceOf(Task::class, $hostTask);
+        $seen = [];
+        $this->dispatcher()->addListener(TaskBoardEvents::TASK_ERASED, function (TaskErasedEvent $event) use (&$seen, $task): void {
+            $seen[] = [$event->taskId, $this->rows(Task::class, 'id = ?', [$task->getId()])];
+        });
+
+        self::assertSame(1, $this->eraser()->eraseTask($hostTask, $this->owner));
+
+        self::assertSame([[$task->getId(), 0]], $seen, 'announced once, after the row was deleted');
+        self::assertSame('Erased', $hostTask->getTitle());
+    }
+
+    /** Since 3.0.0 (audit ZAS-V1): an erase of a task the application holds whose flush fails deletes nothing and announces nothing. */
+    public function testAFailedEraseOfATaskTheApplicationHoldsDeletesNothingAndAnnouncesNothing(): void
+    {
+        $task     = $this->task($this->board(), 'Kept');
+        $hostTask = $this->host->find(Task::class, $task->getId());
+        self::assertInstanceOf(Task::class, $hostTask);
+        $fired = 0;
+        $this->dispatcher()->addListener(TaskBoardEvents::TASK_ERASED, static function () use (&$fired): void {
+            ++$fired;
+        });
+        $this->privateManager()->getEventManager()->addEventListener(Events::onFlush, new class {
+            public function onFlush(): never
+            {
+                throw new RuntimeException('flush failed');
+            }
+        });
+
+        try {
+            $this->eraser()->eraseTask($hostTask, $this->owner);
+            self::fail('The erase should have failed.');
+        } catch (RuntimeException $exception) {
+            self::assertSame('flush failed', $exception->getMessage());
+        }
+
+        self::assertSame(0, $fired, 'no TaskErasedEvent: the host keeps the files of a task that still exists');
+        self::assertSame(1, $this->rows(Task::class, 'id = ?', [$task->getId()]));
+    }
+
+    /** Since 3.0.0 (audit ZAS-V2): a TaskBoard row the application persisted but did not flush is refused as not saved yet. */
+    public function testARowTheApplicationHasNotSavedYetIsRefusedAsNotSaved(): void
+    {
+        $board = $this->host->find(TaskBoard::class, $this->board()->getId());
+        self::assertInstanceOf(TaskBoard::class, $board);
+        $column = new BoardColumn($board, 'Pending', 9);
+        $this->host->persist($column);
+
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage('not saved yet');
+
+        $this->privateManager()->attach($column);
+    }
+
     /** A row the application's manager holds that no longer exists is refused clearly. */
     public function testARowTheApplicationHoldsThatIsGoneIsRefused(): void
     {
@@ -270,6 +403,22 @@ final class HostEntitiesAcrossManagersTest extends FunctionalTestCase
         self::assertInstanceOf(TaskBoardCreatorInterface::class, $creator);
 
         return $creator;
+    }
+
+    private function eraser(): TaskBoardEraserInterface
+    {
+        $eraser = self::getContainer()->get(TaskBoardEraserInterface::class);
+        self::assertInstanceOf(TaskBoardEraserInterface::class, $eraser);
+
+        return $eraser;
+    }
+
+    private function dispatcher(): EventDispatcherInterface
+    {
+        $dispatcher = self::getContainer()->get('event_dispatcher');
+        self::assertInstanceOf(EventDispatcherInterface::class, $dispatcher);
+
+        return $dispatcher;
     }
 
     private function privateManager(): TaskBoardEntityManager

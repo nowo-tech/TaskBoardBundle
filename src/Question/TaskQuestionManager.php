@@ -10,6 +10,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Persistence\ManagerRegistry;
 use Nowo\TaskBoardBundle\Api\Operation\TaskApiTransaction;
 use Nowo\TaskBoardBundle\Doctrine\RecoveringFlusher;
+use Nowo\TaskBoardBundle\Doctrine\TaskBoardEntityManager;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskChangeHistory;
 use Nowo\TaskBoardBundle\Enum\TaskChangeType;
@@ -103,6 +104,9 @@ final readonly class TaskQuestionManager
         private LoggerInterface $logger = new NullLogger(),
         private int $maxRecipients = 20,
         private int $maxOpenPerTask = 20,
+        // Since 3.0.0 (audit ZAS-V1): TaskBoard rows the application's manager holds are read again by id at each write
+        // entry (none: a service built by hand works on the rows it is given, as in 2.x).
+        private ?TaskBoardEntityManager $rows = null,
     ) {
     }
 
@@ -149,6 +153,7 @@ final readonly class TaskQuestionManager
      */
     public function ask(object $asker, Task $task, TaskQuestionInput $input): TaskQuestion
     {
+        $task = $this->own($task);
         if ($task->isArchived()) {
             throw new TaskQuestionRefusedException(TaskQuestionRefusedException::TASK_CLOSED, 'task');
         }
@@ -191,6 +196,7 @@ final readonly class TaskQuestionManager
      */
     public function answer(object $user, TaskQuestion $question, TaskQuestionAnswerInput $input, ?int $version = null, ?string $via = null): TaskQuestionAnswer
     {
+        $question = $this->own($question);
         if ($question->isWithdrawn()) {
             throw new TaskQuestionRefusedException(TaskQuestionRefusedException::WITHDRAWN);
         }
@@ -240,6 +246,7 @@ final readonly class TaskQuestionManager
      */
     public function withdraw(object $user, TaskQuestion $question, string $reason, ?int $version = null): void
     {
+        $question = $this->own($question);
         if ($question->isWithdrawn()) {
             throw new TaskQuestionRefusedException(TaskQuestionRefusedException::WITHDRAWN);
         }
@@ -278,8 +285,9 @@ final readonly class TaskQuestionManager
      */
     public function publish(object $user, TaskQuestion $question, ?int $version = null): TaskQuestionPublication
     {
-        $label   = $this->publishLabel($user, $question);
-        $current = $question->getCurrentAnswer();
+        $question = $this->own($question);
+        $label    = $this->publishLabel($user, $question);
+        $current  = $question->getCurrentAnswer();
         if ($label === null || !$this->publisher instanceof TaskQuestionDecisionPublisherInterface || !$current instanceof TaskQuestionAnswer) {
             throw new TaskQuestionRefusedException(TaskQuestionRefusedException::FORBIDDEN);
         }
@@ -703,5 +711,17 @@ final readonly class TaskQuestionManager
     private function plain(string $text): string
     {
         return trim(str_replace(["\r\n", "\r", "\n", "\t"], ' ', $text));
+    }
+
+    /**
+     * @template T of object
+     *
+     * @param T $row
+     *
+     * @return T
+     */
+    private function own(object $row): object
+    {
+        return $this->rows instanceof TaskBoardEntityManager ? $this->rows->attach($row) : $row;
     }
 }

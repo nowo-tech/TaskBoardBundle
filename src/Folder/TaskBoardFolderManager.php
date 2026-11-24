@@ -11,6 +11,7 @@ use Nowo\TaskBoardBundle\Configuration\BoardColumnsApplier;
 use Nowo\TaskBoardBundle\Configuration\BoardColumnSpec;
 use Nowo\TaskBoardBundle\Configuration\BoardColumnsRefusedException;
 use Nowo\TaskBoardBundle\Doctrine\RecoveringFlusher;
+use Nowo\TaskBoardBundle\Doctrine\TaskBoardEntityManager;
 use Nowo\TaskBoardBundle\Doctrine\TransactionRollback;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskBoardFolder;
@@ -66,6 +67,9 @@ final readonly class TaskBoardFolderManager
         private ?TaskEventDeferral $events = null,
         // Since 2.20.0 (audit PW-D2-L1): asked for every task a column map moves, before the write.
         private ColumnTransitionPolicyInterface $transitions = new AllowAllColumnTransitionPolicy(),
+        // Since 3.0.0 (audit ZAS-V1): TaskBoard rows the application's manager holds are read again by id at each write
+        // entry (none: a service built by hand works on the rows it is given, as in 2.x).
+        private ?TaskBoardEntityManager $rows = null,
     ) {
     }
 
@@ -141,12 +145,14 @@ final readonly class TaskBoardFolderManager
      */
     public function update(object $actor, TaskBoardFolder $folder, string $name, ?string $description, int $position): TaskBoardFolder
     {
+        $folder = $this->own($folder);
         if (!$this->policy->mayManageFolders($actor, $folder->getTenantKey())) {
             throw new TaskBoardRestructureRefusedException(TaskBoardRestructureRefusedException::NOT_ALLOWED);
         }
         $name = $this->name($name);
         $this->description($description);
         $this->write(static function () use ($folder, $name, $description, $position): void {
+            // @igor-ignore - Request data: the row the caller passed, or TaskBoard's own copy of it (own(), audit ZAS-V1); not service state.
             $folder->setName($name)->setDescription($description)->setPosition($position);
         });
 
@@ -158,6 +164,7 @@ final readonly class TaskBoardFolderManager
      */
     public function delete(object $actor, TaskBoardFolder $folder): void
     {
+        $folder = $this->own($folder);
         if (!$this->policy->mayManageFolders($actor, $folder->getTenantKey())) {
             throw new TaskBoardRestructureRefusedException(TaskBoardRestructureRefusedException::NOT_ALLOWED);
         }
@@ -186,6 +193,8 @@ final readonly class TaskBoardFolderManager
      */
     public function moveBoard(object $actor, TaskBoard $board, ?TaskBoardFolder $folder, array $columnMap = [], ?ColumnTransitionVia $via = null): void
     {
+        $board  = $this->own($board);
+        $folder = $folder instanceof TaskBoardFolder ? $this->own($folder) : null;
         if ($folder instanceof TaskBoardFolder && $folder->getTenantKey() !== $board->getTenantKey()) {
             throw new TaskBoardRestructureRefusedException(TaskBoardRestructureRefusedException::NOT_FOUND);
         }
@@ -244,6 +253,7 @@ final readonly class TaskBoardFolderManager
      */
     public function applyColumns(TaskBoard $board, array $set, array $columnMap = [], ?object $actor = null): void
     {
+        $board = $this->own($board);
         $this->columns(function () use ($board, $set, $columnMap, $actor): void {
             $before = $this->follow->snapshot($board);
             foreach ($this->columnsApplier->apply($board, $set, $columnMap) as $removed) {
@@ -436,5 +446,17 @@ final readonly class TaskBoardFolderManager
             throw $failure;
         }
         $this->events?->commit(false);
+    }
+
+    /**
+     * @template T of object
+     *
+     * @param T $row
+     *
+     * @return T
+     */
+    private function own(object $row): object
+    {
+        return $this->rows instanceof TaskBoardEntityManager ? $this->rows->attach($row) : $row;
     }
 }

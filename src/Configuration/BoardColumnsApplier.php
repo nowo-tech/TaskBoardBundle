@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\Configuration;
 
 use Doctrine\ORM\EntityManagerInterface;
 use InvalidArgumentException;
+use Nowo\TaskBoardBundle\Doctrine\TaskBoardEntityManager;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
@@ -40,6 +41,9 @@ final readonly class BoardColumnsApplier
     public function __construct(
         private ?SyncLimitCheckerInterface $limits = null,
         private ?EntityManagerInterface $entityManager = null,
+        // Since 3.0.0 (audit ZAS-V1): TaskBoard rows the application's manager holds are read again by id at each write
+        // entry (none: a service built by hand works on the rows it is given, as in 2.x).
+        private ?TaskBoardEntityManager $rows = null,
     ) {
     }
 
@@ -117,6 +121,7 @@ final readonly class BoardColumnsApplier
      */
     public function apply(TaskBoard $board, array $specs, array $columnMap = []): array
     {
+        $board   = $this->own($board);
         $target  = $this->check($board, $specs, $columnMap);
         $current = ColumnTypes::ordered($board);
 
@@ -134,6 +139,7 @@ final readonly class BoardColumnsApplier
             // @igor-ignore - A BoardColumn entity of the board being written (instance-scoped), not a shared service.
             $column->setName($spec->name)->setPosition($index)->setColor($spec->color)->setIcon(ColumnIcon::normalize($spec->icon))->setType($spec->type)->setHumansOnly($spec->humansOnly);
             if (!isset($kept[$index])) {
+                // @igor-ignore - Request data: the row the caller passed, or TaskBoard's own copy of it (own(), audit ZAS-V1); not service state.
                 $board->addColumn($column);
             }
             $columns[$index] = $column;
@@ -173,6 +179,7 @@ final readonly class BoardColumnsApplier
                     $task->setColumn($columns[0]);
                 }
             }
+            // @igor-ignore - Request data: the row the caller passed, or TaskBoard's own copy of it (own(), audit ZAS-V1); not service state.
             $board->removeColumn($column);
         }
 
@@ -237,5 +244,17 @@ final readonly class BoardColumnsApplier
         }
 
         return $position + 1;
+    }
+
+    /**
+     * @template T of object
+     *
+     * @param T $row
+     *
+     * @return T
+     */
+    private function own(object $row): object
+    {
+        return $this->rows instanceof TaskBoardEntityManager ? $this->rows->attach($row) : $row;
     }
 }
