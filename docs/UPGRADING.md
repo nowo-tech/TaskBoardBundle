@@ -1,9 +1,9 @@
 # Upgrading
 
+This document describes how to upgrade between versions of TaskBoard Bundle.
+
 ## Table of contents
 
-- [To 1.5.1](#to-151)
-- [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [Unreleased](#unreleased)
   - [Before you upgrade](#before-you-upgrade)
   - [Default flips](#default-flips)
@@ -179,9 +179,11 @@
 - [To 1.6.0](#to-160)
 - [To 1.5.8](#to-158)
 - [To 1.5.7](#to-157)
+- [From 1.5.5 to 1.5.6](#from-155-to-156)
 - [To 1.5.4](#to-154)
 - [To 1.5.3](#to-153)
 - [To 1.5.2](#to-152)
+- [To 1.5.1](#to-151)
 - [To 1.5.0](#to-150)
   - [Twig Extra Bundle (REQ-TWIG-004)](#twig-extra-bundle-req-twig-004)
   - [Twig-CS-Fixer (maintainers)](#twig-cs-fixer-maintainers)
@@ -216,31 +218,6 @@
   - [Install](#install)
 - [Future 1.x releases](#future-1x-releases)
   - [FormKitBundle (admin forms)](#formkitbundle-admin-forms)
-
-## To 1.5.1
-
-From **1.5.0** — YAML services_timetrack indentation fix only. No host migration.
-
-```bash
-composer update nowo-tech/task-board-bundle
-```
-
-This document describes how to upgrade between versions of TaskBoard Bundle.
-
-## From 1.5.5 to 1.5.6
-
-No breaking changes and no host migration. Behaviour changes to be aware of:
-
-- Creating a board whose slug already exists now stores it as `<slug>-2`, `<slug>-3`, … instead of failing with a unique-constraint error.
-- Assigning the same user twice with the same role returns the existing `TaskMember` and does not write a second change-history entry.
-- Code that instantiates `TaskAccessGuard`, `TaskImportOrchestrator`, `TimeSpentAggregatorListener` or the flushing `DoctrineOrm*Repository` classes manually keeps working: the new `?ManagerRegistry` argument is optional (without it, a closed EntityManager is not reset and access/timer paths do not refresh entities).
-
-```bash
-composer update nowo-tech/task-board-bundle
-php bin/console cache:clear
-```
-
-Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
 
 ## Unreleased
 
@@ -472,6 +449,9 @@ default asked for scope `''`); alias the id to your scope policy service or upda
   when a user object is passed; 4.0 removes it in favour of `$userId`.
 - `events.after_host_commit` keeps its default `false` in 3.0. A 3.x minor raises a notice when the key is unset; 4.0
   makes `true` the default (`false` stays an explicit option).
+- `Import\Dto\TaskImportOptions::$skipExisting`, `Dto\TaskImportFormData::$skipExisting` and the import command's
+  `--force` option (`@deprecated since 1.22`, ignored: every import is an idempotent upsert) stay in 3.0 because they
+  only had a docblock or a console note, never a runtime deprecation. A 3.x minor raises one; 4.0 removes them.
 - Also removed with the deprecation layer: `TaskBoardExtension::unsetPrivateEntityManagerNotice()` (the 2.28 notice
   text) and the extension constants `TIME_TRACK_LEGACY_TASK_PROVIDER` / `TIME_TRACK_LEGACY_TEAM_PROVIDER`.
 
@@ -4162,6 +4142,21 @@ php bin/console cache:clear
 _(empty)_
 - No application upgrade steps for require-dev Igor tooling (REQ-CS-008). Consumers do not pull `igor-php/igor-php` transitively.
 
+## From 1.5.5 to 1.5.6
+
+No breaking changes and no host migration. Behaviour changes to be aware of:
+
+- Creating a board whose slug already exists now stores it as `<slug>-2`, `<slug>-3`, … instead of failing with a unique-constraint error.
+- Assigning the same user twice with the same role returns the existing `TaskMember` and does not write a second change-history entry.
+- Code that instantiates `TaskAccessGuard`, `TaskImportOrchestrator`, `TimeSpentAggregatorListener` or the flushing `DoctrineOrm*Repository` classes manually keeps working: the new `?ManagerRegistry` argument is optional (without it, a closed EntityManager is not reset and access/timer paths do not refresh entities).
+
+```bash
+composer update nowo-tech/task-board-bundle
+php bin/console cache:clear
+```
+
+Hosting FrankenPHP with **kernel not reset** between requests: see [FRANKENPHP-WORKER-AUDIT.md](FRANKENPHP-WORKER-AUDIT.md) and the host checklist in [DEMO-FRANKENPHP.md](DEMO-FRANKENPHP.md) (clear the Doctrine identity map between requests, or keep `services_resetter`).
+
 ## To 1.5.4
 
 Review Flex recipe `security_nowo_task_board.yaml` after update.
@@ -4177,6 +4172,14 @@ From **1.5.2** — No application upgrade steps (release notes only; recipe file
 ## To 1.5.2
 
 From **1.5.1** — No application upgrade steps. **Demos only:** Hot Reload Bundle `^1.4` (FrankenPHP Mercure/`hot_reload`, `dev`/`test`).
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
+
+## To 1.5.1
+
+From **1.5.0** — YAML services_timetrack indentation fix only. No host migration.
 
 ```bash
 composer update nowo-tech/task-board-bundle

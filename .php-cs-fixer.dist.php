@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * PHP-CS-Fixer configuration (PSR-12 + Symfony canonical).
+ * PHP-CS-Fixer configuration (PER-CS + Symfony canonical, REQ-CS-009).
  * Standard for Nowo bundles. Run: make cs-check | make cs-fix
  */
 use PhpCsFixer\Config;
