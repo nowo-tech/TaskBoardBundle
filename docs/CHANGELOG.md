@@ -235,6 +235,8 @@ UPGRADING "To 3.0.0".
 
 - `Dto\TaskMemberFormData::$user` (announced for 3.0 in a 2.29 docblock only): kept; a 3.x minor deprecates it at
   runtime and 4.0 removes it. `events.after_host_commit` keeps `false`; 4.0 flips it after a 3.x notice.
+- `TaskImportOptions::$skipExisting`, `TaskImportFormData::$skipExisting` and the import command's `--force`
+  (`@deprecated since 1.22`, ignored): kept; a 3.x minor deprecates them at runtime and 4.0 removes them.
 
 ### Security
 
