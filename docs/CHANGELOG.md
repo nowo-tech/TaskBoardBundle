@@ -136,6 +136,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 TaskBoard 3.0 (REQ-ARCH-001 rules 3 and 6): only what 2.x announced through deprecation notices is removed. See
 UPGRADING "To 3.0.0".
 
+### Added
+
+- `ValueObject\TaskBoardSnapshot::of(TaskBoard $board)`: the public way to build a board's snapshot for the
+  framework-free ports that take one (for example `SyncActorProviderInterface::actorFor()`, the replacement of the
+  removed `SyncActorResolverInterface`). It uses the same mapping as the bundle's own ports (`Port\Snapshots`,
+  internal), so the two cannot drift.
+
 ### Removed
 
 - **BREAKING:** the application's-manager mode. `database.private_entity_manager` unset or `false` (deprecated since

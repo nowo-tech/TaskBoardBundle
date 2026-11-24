@@ -951,7 +951,7 @@ Grouped by feature; each row names the semantic requirement of [`spec.md`](spec.
 | `ValueObject/ColumnTransition.php` | FR-TRANS-001 |
 | `ValueObject/ColumnTransitionDecision.php` | FR-TRANS-001 |
 | `ValueObject/ColumnTransitionVia.php` | FR-TRANS-001 |
-| `ValueObject/TaskBoardSnapshot.php` | FR-TRANS-001 |
+| `ValueObject/TaskBoardSnapshot.php` (3.0: public `of(TaskBoard)`) | FR-TRANS-001 |
 | `ValueObject/TaskBoardUserRef.php` | FR-TRANS-001 |
 | `ValueObject/TaskChangeSnapshot.php` | FR-TRANS-001 |
 | `ValueObject/TaskCommentSnapshot.php` | FR-TRANS-001 |
