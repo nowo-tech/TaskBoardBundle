@@ -322,11 +322,12 @@ to check). What breaks in code that worked in 2.x without the option:
     `TaskBoardEraser`, `TaskQuestionManager`, `TaskCustomFieldManager`, `TaskRecurrenceManager`, `TaskTemplateManager`,
     `TaskMover`, `TaskBoardFolderManager`, `BoardConfigurationApplier`, `BoardColumnsApplier`, `TaskCopier`,
     `TaskImportOrchestrator` (the board and parent task you pass), the sync service (`TaskBoardSyncService`) and the
-    people services (`TaskSyncPeopleDirectoryService`, `TaskSyncPeopleReassigner`, `PeopleMappingService`,
-    `SyncFieldValueEraser::eraseField()`) read it again by id at their entry and write TaskBoard's own copy: your
-    instance and its collections are never changed (so your next `flush()` neither fails on TaskBoard's new row nor
-    writes it), and your instance does not show TaskBoard's change until you load it again. A row that no longer exists
-    is refused (`… no longer exists`), one you persisted but did not flush too (`… not saved yet. Flush it first …`);
+    people services (`TaskSyncPeopleDirectoryService`, including `directoryFor()` and `pruneDirectory()`,
+    `TaskSyncPeopleReassigner`, `PeopleMappingService`, `SyncFieldValueEraser::eraseField()`) read it again by id at
+    their entry and write TaskBoard's own copy: your instance and its collections are never changed (so your next
+    `flush()` neither fails on TaskBoard's new row nor writes it), and your instance does not show TaskBoard's change
+    until you load it again. A row that no longer exists is refused (`… no longer exists`), one you persisted but did
+    not flush too (`… not saved yet. Flush it first …`);
   - a service you build by hand (`new TaskManager(...)` and the like, without the autowired `?TaskBoardEntityManager
     $rows` argument, null by default) keeps the 2.x behaviour: it works on the instances you pass and does not read them
     again;

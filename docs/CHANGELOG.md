@@ -219,6 +219,10 @@ UPGRADING "To 3.0.0".
   application's manager holds again by id too, so an anonymisation or an erased field line is really written before its
   audit event or count; `TaskImportOrchestrator::import()` re-reads the board and parent task it is given. A service
   built by hand without the manager keeps the 2.x behaviour.
+- Audit ZAS-X1 / ZAS-X2: `TaskSyncPeopleDirectoryService::directoryFor()` (the connection) and `pruneDirectory()` (the
+  directory) read a row the application's manager holds again by id too, so the directory is attached and the pruned
+  people and directory are removed for real. Host-held DB tests now also cover `reassign()`,
+  `PeopleMappingService::save()` and `TaskImportOrchestrator::import()`.
 - Audit ZAS-V2: a TaskBoard row the application persisted but did not flush is refused as `… not saved yet. Flush it
   first …` instead of `… no longer exists`.
 - Audit ZAS-3: with TimeTrack 2.0, a TimeTrack scope port that is not served as `TimesheetScopePolicyInterface` fails

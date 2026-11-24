@@ -63,7 +63,9 @@ final readonly class TaskSyncPeopleDirectoryService
      */
     public function directoryFor(TaskBoardConnection $connection, TaskProviderInterface $provider, ProviderCredential $credential): ?TaskSyncDirectory
     {
-        $directory = $connection->getDirectory();
+        // Since 3.0.0 (audit ZAS-X1): the directory is set on TaskBoard's copy of a connection the application holds.
+        $connection = $this->own($connection);
+        $directory  = $connection->getDirectory();
         if ($directory instanceof TaskSyncDirectory) {
             return $directory;
         }
@@ -75,6 +77,7 @@ final readonly class TaskSyncPeopleDirectoryService
             return null;
         }
         $directory = $this->directoryForDraft($connection->getBoard(), $provider->id(), $workspaceId);
+        // @igor-ignore - Request data: the row the caller passed, or TaskBoard's own copy of it (own(), audit ZAS-X1); not service state.
         $connection->setDirectory($directory);
         $this->entityManager->flush();
 
@@ -295,6 +298,8 @@ final readonly class TaskSyncPeopleDirectoryService
      */
     public function pruneDirectory(TaskSyncDirectory $directory): int
     {
+        // Since 3.0.0 (audit ZAS-X1): a directory the application holds is removed through TaskBoard's copy.
+        $directory = $this->own($directory);
         if ($this->people->connectionsOf($directory) !== []) {
             return 0;
         }
