@@ -8,6 +8,7 @@ use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Enum\TaskChangeType;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\Port\Snapshots;
+use Nowo\TaskBoardBundle\ValueObject\TaskBoardSnapshot;
 use PHPUnit\Framework\TestCase;
 
 final class SnapshotsTest extends TestCase
@@ -27,6 +28,18 @@ final class SnapshotsTest extends TestCase
         self::assertSame($board->getCreatorName(), $snapshot->creatorName);
         self::assertFalse($snapshot->archived);
         self::assertSame($board->getCreatedAt(), $snapshot->createdAt);
+    }
+
+    public function testTheBoardSnapshotsPublicConstructorUsesTheSameMapping(): void
+    {
+        $board = $this->board();
+
+        self::assertEquals(Snapshots::board($board), TaskBoardSnapshot::of($board));
+        self::assertSame('roadmap', TaskBoardSnapshot::of($board)->slug);
+
+        $board->archive();
+        self::assertTrue(TaskBoardSnapshot::of($board)->archived);
+        self::assertEquals(Snapshots::board($board), TaskBoardSnapshot::of($board));
     }
 
     public function testTask(): void

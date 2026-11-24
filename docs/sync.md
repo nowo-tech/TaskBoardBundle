@@ -220,7 +220,7 @@ final class MessengerSyncRunner implements SyncRunnerInterface
 In the handler, resolve the actor through `SyncActorProviderInterface` and stop when it answers `null`, then run:
 
 ```php
-$actor = $this->actors->actorFor($boardSnapshot, $message->actorId); // SyncActorProviderInterface: the board as a TaskBoardSnapshot
+$actor = $this->actors->actorFor(TaskBoardSnapshot::of($board), $message->actorId); // SyncActorProviderInterface (TaskBoardSnapshot::of() since 3.0)
 if ($actor === null) {
     return; // disabled, erased or refused: never run as anyone else
 }

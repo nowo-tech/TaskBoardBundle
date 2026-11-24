@@ -378,7 +378,21 @@ instead and keep the configuration key as it is; the bundle asks it through its 
   (`Nowo\TaskBoardBundle\Import\TaskImportLinkFinderInterface: '@App\Import\MyLinkFinder'`).
 - **Injecting a port:** code that injected a removed interface to ask it (for example `SyncActorResolverInterface` in
   a sync handler) injects the framework-free one instead: `SyncActorProviderInterface` is a public alias that follows
-  `sync.actor_resolver`.
+  `sync.actor_resolver`. The framework-free ports take snapshots, not entities: build the board's with
+  `ValueObject\TaskBoardSnapshot::of($board)` (new in 3.0, the same mapping the bundle uses):
+
+  ```php
+  // 2.x
+  public function __construct(private SyncActorResolverInterface $actors) {}
+  $actor = $this->actors->actorFor($board, $message->actorId);
+
+  // 3.0
+  use Nowo\TaskBoardBundle\Sync\Hook\SyncActorProviderInterface;
+  use Nowo\TaskBoardBundle\ValueObject\TaskBoardSnapshot;
+
+  public function __construct(private SyncActorProviderInterface $actors) {}
+  $actor = $this->actors->actorFor(TaskBoardSnapshot::of($board), $message->actorId);
+  ```
 - The bundle keeps internal entity-typed seams for its own defaults and gates (`Port\Internal\*`, `@internal`). They
   are not a host extension point and implementing or decorating them is not supported: a service a configuration key
   names that implements a seam (and not the framework-free interface) fails the build, but a host `#[AsDecorator]` of a
