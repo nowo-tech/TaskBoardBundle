@@ -517,7 +517,12 @@ See [.github/SECURITY.md](../.github/SECURITY.md) for coordinated disclosure.
   values are accepted; a tree level opens by a POST (no provider call on a GET).
 - Plans, their items, events, Messenger messages, the progress JSON and the downloadable report hold ids and counts
   only — no token, no names or e-mails. The credential is resolved per slice through the host and never stored.
-- The worker re-checks the actor at each slice and never substitutes another user; a credential failure stops the plan.
+- The worker always acts as the plan's starter (never the user polling or resuming) and re-checks at each board that
+  they exist, are enabled, hold `import_plan` and may connect and import into the board; otherwise the plan fails
+  (`actor`) — no other user is substituted. A credential failure stops the plan.
+- Starting a plan needs a connection the host offers to the starter; chosen containers must belong to the plan's
+  workspace; the board quota is asked per board at creation.
 - The rate budget's cache key is an HMAC of the connection reference with `kernel.secret`.
 - Personal data: the people directory of the tenant and workspace holds ClickUp names and e-mails, as before;
-  `TaskSyncPeopleReassigner::detachUser()` also clears the user's id from plans; plans are pruned after `keep_days`.
+  `TaskSyncPeopleReassigner::detachUser()` also clears the user's id from plans (string ids: no database cascade);
+  `ImportPlanStore::exportFor()` lists a user's plans for an access request; plans are pruned after `keep_days`.

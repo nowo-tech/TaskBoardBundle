@@ -372,8 +372,11 @@ tasks** (`SyncOptions::$createOnly`: imported tasks untouched, deletions not arc
 1. **Start** checks the actor, the host's board quota and the connection, takes the workspace lock (one active plan
    per tenant, provider and workspace; a second start is refused) and creates the new boards — each in one
    transaction with its item, so a crash never creates a second board — then dispatches the runner.
-2. **Each slice** claims the plan (one worker; a heartbeat older than ten minutes is taken over), re-checks the actor
-   (`SyncActorProviderInterface`, a refused actor fails the plan as `actor`), then for each item in order links the
+2. **Each slice** claims the plan (one worker; a heartbeat older than ten minutes is taken over) and gets a token
+   every later write of the slice is conditional on (a slice that was taken over writes nothing more). It always runs
+   as the user who **started** the plan — never as whoever polls or resumes it — and re-checks that user at each board
+   (`SyncActorProviderInterface`, `import_plan` in the tenant, connect and import rights on the board); a refused
+   starter fails the plan as `actor`. Then for each item in order links the
    board to its source with the plan's status map, options, excluded fields and directory, and runs its connection
    through `runLinked()` until the slice's time is used.
 3. **Endings of a slice**: time used or the board's run paused (due now), the token's budget or ClickUp's 429
@@ -384,7 +387,9 @@ tasks** (`SyncOptions::$createOnly`: imported tasks untouched, deletions not arc
 4. **End**: `SYNC_IMPORT_PLAN_FINISHED` (succeeded or cancelled) or `SYNC_IMPORT_PLAN_FAILED`, with ids and counts only,
    for the host to notify the actor. Plans older than `keep_days` are pruned then.
 
-With the inline runner the progress endpoint advances a due plan by one slice per poll. With
+With the inline runner the progress endpoint (a GET, like the board connection's progress since 1.23) advances a due
+plan by one slice per poll, as the starter. The Statuses step's GET stores each source's statuses on its draft item
+(a cache of the draft, nothing else). With
 `sync.plans.messenger.enabled` the handler queues the next message with a `DelayStamp`; route `RunImportPlanSlice`
 to an async transport (a sync transport ignores the delay). A host runner implements `ImportPlanRunnerInterface`
 and calls `ImportPlanRunner::runSlice($planId, $actorId, $seconds)`; it returns null when nothing ran.
@@ -393,10 +398,11 @@ and calls `ImportPlanRunner::runSlice($planId, $actorId, $seconds)`; it returns 
 
 ClickUp limits requests **per token** (100 a minute on most plans). Several plan items, a list sync of another board
 and the People scan may use one token at once, so `ProviderRateBudget` counts the requests of each token in one-minute
-windows in `sync.rate_limit.storage` and stops at the last `X-RateLimit-Limit` seen less `margin`. A full window waits
+windows in `sync.rate_limit.storage` and stops at the last `X-RateLimit-Limit` seen less `margin`. It is on for every
+ClickUp sync, not only plans, and it is per connection **reference**: keep references globally unique. A full window waits
 inline when it ends within `sync.http.max_inline_wait`, otherwise the slice ends `rate_limited`. The key is an HMAC of
 `clickup:<connection ref>` with `kernel.secret`; the token never reaches the pool. Use a pool every process shares
-(Redis, database): an APCu or array pool counts per process only. The count is read-modify-write, so two processes
+(Redis): `cache.app` is shared by the processes of one server only, and an APCu or array pool counts per process. The count is read-modify-write, so two processes
 may both take a window's last request; the margin and ClickUp's own 429 handling cover it. A failing pool lets the
 request go.
 

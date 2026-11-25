@@ -623,6 +623,10 @@ Tests: two-process integration tests (under `tests/Integration`, like the existi
 - The workspace lock is a unique `lock_key` column on the plan (no Symfony Lock dependency); the rate budget uses a
   PSR-6 pool directly (no symfony/rate-limiter dependency), fixed one-minute windows.
 - The progress page polls the plan's overall counters (per-board rows are refreshed on reload).
+- Audit ZBY (pre-release): the slices run as `started_by_id` only (re-checked per board: `import_plan`, connect and
+  import rights; else `failed: actor`); a `run_token` fences every write of a slice; cancel / resume are
+  compare-and-sets; steps are transactions; sources are bound to the plan's workspace; the board quota is asked per
+  board; the preview is bounded (`preview_max_requests`, `preview_seconds`).
 
 Each slice closes every REQ gap of the bundle before its tag (owner rule "touched bundle = 100 % REQs"); one batched audit
 before the tags, immediate audit for CU-1 (auth).

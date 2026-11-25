@@ -183,7 +183,7 @@ Import plans and the guided import from ClickUp, phase CU-2 of [design/CLICKUP_I
 - Events `SYNC_IMPORT_PLAN_STARTED`, `SYNC_IMPORT_PLAN_FINISHED` and `SYNC_IMPORT_PLAN_FAILED` (`ImportPlanEvent`: ids
   and counts only).
 - Configuration `sync.plans.*` (`enabled`, `runner`, `inline_slice_seconds`, `messenger.enabled`,
-  `messenger.slice_seconds`, `keep_days`, `preview_max_pages`, `max_items`), `sync.rate_limit.*` (`enabled`,
+  `messenger.slice_seconds`, `keep_days`, `preview_max_pages`, `preview_max_requests`, `preview_seconds`, `max_items`), `sync.rate_limit.*` (`enabled`,
   `storage`, `default_limit`, `margin`), ten `routes.import_plan*` entries and `templates.import_plans` /
   `templates.import_plan`.
 - `InMemoryTaskProvider::withFieldDefinitions()` and `failOn()` (tests and demos).
@@ -194,7 +194,7 @@ Import plans and the guided import from ClickUp, phase CU-2 of [design/CLICKUP_I
 - Retention (Q-CU-13): finished plans and abandoned drafts are deleted after `sync.plans.keep_days` (90), pruned when
   a plan ends or a draft is created; the imported boards and tasks stay.
 - Erasing a user (`TaskSyncPeopleReassigner::detachUser()`) also clears `created_by_id` / `started_by_id` of their
-  plans.
+  plans; `ImportPlanStore::exportFor($userId)` lists them for an access request (ids, dates, states).
 
 ### Security
 
@@ -202,8 +202,21 @@ Import plans and the guided import from ClickUp, phase CU-2 of [design/CLICKUP_I
   compare-and-set with the plan's version); one worker per plan (a compare-and-set claim with a heartbeat, taken over
   after ten minutes); every wizard step is a compare-and-set on the plan's version; board creation and the item update
   share one transaction. Plans never hold a credential: the runner resolves it per slice through the host.
-- The worker re-checks the actor at every slice: a disabled, erased or demoted user stops the plan
-  (`failed: actor`); it never runs as someone else. A connection that no longer works stops the plan
+- The slices always run as the user who started the plan (`started_by_id`), never as whoever polls the progress
+  page or presses *Resume* (audit ZBY-M1). At every board the runner checks again that this user exists, is enabled,
+  still holds `import_plan` in the tenant and may connect and import into the board; otherwise the plan ends
+  `failed` with code `actor` — no other user is ever substituted. `PlanRunRequest` and `RunImportPlanSlice` carry
+  the plan id only.
+- Fencing (audit ZBY-L2): the claim hands each slice a token (`run_token` column); heartbeat, report, hold and end
+  are conditional on it, so a slice that was taken over cannot overwrite the plan or free the workspace lock. Cancel
+  and *Resume* are compare-and-sets on the status. `sync.plans.messenger.slice_seconds` is at most 300 (half the
+  10-minute takeover window). Each wizard step is one transaction.
+- The Tree step opens only levels listed from the plan's workspace, and the chosen containers are checked to belong
+  to it (`PeopleProviderInterface::workspaceOf()`, audit ZBY-L1). The board quota is asked again for each board right
+  before it is created (ZBY-L3). Provider errors of the Workspace and Fields steps are messages, and the preview reads
+  at most `sync.plans.preview_max_requests` requests for `sync.plans.preview_seconds` (ZBY-L4). A re-import leaves a
+  board linked again elsewhere alone, and adopts only a link made since the plan started (ZBY-I1). Starting a plan
+  needs a connection the host offers to the starter (ZBY-I3). A connection that no longer works stops the plan
   (`failed: credential`); an outage pauses it (1, 2, 4, 8 then 15 minutes); a failed list never stops the others.
 
 ## [3.1.0] - 2026-11-25

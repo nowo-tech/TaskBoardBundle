@@ -225,7 +225,11 @@ REQ-RUNTIME-003 for the guided import (design §19):
 | --- | --- |
 | Two plans of one tenant and workspace started at once | `lock_key` (SHA-256 of tenant, provider, workspace) is set in the same `UPDATE … WHERE version = ? AND lock_key IS NULL` that checks the version; its unique key refuses the second (`workspace_busy`) |
 | Two managers editing a draft | every step is `UPDATE … SET version = version + 1 WHERE version = ? AND status = 'draft'`; the loser gets `stale` |
-| Two workers on one plan (redelivery, inline poll + worker) | `claim()`: `UPDATE … SET status = 'running', heartbeat_at = now WHERE status IN (queued, paused, rate_limited) OR (running AND heartbeat older than 10 min)`; the loser runs nothing |
+| Two workers on one plan (redelivery, inline poll + worker) | `claim()`: `UPDATE … SET status = 'running', heartbeat_at = now, run_token = <new> WHERE status IN (queued, paused, rate_limited) OR (running AND heartbeat older than 10 min)`; the loser runs nothing. A slice lasts at most 300 s and beats after each board |
+| A slice taken over (or a plan cancelled) while it still runs | fencing: heartbeat, report, hold and end are `UPDATE … WHERE run_token = <its token> AND status = 'running'`; the stale slice stops and never frees `lock_key` |
+| Cancel or Resume against a claim | `cancelWaiting()` / `makeDue()` are compare-and-sets on the waiting statuses; a running plan only gets `cancel_requested` |
+| A wizard step that fails half-way | the version compare-and-set, the item rewrite and the flush are one transaction |
+| Two starts that each pass the board quota | the quota is asked again per board right before it is created |
 | A crash between "board created" and "item updated" | the board and its item are written in one transaction; a resumed start creates only the boards still missing |
 | A crash after the link, before the item recorded it | the next slice adopts the board's connection when it follows the item's source (no second link) |
 | A plan item and a manual Refresh of the same board | the board's run lock: the item gets `busy` and the plan retries 30 s later |
@@ -233,5 +237,6 @@ REQ-RUNTIME-003 for the guided import (design §19):
 | Token replaced while running | the next slice resolves it through `credentialFor()`; nothing is cached |
 | Shared request budget | read-modify-write per one-minute window in a PSR-6 pool: two processes may both take the last request; the 10 % margin and the 429 handling cover it |
 
-Tests: `ImportPlanRunnerTest` (lock, claim, adoption, busy board, cancel), `ImportPlanFlowTest` (stale and forged
-steps).
+Tests: `ImportPlanRunnerTest` (lock, claim, adoption, busy board, cancel), `ImportPlanFencingTest` (takeover, cancel
+and resume against a claim, step transaction, and with a second database connection on MySQL / MariaDB / PostgreSQL:
+claim, workspace lock, cancel), `ImportPlanFlowTest` (stale and forged steps).

@@ -651,13 +651,15 @@ nowo_task_board:
             inline_slice_seconds: 20   # one inline slice (keep it below max_execution_time)
             messenger:
                 enabled: false         # Q-CU-9: RunImportPlanSlice on the host's bus (needs symfony/messenger)
-                slice_seconds: 120     # one queued slice (below the worker's time limit and the redelivery)
+                slice_seconds: 120     # one queued slice (at most 300: half the 10-minute takeover window)
             keep_days: 90              # Q-CU-13: finished plans and abandoned drafts are pruned after this
             preview_max_pages: 3       # task pages the preview reads per board; beyond them counts are estimated
+            preview_max_requests: 60   # provider requests one preview page view may make; later boards are shown unread
+            preview_seconds: 15        # seconds one preview page view may read from the provider
             max_items: 200             # the most boards one plan fills
         rate_limit:
             enabled: true              # the per-token budget shared by every process (ClickUp: 100 requests a minute)
-            storage: null              # a PSR-6 pool every process shares; null = cache.app
+            storage: null              # a PSR-6 pool every process shares (Redis across servers); null = cache.app
             default_limit: 100         # until the provider's X-RateLimit-Limit is seen
             margin: 0.1                # share of the limit left unused
 ```

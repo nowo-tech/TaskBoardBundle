@@ -132,6 +132,11 @@ Larger pieces that need a design pass or a new table.
 
 ## Considering
 
+- **Import plans: POST-only progress advance** (audit ZBY-I4). With the inline runner the progress GET advances a due
+  plan (as the board connection's progress has since 1.23); moving the advance to a POST needs the progress script to
+  post with a CSRF token. The Statuses step GET also stores the sources' statuses on the draft (ZBY-I5), a draft-only
+  cache.
+
 Ideas that need more feedback before they are planned.
 
 - **Card covers.** An image from the task's attachments shown at the top of the card; helps visual boards (design,
