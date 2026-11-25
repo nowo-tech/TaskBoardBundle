@@ -442,8 +442,8 @@ jobs:
     if: ${{ !cancelled() && needs.changes.outputs.mode != 'light' }}
     env:
       # Since 3.0.0 (audit ZAS-3): TaskBoard 3.0 supports time-track-bundle ^1.23 || ^2.0; the other jobs install 1.x.
-      # Until TimeTrack 2.0.0 is tagged this is its release branch (TimeTrackBundle#145); then set it to '^2.0'.
-      TIME_TRACK_2: 'dev-feat/2.0-arch-001 as 2.0.0'
+      # TimeTrack 2.0.0 is tagged: this job installs the released 2.x line.
+      TIME_TRACK_2: '^2.0'
 
     steps:
       - name: Checkout TaskBoardBundle
