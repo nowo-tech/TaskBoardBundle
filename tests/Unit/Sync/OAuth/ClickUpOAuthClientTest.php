@@ -18,6 +18,7 @@ use Nowo\TaskBoardBundle\Tests\Unit\Sync\RecordingSleeper;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Clock\MockClock;
+use Symfony\Component\HttpClient\Exception\TimeoutException;
 use Symfony\Component\HttpClient\Exception\TransportException;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
@@ -227,6 +228,48 @@ final class ClickUpOAuthClientTest extends TestCase
         }
     }
 
+    /**
+     * @return iterable<string, array{MockResponse|TimeoutException, OAuthErrorCode|ProviderErrorCode}>
+     */
+    public static function failedDescriptions(): iterable
+    {
+        yield 'rate limited' => [new MockResponse('', ['http_code' => 429, 'response_headers' => ['retry-after' => '600']]), OAuthErrorCode::RateLimited];
+        yield 'unauthorised' => [new MockResponse('', ['http_code' => 401]), OAuthErrorCode::TokenRejected];
+        yield 'forbidden' => [new MockResponse('', ['http_code' => 403]), ProviderErrorCode::Forbidden];
+        yield 'not found' => [new MockResponse('', ['http_code' => 404]), ProviderErrorCode::NotFound];
+        yield 'gone' => [new MockResponse('', ['http_code' => 410]), ProviderErrorCode::NotFound];
+        yield 'server error' => [new MockResponse('', ['http_code' => 503]), ProviderErrorCode::ServerError];
+        yield 'redirect' => [new MockResponse('', ['http_code' => 302, 'response_headers' => ['location' => 'https://evil.test/']]), ProviderErrorCode::InvalidResponse];
+        yield 'transport' => [new MockResponse([new TransportException('boom')]), ProviderErrorCode::Transport];
+        yield 'timeout' => [new TimeoutException('slow'), ProviderErrorCode::Timeout];
+        yield 'declared too large' => [new MockResponse(str_repeat(' ', 2_097_153), ['response_headers' => ['content-length' => '2097153']]), ProviderErrorCode::ResponseTooLarge];
+        yield 'streamed too large' => [new MockResponse(['{"user": "', str_repeat('a', 2_097_152), '"}']), ProviderErrorCode::ResponseTooLarge];
+        yield 'not json' => [new MockResponse('<html>'), ProviderErrorCode::InvalidResponse];
+        yield 'json string' => [new MockResponse('"x"'), ProviderErrorCode::InvalidResponse];
+    }
+
+    /** Audit ZBT-L2: the interactive callback never waits, retries or follows the sync client's budget. */
+    #[DataProvider('failedDescriptions')]
+    public function testDescribeFailsAtOnceWithoutRetryOrWait(MockResponse|TimeoutException $response, OAuthErrorCode|ProviderErrorCode $code): void
+    {
+        try {
+            $this->client([$response, new MockResponse('{"user": {"id": 1}}'), new MockResponse('{"teams": []}')])->describe(new ProviderCredential('tok', 'c', ['scheme' => 'oauth']));
+            self::fail('describe');
+        } catch (OAuthException $exception) {
+            self::assertSame($code, $exception->errorCode);
+            self::assertNull($exception->getPrevious());
+        } catch (ProviderException $exception) {
+            self::assertSame($code, $exception->code());
+            self::assertNull($exception->getPrevious());
+        }
+        self::assertCount(1, $this->requests, 'a single request: no retry');
+        self::assertSame('GET', $this->requests[0]['method']);
+        self::assertSame(0, $this->requests[0]['options']['max_redirects']);
+        self::assertSame(ClickUpOAuthClient::DESCRIBE_TIMEOUT, $this->requests[0]['options']['timeout']);
+        self::assertSame(ClickUpOAuthClient::DESCRIBE_TIMEOUT, $this->requests[0]['options']['max_duration']);
+        self::assertLessThanOrEqual(ClickUpOAuthClient::EXCHANGE_TIMEOUT, 2 * ClickUpOAuthClient::DESCRIBE_TIMEOUT);
+    }
+
     public function testTheAdapterOnlyReadsAndSendsOAuthTokensAsBearer(): void
     {
         $responses = [
@@ -261,7 +304,7 @@ final class ClickUpOAuthClientTest extends TestCase
     }
 
     /**
-     * @param list<MockResponse> $responses
+     * @param list<MockResponse|TimeoutException> $responses
      */
     private function client(array $responses, bool $loopback = false): ClickUpOAuthClient
     {
@@ -269,9 +312,11 @@ final class ClickUpOAuthClientTest extends TestCase
         $http           = new MockHttpClient(function (string $method, string $url, array $options) use (&$responses): MockResponse {
             $this->requests[] = ['method' => $method, 'url' => $url, 'options' => $options];
 
-            return array_shift($responses) ?? new MockResponse('', ['http_code' => 500]);
+            $next = array_shift($responses) ?? new MockResponse('', ['http_code' => 500]);
+
+            return $next instanceof MockResponse ? $next : throw $next;
         });
 
-        return new ClickUpOAuthClient(new ProviderHttpClient($http, new RecordingSleeper(), new MockClock()), $http, allowLoopbackRedirect: $loopback);
+        return new ClickUpOAuthClient($http, allowLoopbackRedirect: $loopback);
     }
 }

@@ -22,6 +22,9 @@ enum OAuthErrorCode: string
     /** The provider refused the access token (HTTP 401). */
     case TokenRejected = 'oauth_token_rejected';
 
+    /** Since ZBT-L2: the provider asked to slow down while connecting (HTTP 429); nothing waits, the user retries later. */
+    case RateLimited = 'oauth_rate_limited';
+
     public function message(): string
     {
         return match ($this) {
@@ -29,6 +32,7 @@ enum OAuthErrorCode: string
             self::StateInvalid   => 'The connection request expired or was not started here.',
             self::ExchangeFailed => 'The provider did not complete the connection.',
             self::TokenRejected  => 'The provider refused the connection token.',
+            self::RateLimited    => 'The provider is busy. Try connecting again in a minute.',
         };
     }
 }

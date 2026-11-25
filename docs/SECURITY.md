@@ -149,6 +149,9 @@ Since 1.23 (audit Appendix EG). What the host must do, and what the bundle does 
 - The code exchange posts the secret in the body (never the query string), follows no redirects, times out after 10 s
   and reads at most 16 KiB. `OAuthGrant` and `ProviderCredential` are redacted in dumps and cannot be serialized;
   OAuth exceptions carry a code and HTTP status, never a body or a chained client exception.
+- `describe()` runs in the interactive callback with its own budget (two GETs of 5 s, no retry, no inline wait; 429 →
+  `oauth_rate_limited`), never the sync retry policy (audit ZBT-L2). The host recipe authorizes both routes in code
+  (ZBT-L1); set `framework.trusted_hosts` because the callback URL is built from the request host.
 - Redirect URIs must be `https://` (loopback `http://` only with `kernel.debug`), without user info or fragment; the
   `returnTo` path is checked with `OAuthReturnPath::isSafe()`; host links the page shows must be `https://` or
   same-origin paths.

@@ -9,11 +9,11 @@ use JsonException;
 use Nowo\TaskBoardBundle\Sync\Content\RemoteContentSanitizer;
 use Nowo\TaskBoardBundle\Sync\Exception\ProviderErrorCode;
 use Nowo\TaskBoardBundle\Sync\Exception\ProviderException;
-use Nowo\TaskBoardBundle\Sync\Http\ProviderHttpClient;
 use Nowo\TaskBoardBundle\Sync\Provider\ClickUp\ClickUpAuthorization;
 use Nowo\TaskBoardBundle\Sync\Provider\ClickUp\ClickUpTaskProvider;
 use Nowo\TaskBoardBundle\Sync\Provider\ProviderCredential;
 use SensitiveParameter;
+use Symfony\Contracts\HttpClient\Exception\TimeoutExceptionInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Symfony\Contracts\HttpClient\ResponseInterface;
 use Throwable;
@@ -41,9 +41,11 @@ use const PHP_QUERY_RFC3986;
  *
  * - {@see self::authorizationUrl()}: the consent URL (constant base, `state` always sent; ClickUp has no PKCE and no
  *   scopes, so the protection is the confidential client plus the single-use {@see OAuthState}).
- * - {@see self::exchange()}: POST to the constant token URL with the parameters in the JSON body (never the query
- *   string), no redirects, 10 s, 16 KiB answer cap; one string `access_token` of printable ASCII (≤ 512 bytes).
- * - {@see self::describe()}: `GET /user` and `GET /team` (the authorising user and the workspaces they authorised).
+ * - {@see self::exchange()}: POST to the constant token URL with the parameters in the JSON body, as ClickUp's
+ *   reference documents them (`application/json` or form; never the query string, so the secret stays out of access
+ *   logs), no redirects, 10 s, 16 KiB answer cap; one string `access_token` of printable ASCII (≤ 512 bytes).
+ * - {@see self::describe()}: `GET /user` and `GET /team` (the authorising user and the workspaces they authorised),
+ *   each one bounded request (5 s, no retry, a 429 fails at once as `oauth_rate_limited`).
  *
  * Exceptions carry a code and the HTTP status, never a response body. No state between calls (FrankenPHP
  * worker-safe with and without kernel reset).
@@ -62,6 +64,12 @@ final readonly class ClickUpOAuthClient
     /** The largest code exchange answer read. */
     public const MAX_EXCHANGE_BYTES = 16_384;
 
+    /** Seconds each of the two `describe()` calls may take (no retry): ≤ 10 s in all, like the exchange. */
+    public const DESCRIBE_TIMEOUT = 5.0;
+
+    /** The largest `describe()` answer read (`GET /team` lists the members of every workspace). */
+    public const MAX_DESCRIBE_BYTES = 2_097_152;
+
     private const CLIENT_ID_PATTERN = '/^[A-Za-z0-9_-]{1,128}$/D';
 
     /** An authorization code or an access token: 1-512 printable ASCII characters. */
@@ -73,10 +81,10 @@ final readonly class ClickUpOAuthClient
 
     /**
      * @param HttpClientInterface $client the bundle's own client (never the profiler-traced one: it records bodies)
+     *                                    — every call here is a single bounded request, never the sync retry policy
      * @param bool $allowLoopbackRedirect `http://localhost` / `127.0.0.1` redirect URIs (the bundle passes `kernel.debug`)
      */
     public function __construct(
-        private ProviderHttpClient $http,
         private HttpClientInterface $client,
         private RemoteContentSanitizer $sanitizer = new RemoteContentSanitizer(),
         private bool $allowLoopbackRedirect = false,
@@ -129,7 +137,7 @@ final readonly class ClickUpOAuthClient
 
                 throw new OAuthException(OAuthErrorCode::ExchangeFailed, $status);
             }
-            $body = $this->body($response, $status);
+            $body = $this->body($response, self::MAX_EXCHANGE_BYTES) ?? throw new OAuthException(OAuthErrorCode::ExchangeFailed, $status);
         } catch (OAuthException $exception) {
             throw $exception;
         } catch (Throwable) {
@@ -153,22 +161,18 @@ final readonly class ClickUpOAuthClient
      * The authorising user (id and name, never the e-mail) and the workspaces the token may read (`GET /team`).
      * Workspaces with a malformed id are left out.
      *
-     * @throws OAuthException `oauth_token_rejected` when ClickUp answers 401
-     * @throws ProviderException any other provider failure (rate limit, timeout, unexpected answer, unknown scheme)
+     * Since ZBT-L2 it is bounded for the interactive callback: two GETs of at most {@see self::DESCRIBE_TIMEOUT}
+     * seconds each (≤ 10 s in all, like {@see self::exchange()}), no retry and no inline rate-limit wait.
+     *
+     * @throws OAuthException `oauth_token_rejected` (401), `oauth_rate_limited` (429: ask the user to try again later)
+     * @throws ProviderException any other failure (`forbidden`, `not_found`, `server_error`, `timeout`, `transport`,
+     *                           `response_too_large`, `invalid_response`, `unsupported_credential`)
      */
     public function describe(ProviderCredential $credential): OAuthIdentity
     {
         $headers = ['Authorization' => ClickUpAuthorization::header($credential)];
-        try {
-            $me    = $this->http->getJson(ClickUpTaskProvider::BASE_URI . 'user', [], $headers);
-            $teams = $this->http->getJson(ClickUpTaskProvider::BASE_URI . 'team', [], $headers);
-        } catch (ProviderException $exception) {
-            if ($exception->errorCode === ProviderErrorCode::AuthFailed) {
-                throw new OAuthException(OAuthErrorCode::TokenRejected, 401);
-            }
-
-            throw $exception;
-        }
+        $me      = $this->getOnce('user', $headers);
+        $teams   = $this->getOnce('team', $headers);
 
         $user   = is_array($me['user'] ?? null) ? $me['user'] : [];
         $userId = $this->id($user['id'] ?? null);
@@ -187,25 +191,77 @@ final readonly class ClickUpOAuthClient
         return new OAuthIdentity($userId, $this->sanitizer->line(is_string($user['username'] ?? null) ? $user['username'] : '', 255), $workspaces);
     }
 
-    private function body(ResponseInterface $response, int $status): string
+    /**
+     * The answer, or null when it is larger than `$maxBytes` (declared or streamed; the response is cancelled).
+     */
+    private function body(ResponseInterface $response, int $maxBytes): ?string
     {
         $length = $response->getHeaders(false)['content-length'][0] ?? null;
-        if (is_string($length) && ctype_digit($length) && (int) $length > self::MAX_EXCHANGE_BYTES) {
+        if (is_string($length) && ctype_digit($length) && (int) $length > $maxBytes) {
             $response->cancel();
 
-            throw new OAuthException(OAuthErrorCode::ExchangeFailed, $status);
+            return null;
         }
         $body = '';
         foreach ($this->client->stream($response) as $chunk) {
             $body .= $chunk->getContent();
-            if (strlen($body) > self::MAX_EXCHANGE_BYTES) {
+            if (strlen($body) > $maxBytes) {
                 $response->cancel();
 
-                throw new OAuthException(OAuthErrorCode::ExchangeFailed, $status);
+                return null;
             }
         }
 
         return $body;
+    }
+
+    /**
+     * Since ZBT-L2: one GET of the interactive callback — no retry, no inline rate-limit wait, no redirect, at most
+     * {@see self::DESCRIBE_TIMEOUT} seconds — unlike the sync client's batch policy.
+     *
+     * @param array<string, string> $headers
+     *
+     * @throws OAuthException `oauth_token_rejected` (401), `oauth_rate_limited` (429)
+     * @throws ProviderException any other failure, with the provider error code
+     *
+     * @return array<mixed>
+     */
+    private function getOnce(string $path, array $headers): array
+    {
+        try {
+            $response = $this->client->request('GET', ClickUpTaskProvider::BASE_URI . $path, [
+                'headers'       => $headers + ['Accept' => 'application/json'],
+                'max_redirects' => 0,
+                'timeout'       => self::DESCRIBE_TIMEOUT,
+                'max_duration'  => self::DESCRIBE_TIMEOUT,
+            ]);
+            $status = $response->getStatusCode();
+            if ($status < 200 || $status >= 300) {
+                $response->cancel();
+
+                throw match (true) {
+                    $status === 401                  => new OAuthException(OAuthErrorCode::TokenRejected, 401),
+                    $status === 429                  => new OAuthException(OAuthErrorCode::RateLimited, 429),
+                    $status === 403                  => new ProviderException(ProviderErrorCode::Forbidden),
+                    $status === 404, $status === 410 => new ProviderException(ProviderErrorCode::NotFound),
+                    $status >= 500                   => new ProviderException(ProviderErrorCode::ServerError),
+                    default                          => new ProviderException(ProviderErrorCode::InvalidResponse),
+                };
+            }
+            $body = $this->body($response, self::MAX_DESCRIBE_BYTES) ?? throw new ProviderException(ProviderErrorCode::ResponseTooLarge);
+        } catch (OAuthException|ProviderException $exception) {
+            throw $exception;
+        } catch (Throwable $exception) {
+            throw new ProviderException($exception instanceof TimeoutExceptionInterface ? ProviderErrorCode::Timeout : ProviderErrorCode::Transport);
+        }
+
+        try {
+            $data = json_decode($body, true, 64, JSON_THROW_ON_ERROR);
+        } catch (JsonException) {
+            throw new ProviderException(ProviderErrorCode::InvalidResponse);
+        }
+
+        return is_array($data) ? $data : throw new ProviderException(ProviderErrorCode::InvalidResponse);
     }
 
     private function id(mixed $value): ?string

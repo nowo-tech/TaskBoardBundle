@@ -158,13 +158,21 @@ and [sync.md](sync.md#connecting-clickup-with-oauth-since-310).
   in the picker.
 - `ProviderErrorCode::UnsupportedCredential` (`unsupported_credential`) and translations (7 locales) for the new texts
   and the OAuth error codes (`task_board.sync.oauth.error.*`).
-- Demo: a no-network OAuth stub of the host's two routes (`DemoClickUpOAuthController`).
+- Demo: a no-network OAuth stub of the host's two routes (`DemoClickUpOAuthController`), labelled demo-only (not a
+  template).
+- `OAuthErrorCode::RateLimited` (`oauth_rate_limited`, audit ZBT-L2).
 
 ### Security
 
 - The ClickUp adapter refuses a credential with an unknown `scheme` before any request, and only ever sends `GET`
   (tested): ClickUp OAuth has no scopes or PKCE, so read-only is the adapter's rule; residual risk documented in
   sync.md (Q-CU-4).
+- Audit ZBT (pre-release): `ClickUpOAuthClient::describe()` no longer uses the sync client's retry policy in the
+  interactive callback: two GETs of at most 5 s each, no retry, no inline rate-limit wait (a 429 fails at once as
+  `oauth_rate_limited`), no redirect, 2 MiB cap (ZBT-L2). The host recipe in sync.md now authorizes both routes in
+  code (board connection managers only, re-checked before the exchange, `purpose` compared, `returnTo` limited to
+  the board's connection page, deny path shown; ZBT-L1), and documents trusted hosts, the untraced client and the
+  session-handler caveat (ZBT-I2, I3, I6).
 
 ## [3.0.0] - 2026-11-25
 

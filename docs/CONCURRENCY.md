@@ -159,7 +159,9 @@ the commit (`TaskEventDeferral`).
 
 CU-1 adds no write: `ClickUpOAuthClient` and the OAuth value objects are stateless, and the token, the `state` and the
 connection row live in the host. The races of the flow are the host's: the `state` is single use (removed from the
-session before it is checked, so a replayed or doubled callback fails), and reconnecting replaces the token of the same
+session before it is checked, so a replayed or doubled callback fails **with a locking session handler** such as
+native files or PDO with locking; with a non-locking handler (Redis, Memcached) two parallel callbacks can both read
+it, and then ClickUp's single-use code makes the second exchange fail), and reconnecting replaces the token of the same
 connection row (one per tenant, ClickUp user and app), so a concurrent run slice either uses the old token or resolves
 the new one through `credentialFor()`; nothing is cached in the bundle.
 

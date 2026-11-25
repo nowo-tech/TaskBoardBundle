@@ -19,6 +19,10 @@ use function is_string;
  * Since 3.1.0 (CU-1): the host's two OAuth routes of docs/sync.md ("Connecting ClickUp with OAuth"), as a stub with
  * no network: the start route skips ClickUp's consent page and comes straight back with a placeholder code, and the
  * callback does not call `ClickUpOAuthClient::exchange()`. A real host does both and stores the token encrypted.
+ *
+ * DEMO ONLY, NOT A TEMPLATE (audit ZBT-I5): it checks no board permission, binds no tenant and "connects" on a plain
+ * GET with a placeholder token, so a cross-site link could flip the demo session's flag. Copy the recipe in
+ * docs/sync.md ("Host recipe: start and callback routes") instead, which authorizes both routes.
  */
 final class DemoClickUpOAuthController extends AbstractController
 {

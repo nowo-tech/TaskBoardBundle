@@ -501,6 +501,7 @@ task_board.sync.oauth.error.oauth_denied: "Die Verbindung wurde nicht autorisier
 task_board.sync.oauth.error.oauth_state_invalid: "Die Verbindungsanfrage ist abgelaufen oder wurde nicht hier gestartet. Bitte erneut versuchen."
 task_board.sync.oauth.error.oauth_exchange_failed: "Der Anbieter hat die Verbindung nicht abgeschlossen. Bitte erneut versuchen."
 task_board.sync.oauth.error.oauth_token_rejected: "Der Anbieter hat die Verbindung abgelehnt. Bitte erneut verbinden."
+task_board.sync.oauth.error.oauth_rate_limited: "Der Anbieter ist ausgelastet. Bitte in einer Minute erneut verbinden."
 task_board.sync.error.internal: "Die Synchronisierung wurde wegen eines Fehlers gestoppt. Von der laufenden Seite wurde nichts geschrieben."
 task_board.sync.error.not_linked: "Das Board ist mit keinem Anbieter verknüpft."
 task_board.sync.error.provider_unavailable: "Dieser Anbieter ist nicht verfügbar."

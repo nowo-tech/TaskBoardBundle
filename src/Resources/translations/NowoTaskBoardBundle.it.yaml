@@ -501,6 +501,7 @@ task_board.sync.oauth.error.oauth_denied: "La connessione non è stata autorizza
 task_board.sync.oauth.error.oauth_state_invalid: "La richiesta di connessione è scaduta o non è stata avviata qui. Riprova."
 task_board.sync.oauth.error.oauth_exchange_failed: "Il provider non ha completato la connessione. Riprova."
 task_board.sync.oauth.error.oauth_token_rejected: "Il provider ha rifiutato la connessione. Connetti di nuovo."
+task_board.sync.oauth.error.oauth_rate_limited: "Il provider è occupato. Riprova a connetterti tra un minuto."
 task_board.sync.error.internal: "La sincronizzazione si è fermata per un errore. Nulla della pagina in corso è stato scritto."
 task_board.sync.error.not_linked: "La bacheca non è collegata a nessun provider."
 task_board.sync.error.provider_unavailable: "Questo provider non è disponibile."
