@@ -1,6 +1,6 @@
 # ClickUp OAuth connection and guided import: design
 
-Status 2026-11-25: **design only, nothing built.** For symfony-beacon decision **D-20261124-07** ("Connect to ClickUp"
+Status 2026-11-25: owner accepted every Q-CU recommendation; **CU-1 (OAuth connection, 3.1.0) built**, CU-2 onwards not started. For symfony-beacon decision **D-20261124-07** ("Connect to ClickUp"
 by OAuth and a guided ClickUp import). Target: the 3.x line of TaskBoardBundle (3.0.0 is on `main`; the 2.x maintenance
 branch gets nothing of this). The owner answers the questions in [§24](#24-questions-for-the-owner-q-cu) before the
 first build task starts; until then every recommended answer is the working assumption.

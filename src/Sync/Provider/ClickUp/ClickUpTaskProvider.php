@@ -102,7 +102,9 @@ use const JSON_UNESCAPED_UNICODE;
 
 /**
  * Since 1.23: ClickUp API v2. The base URI is a constant (never configurable), the token goes only to it, in the
- * `Authorization` header (personal tokens); paging, rate limits, timeouts and size caps are those of
+ * `Authorization` header (personal tokens as is; since 3.1.0 OAuth tokens as `Bearer`, {@see ClickUpAuthorization}).
+ * Every call is a GET: the adapter never writes to ClickUp (an OAuth token has no scopes, so read-only is the
+ * adapter's rule, not the token's); paging, rate limits, timeouts and size caps are those of
  * {@see ProviderHttpClient}. Tree ids carry their level: "w:<workspace>", "s:<space>", "f:<folder>"; a list is its
  * plain ClickUp id.
  */
@@ -1235,7 +1237,7 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Threa
      */
     private function get(ProviderCredential $credential, string $path, array $query = []): array
     {
-        return $this->http->getJson(self::BASE_URI . $path, $query, ['Authorization' => $credential->reveal()]);
+        return $this->http->getJson(self::BASE_URI . $path, $query, ['Authorization' => ClickUpAuthorization::header($credential)]);
     }
 
     /**

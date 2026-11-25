@@ -134,6 +134,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+ClickUp OAuth connection, phase CU-1 of [design/CLICKUP_IMPORT.md](design/CLICKUP_IMPORT.md) (Beacon D-20261124-07;
+owner decisions Q-CU-1 … Q-CU-16 of 2026-11-25). No schema change, no new configuration key. See UPGRADING "To 3.1.0"
+and [sync.md](sync.md#connecting-clickup-with-oauth-since-310).
+
+### Added
+
+- `Sync\OAuth\ClickUpOAuthClient`: the stateless helper a host calls from its own start and callback routes:
+  `authorizationUrl()` (constant consent URL, `state` always sent, redirect URI checked: `https://`, no user info or
+  fragment; `http://localhost` only with `kernel.debug`), `exchange()` (POST with the client id, secret and code in the
+  JSON body, no redirects, 10 s, 16 KiB cap, one printable `access_token`) and `describe()` (`GET /user` + `GET /team`:
+  user id, name and authorised workspaces, never the e-mail). The bundle has no callback route and stores no token and
+  no client secret (Q-CU-1 option A).
+- `Sync\OAuth\OAuthState` (single-use `state`, 43 base64url characters, constant-time compare; a copy of TimeTrack's
+  helper, no TimeTrack dependency, Q-CU-3), `OAuthGrant` (redacted, not serializable; optional `expiresAt` and refresh
+  token, always null today, Q-CU-16), `OAuthIdentity`, `OAuthWorkspace`, `OAuthException` + `OAuthErrorCode` and
+  `OAuthReturnPath::isSafe()`.
+- `ProviderCredential::scheme()` and `Sync\Provider\CredentialScheme`: `options['scheme'] = 'oauth'` makes the ClickUp
+  adapter send `Authorization: Bearer <token>`; without the option (or `personal`) personal tokens work as before.
+- `Sync\Hook\OAuthConnectionStartInterface` (optional, on the `credential_resolver` service): the connection page links
+  the host's start route as *Connect with ClickUp*, and as *Connect again* after `auth_failed` / `forbidden`.
+- `ConnectionChoice` optional `kind` (`CredentialScheme`) and `workspaceIds`: OAuth connections are labelled "OAuth"
+  in the picker.
+- `ProviderErrorCode::UnsupportedCredential` (`unsupported_credential`) and translations (7 locales) for the new texts
+  and the OAuth error codes (`task_board.sync.oauth.error.*`).
+- Demo: a no-network OAuth stub of the host's two routes (`DemoClickUpOAuthController`).
+
+### Security
+
+- The ClickUp adapter refuses a credential with an unknown `scheme` before any request, and only ever sends `GET`
+  (tested): ClickUp OAuth has no scopes or PKCE, so read-only is the adapter's rule; residual risk documented in
+  sync.md (Q-CU-4).
+
 ## [3.0.0] - 2026-11-25
 
 TaskBoard 3.0 (REQ-ARCH-001 rules 3 and 6): only what 2.x announced through deprecation notices is removed. See

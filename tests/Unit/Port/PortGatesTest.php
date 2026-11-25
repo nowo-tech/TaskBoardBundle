@@ -32,6 +32,7 @@ use Nowo\TaskBoardBundle\Move\TaskBoardTargetIdsInterface;
 use Nowo\TaskBoardBundle\Port\FirstBoardProvisioningGate;
 use Nowo\TaskBoardBundle\Port\ImportedTimeEntryReceiverGate;
 use Nowo\TaskBoardBundle\Port\Internal\AttributionOnlyResolverInterface;
+use Nowo\TaskBoardBundle\Port\Internal\OAuthConnectionStarterInterface;
 use Nowo\TaskBoardBundle\Port\Internal\OwnerlessTimeEntrySinkInterface;
 use Nowo\TaskBoardBundle\Port\OwnerlessTimeEntryReceiverGate;
 use Nowo\TaskBoardBundle\Port\Ports;
@@ -44,6 +45,7 @@ use Nowo\TaskBoardBundle\Sync\Hook\AttributionOnlyPolicyInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\ConnectionChoice;
 use Nowo\TaskBoardBundle\Sync\Hook\ImportedTimeEntryReceiverInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
+use Nowo\TaskBoardBundle\Sync\Hook\OAuthConnectionStartInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\OwnerlessTimeEntryReceiverInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\PeopleInvitationInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\ProviderCredentialSourceInterface;
@@ -464,6 +466,37 @@ final class PortGatesTest extends TestCase
         self::assertSame($credential, $resolver->credentialFor($board, 'c-1'));
         self::assertNull($resolver->credentialFor($board, 'c-2'));
         self::assertSame('/tokens/acme/clickup', $resolver->credentialFormUrl($board, 'clickup'));
+        // Since 3.1.0: no OAuth start unless the host's source also implements OAuthConnectionStartInterface.
+        self::assertInstanceOf(OAuthConnectionStarterInterface::class, $resolver);
+        self::assertNull($resolver->connectUrl($board, 'clickup', '/back'));
+        $oauthSource = new class($source) implements ProviderCredentialSourceInterface, OAuthConnectionStartInterface {
+            public function __construct(private readonly ProviderCredentialSourceInterface $inner)
+            {
+            }
+
+            public function connectionsFor(TaskBoardSnapshot $board, object $user, string $provider): array
+            {
+                return $this->inner->connectionsFor($board, $user, $provider);
+            }
+
+            public function credentialFor(TaskBoardSnapshot $board, string $connectionRef): ?ProviderCredential
+            {
+                return $this->inner->credentialFor($board, $connectionRef);
+            }
+
+            public function credentialFormUrl(TaskBoardSnapshot $board, string $provider): ?string
+            {
+                return $this->inner->credentialFormUrl($board, $provider);
+            }
+
+            public function connectUrl(TaskBoardSnapshot $board, string $provider, string $returnTo): string
+            {
+                return '/oauth/' . $board->tenantKey . '/' . $provider . '?returnTo=' . $returnTo;
+            }
+        };
+        $oauthResolver = Ports::credentialResolver($oauthSource);
+        self::assertInstanceOf(OAuthConnectionStarterInterface::class, $oauthResolver);
+        self::assertSame('/oauth/acme/clickup?returnTo=/back', $oauthResolver->connectUrl($board, 'clickup', '/back'));
 
         $actors = new class($actor) implements SyncActorProviderInterface {
             public function __construct(private readonly object $actor)

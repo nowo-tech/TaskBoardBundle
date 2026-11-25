@@ -6,6 +6,7 @@
 - [Threats and mitigations](#threats-and-mitigations)
 - [Access control model](#access-control-model)
 - [Provider sync: host duties and known limits](#provider-sync-host-duties-and-known-limits)
+- [ClickUp OAuth connection (since 3.1.0)](#clickup-oauth-connection-since-310)
 - [Sync writes by e-mail (fixed in 1.28.0)](#sync-writes-by-e-mail-fixed-in-1280)
 - [New board scope step (since 1.30)](#new-board-scope-step-since-130)
 - [Unmatched columns (since 1.28.0)](#unmatched-columns-since-1280)
@@ -136,6 +137,21 @@ Since 1.23 (audit Appendix EG). What the host must do, and what the bundle does 
 - **Progress polling (EG-I7).** `GET …/connection/progress/{runId}` advances an inline run by one slice (contract §6.1).
   It needs the unguessable run id and the manage right; it is not a practical CSRF target, but it is a GET with an
   effect.
+
+## ClickUp OAuth connection (since 3.1.0)
+
+- The bundle has no OAuth route and stores no token or client secret; the host owns the start / callback routes, the
+  `state` in its session and the encrypted token (design Q-CU-1).
+- ClickUp has **no PKCE and no scopes** (Q-CU-4): protection is the confidential client plus the single-use,
+  constant-time `OAuthState` bound to session, actor, tenant and purpose. **Residual risk**: an OAuth token can write
+  wherever its user can; TaskBoard's adapter only sends `GET` (tested) and refuses unknown credential schemes before a
+  request. A stolen token stays dangerous in ClickUp until the user removes the app there (no revoke endpoint).
+- The code exchange posts the secret in the body (never the query string), follows no redirects, times out after 10 s
+  and reads at most 16 KiB. `OAuthGrant` and `ProviderCredential` are redacted in dumps and cannot be serialized;
+  OAuth exceptions carry a code and HTTP status, never a body or a chained client exception.
+- Redirect URIs must be `https://` (loopback `http://` only with `kernel.debug`), without user info or fragment; the
+  `returnTo` path is checked with `OAuthReturnPath::isSafe()`; host links the page shows must be `https://` or
+  same-origin paths.
 
 ## Sync writes by e-mail (fixed in 1.28.0)
 

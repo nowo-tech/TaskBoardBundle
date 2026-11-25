@@ -2,7 +2,7 @@
 
 **Baseline spec**: [`spec.md`](spec.md)  
 **Package**: `nowo-tech/task-board-bundle`  
-**Last audited**: 2026-11-24 (3.0.0: every tracked file of `src/`, releases 1.10–3.0; 2026-11-22: v2.30.0)
+**Last audited**: 2026-11-25 (3.1.0: ClickUp OAuth, FR-SYNC-014); 2026-11-24 (3.0.0: every tracked file of `src/`, releases 1.10–3.0; 2026-11-22: v2.30.0)
 
 Production scope excludes Vitest sources (`*.test.ts`).
 
@@ -871,6 +871,18 @@ Grouped by feature; each row names the semantic requirement of [`spec.md`](spec.
 | `Sync/People/TaskSyncPeopleReassigner.php` | FR-SYNC-011 |
 | `Sync/People/TaskSyncPeopleScanner.php` | FR-SYNC-011 |
 | `Sync/People/TaskSyncPersonRepository.php` | FR-SYNC-011 |
+| `Sync/Provider/ClickUp/ClickUpAuthorization.php` | FR-SYNC-014 |
+| `Sync/Provider/CredentialScheme.php` | FR-SYNC-014 |
+| `Sync/OAuth/ClickUpOAuthClient.php` | FR-SYNC-014 |
+| `Sync/OAuth/OAuthErrorCode.php` | FR-SYNC-014 |
+| `Sync/OAuth/OAuthException.php` | FR-SYNC-014 |
+| `Sync/OAuth/OAuthGrant.php` | FR-SYNC-014 |
+| `Sync/OAuth/OAuthIdentity.php` | FR-SYNC-014 |
+| `Sync/OAuth/OAuthReturnPath.php` | FR-SYNC-014 |
+| `Sync/OAuth/OAuthState.php` | FR-SYNC-014 |
+| `Sync/OAuth/OAuthWorkspace.php` | FR-SYNC-014 |
+| `Sync/Hook/OAuthConnectionStartInterface.php` | FR-SYNC-014 |
+| `Port/Internal/OAuthConnectionStarterInterface.php` | FR-SYNC-014, FR-PORT-001 |
 | `Sync/Provider/ClickUp/ClickUpCommentRenderer.php` | FR-SYNC-010 |
 | `Sync/Provider/ClickUp/ClickUpTaskProvider.php` | FR-SYNC-010 |
 | `Sync/Provider/ContainerPage.php` | FR-SYNC-010 |

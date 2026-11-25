@@ -5,6 +5,8 @@ This document describes how to upgrade between versions of TaskBoard Bundle.
 ## Table of contents
 
 - [Unreleased](#unreleased)
+- [To 3.1.0](#to-310)
+  - [ClickUp OAuth (additive)](#clickup-oauth-additive)
 - [To 3.0.0](#to-300)
   - [Before you upgrade](#before-you-upgrade)
   - [Default flips](#default-flips)
@@ -221,6 +223,29 @@ This document describes how to upgrade between versions of TaskBoard Bundle.
   - [FormKitBundle (admin forms)](#formkitbundle-admin-forms)
 
 ## Unreleased
+
+## To 3.1.0
+
+```bash
+composer require nowo-tech/task-board-bundle:^3.1
+```
+
+No schema change and no new configuration key: nothing to do unless you want *Connect with ClickUp*.
+
+### ClickUp OAuth (additive)
+
+- Personal tokens keep working: a `ProviderCredential` without `options['scheme']` (or with `personal`) is sent as
+  before. For OAuth connections return `new ProviderCredential($token, $ref, ['scheme' => 'oauth'])` from
+  `credentialFor()`; the adapter sends `Authorization: Bearer`.
+- A `scheme` value other than `personal` / `oauth` is now refused before the request with the new
+  `ProviderErrorCode::UnsupportedCredential` (`unsupported_credential`). If your code has an exhaustive `match` on
+  `ProviderErrorCode`, add that case.
+- To offer the OAuth flow, implement `Sync\Hook\OAuthConnectionStartInterface` on your `credential_resolver` service,
+  add the start and callback routes of the recipe in [sync.md](sync.md#host-recipe-start-and-callback-routes) using
+  the autowirable `Sync\OAuth\ClickUpOAuthClient`, and store the token encrypted (one connection per tenant, ClickUp
+  user and app; reconnecting replaces the token under the same ref). The ClickUp app's client id and secret are
+  instance runtime settings (secret encrypted), never in the repository.
+- `ConnectionChoice` gains optional constructor arguments `kind` and `workspaceIds` (defaults keep the 1.23 shape).
 
 ## To 3.0.0
 

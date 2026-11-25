@@ -634,6 +634,12 @@ your own service to change the rule (return `[]` to allow copies across boards).
 Opt-in: with `enabled: false` (the default) there are no sync routes, services, Doctrine mapping or header change. See
 [sync.md](sync.md).
 
+Since 3.1.0 *Connect with ClickUp* (OAuth) needs **no bundle key**: the host owns the flow and passes its instance-wide
+ClickUp app's client id and secret to `Sync\OAuth\ClickUpOAuthClient` on each call. Keep them as instance runtime
+settings (InstanceSettings: env by default, DB switchable, the secret encrypted), never in configuration files committed
+to a repository. Redirect URIs on `http://localhost` / `127.0.0.1` are accepted only with `kernel.debug`. See
+[sync.md](sync.md#connecting-clickup-with-oauth-since-310).
+
 ```yaml
 nowo_task_board:
     sync:

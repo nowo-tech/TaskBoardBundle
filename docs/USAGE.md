@@ -1360,6 +1360,11 @@ archive and restore its tasks. It is opt-in (`sync.enabled`) and the host keeps 
 configuration, the field and conflict rules, the mass-archive guard, files, background runs, the command, the UI and
 the events — is in [sync.md](sync.md).
 
+**Connect with ClickUp (since 3.1.0).** Besides a pasted personal token, a host can connect ClickUp by OAuth: its
+credential source implements `OAuthConnectionStartInterface`, the connection page shows *Connect with ClickUp*, and
+the host's own start / callback routes use `ClickUpOAuthClient` and store the token encrypted. OAuth connections are
+labelled "OAuth" in the picker. Recipe: [sync.md](sync.md#connecting-clickup-with-oauth-since-310).
+
 **What a linked board brings (since 1.27.0).** Managers map remote people to host users on the *People* page of the
 connection; a candidate of the same name is suggested, never selected for them. The task panel shows the typed custom fields and a read-only *From ClickUp* section: custom task id
 (also found by the list search), points, done and closed dates, location, estimate per assignee, recurrence and time in

@@ -1,6 +1,7 @@
 {#
     Since 1.23: the provider and the stored connection (the host keeps the tokens; its page adds one).
-    providers, provider, choices, choice, credentialFormUrl, board.
+    providers, provider, choices, choice, credentialFormUrl, board; since 3.1.0 connectUrl (the host's OAuth start
+    route, optional).
 #}
 {% if providers|length > 1 %}
     <nav class="nowo-task-mb-3" aria-label="{{ 'task_board.sync.connect.providers'|trans({}, 'NowoTaskBoardBundle') }}">
@@ -20,6 +21,9 @@
     {% if choices is empty %}
         <div class="{{ nowo_ui_class('flash_info', 'NowoTaskBoardBundle') }}" role="note" data-testid="nowo-task-sync-no-connection">
             {{ 'task_board.sync.connect.no_connection'|trans({'%provider%': provider.labelKey|trans({}, 'NowoTaskBoardBundle')}, 'NowoTaskBoardBundle') }}
+            {% if connectUrl|default(null) %}
+                <a href="{{ connectUrl }}" class="{{ nowo_ui_class('btn_primary', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }}" data-testid="nowo-task-sync-connect-oauth">{{ 'task_board.sync.connect.oauth'|trans({'%provider%': provider.labelKey|trans({}, 'NowoTaskBoardBundle')}, 'NowoTaskBoardBundle') }}</a>
+            {% endif %}
             {% if credentialFormUrl %}
                 <a href="{{ credentialFormUrl }}" class="">{{ 'task_board.sync.connect.add_token'|trans({}, 'NowoTaskBoardBundle') }}</a>
             {% endif %}
@@ -31,11 +35,14 @@
                 {% for item in choices %}
                     <li>
                         <a class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }} {{ choice and choice.ref == item.ref ? 'btn-secondary' : 'btn-outline-secondary' }}" href="{{ path(nowo_task_board_route('board_connection'), {boardId: board.id, provider: provider.id, connection: item.ref}) }}"{% if choice and choice.ref == item.ref %} aria-current="true"{% endif %}>
-                            {{ item.label }} <span class="{{ nowo_ui_class('muted', 'NowoTaskBoardBundle') }}">…{{ item.lastFour }}</span>
+                            {{ item.label }} <span class="{{ nowo_ui_class('muted', 'NowoTaskBoardBundle') }}">…{{ item.lastFour }}{% if item.kind.value == 'oauth' %} · {{ 'task_board.sync.connect.kind_oauth'|trans({}, 'NowoTaskBoardBundle') }}{% endif %}</span>
                         </a>
                     </li>
                 {% endfor %}
             </ul>
+            {% if connectUrl|default(null) %}
+                <a href="{{ connectUrl }}" class="nowo-task-small" data-testid="nowo-task-sync-connect-oauth">{{ 'task_board.sync.connect.oauth'|trans({'%provider%': provider.labelKey|trans({}, 'NowoTaskBoardBundle')}, 'NowoTaskBoardBundle') }}</a>
+            {% endif %}
             {% if credentialFormUrl %}
                 <a href="{{ credentialFormUrl }}" class="nowo-task-small">{{ 'task_board.sync.connect.add_token'|trans({}, 'NowoTaskBoardBundle') }}</a>
             {% endif %}

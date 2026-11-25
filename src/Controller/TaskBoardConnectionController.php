@@ -12,6 +12,7 @@ use Nowo\TaskBoardBundle\Form\ConnectionPeopleFormType;
 use Nowo\TaskBoardBundle\Form\ConnectionRefreshFormType;
 use Nowo\TaskBoardBundle\Form\ContainerLevelFormType;
 use Nowo\TaskBoardBundle\Form\CsrfActionType;
+use Nowo\TaskBoardBundle\Port\Internal\OAuthConnectionStarterInterface;
 use Nowo\TaskBoardBundle\Port\Internal\ProviderCredentialResolverInterface;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
@@ -193,6 +194,7 @@ final class TaskBoardConnectionController extends AbstractController
             'choices'           => $choices,
             'choice'            => $choice,
             'credentialFormUrl' => $provider instanceof TaskProviderInterface ? $this->credentialFormUrl($board, $provider) : null,
+            'connectUrl'        => $provider instanceof TaskProviderInterface ? $this->connectUrl($board, $provider) : null,
             'linkForm'          => $this->linkFormView($linkForm),
             'tree'              => $tree,
             'levelForms'        => array_map(fn (ContainerPage $level): FormView => $this->levelForm($level)->createView(), $tree ?? []),
@@ -255,6 +257,7 @@ final class TaskBoardConnectionController extends AbstractController
             'levelForm'         => $this->levelForm($page)->createView(),
             'error'             => $error,
             'credentialFormUrl' => $this->credentialFormUrl($board, $provider),
+            'connectUrl'        => $this->connectUrl($board, $provider),
             'containersForm'    => $this->csrfForm('task_board_connection_containers')->createView(),
             'open'              => [],
             'templates'         => $this->templates,
@@ -827,8 +830,24 @@ final class TaskBoardConnectionController extends AbstractController
      */
     private function credentialFormUrl(TaskBoard $board, TaskProviderInterface $provider): ?string
     {
-        $url = $this->credentials->credentialFormUrl($board, $provider->id());
+        return $this->hostUrl($this->credentials->credentialFormUrl($board, $provider->id()));
+    }
 
+    /**
+     * Since 3.1.0 (CU-1): the host's OAuth start route for this board and provider, when its credential source
+     * implements `OAuthConnectionStartInterface`; `returnTo` is this connection page (a same-origin path). Same URL
+     * rule as {@see self::credentialFormUrl()}.
+     */
+    private function connectUrl(TaskBoard $board, TaskProviderInterface $provider): ?string
+    {
+        return $this->credentials instanceof OAuthConnectionStarterInterface
+            ? $this->hostUrl($this->credentials->connectUrl($board, $provider->id(), $this->generateUrl($this->routes['board_connection']['name'], ['boardId' => $board->getId(), 'provider' => $provider->id()])))
+            : null;
+    }
+
+    /** A host link the page shows: an `https://` URL or a same-origin path, else none. */
+    private function hostUrl(?string $url): ?string
+    {
         return $url !== null && preg_match('~^(?:https://[^\s/?#@\\\\]+|/(?![/\\\\]))[^\s\x00-\x1f\x7f\\\\]*$~Di', $url) === 1 ? $url : null;
     }
 
