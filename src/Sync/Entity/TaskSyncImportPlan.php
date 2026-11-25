@@ -166,7 +166,9 @@ class TaskSyncImportPlan
     /** Another connection of the same tenant (the Connect step again): the workspace and what follows are chosen anew. */
     public function useConnection(string $ref, string $label): void
     {
-        $this->connectionRef   = Text::cut($ref, 191);
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->connectionRef = Text::cut($ref, 191);
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->connectionLabel = Text::cut($label, 255);
     }
 
@@ -192,7 +194,9 @@ class TaskSyncImportPlan
 
     public function setWorkspace(string $id, string $name): void
     {
-        $this->workspaceId   = Text::cut($id, 64);
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->workspaceId = Text::cut($id, 64);
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->workspaceName = Text::cut($name, 255);
     }
 
@@ -203,6 +207,7 @@ class TaskSyncImportPlan
 
     public function setDirectory(?TaskSyncDirectory $directory): void
     {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->directory = $directory;
     }
 
@@ -218,6 +223,7 @@ class TaskSyncImportPlan
 
     public function setLayout(ImportPlanLayout $layout): void
     {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->layout = $layout->value;
     }
 
@@ -228,6 +234,7 @@ class TaskSyncImportPlan
 
     public function setReimportMode(ReimportMode $mode): void
     {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->reimportMode = $mode->value;
     }
 
@@ -240,6 +247,7 @@ class TaskSyncImportPlan
     public function reach(ImportPlanStep $saved): void
     {
         if ($saved->next()->position() > $this->getStep()->position()) {
+            // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
             $this->step = $saved->next()->value;
         }
     }
@@ -248,6 +256,7 @@ class TaskSyncImportPlan
     public function rewindTo(ImportPlanStep $step): void
     {
         if ($step->position() < $this->getStep()->position()) {
+            // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
             $this->step = $step->value;
         }
     }
@@ -264,6 +273,7 @@ class TaskSyncImportPlan
      */
     public function setOptions(array $options): void
     {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->options = $options;
     }
 
@@ -288,6 +298,7 @@ class TaskSyncImportPlan
      */
     public function setExcludedFields(array $fieldIds): void
     {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->fieldMap = array_values($fieldIds);
     }
 
@@ -303,14 +314,22 @@ class TaskSyncImportPlan
 
     public function markStarted(?string $actorId, DateTimeImmutable $now, string $lockKey): void
     {
-        $this->startedById     = $actorId;
-        $this->startedAt       = $now;
-        $this->finishedAt      = null;
-        $this->lockKey         = $lockKey;
-        $this->errorCode       = null;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->startedById = $actorId;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->startedAt = $now;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->finishedAt = null;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->lockKey = $lockKey;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->errorCode = null;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->cancelRequested = false;
-        $this->resumeAt        = null;
-        $this->status          = ImportPlanStatus::Queued->value;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->resumeAt = null;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->status = ImportPlanStatus::Queued->value;
     }
 
     public function getFinishedAt(): ?DateTimeImmutable
@@ -321,11 +340,16 @@ class TaskSyncImportPlan
     /** A final state: the workspace is free again for the tenant. */
     public function finish(ImportPlanStatus $status, DateTimeImmutable $now, ?string $errorCode = null): void
     {
-        $this->status     = $status->value;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->status = $status->value;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->finishedAt = $now;
-        $this->lockKey    = null;
-        $this->resumeAt   = null;
-        $this->errorCode  = $errorCode;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->lockKey = null;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->resumeAt = null;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->errorCode = $errorCode;
     }
 
     public function getLockKey(): ?string
@@ -347,8 +371,11 @@ class TaskSyncImportPlan
     /** Stops the slice in a resumable state (`paused` or `rate_limited`), going on at `$resumeAt`. */
     public function hold(ImportPlanStatus $status, ?DateTimeImmutable $resumeAt, ?string $errorCode = null): void
     {
-        $this->status    = $status->value;
-        $this->resumeAt  = $resumeAt;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->status = $status->value;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->resumeAt = $resumeAt;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->errorCode = $errorCode;
     }
 
@@ -364,6 +391,7 @@ class TaskSyncImportPlan
 
     public function requestCancel(): void
     {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->cancelRequested = true;
     }
 
@@ -380,6 +408,7 @@ class TaskSyncImportPlan
      */
     public function setReport(array $report): void
     {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->report = $report;
     }
 
@@ -413,6 +442,7 @@ class TaskSyncImportPlan
 
     public function bumpVersion(): void
     {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         ++$this->version;
     }
 }

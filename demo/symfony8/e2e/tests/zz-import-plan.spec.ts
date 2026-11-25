@@ -4,7 +4,7 @@ import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 /**
- * Since 3.2.0 (CU-2): the guided import from ClickUp in the demo (in-memory provider, no network) — every step with
+ * Since 3.2.0 (CU-2), named to run last (its boards would come first on the index other specs open): the guided import from ClickUp in the demo (in-memory provider, no network) — every step with
  * the keyboard-reachable no-JS forms, axe (WCAG 2.1 A/AA, serious and critical) on each step's card in light and dark,
  * the confirm dialog, the run and the summary. With PLAN_SHOTS_DIR set it also saves a PNG of each step per theme.
  */
@@ -66,8 +66,11 @@ test('import two lists from ClickUp with the guided import', async ({ page }) =>
   await check(page, '3-tree');
   await page.getByTestId('nowo-task-plan-next').click();
 
-  // Boards, statuses, fields, people.
+  // Boards (named so they sort after the demo's own boards, which other specs open first), statuses, fields, people.
   await expect(page.getByTestId('nowo-task-plan-board-row')).toHaveCount(2);
+  const names = page.getByRole('textbox', { name: /Name of the new board/ });
+  await names.nth(0).fill('Zz imported list 1');
+  await names.nth(1).fill('Zz imported list 2');
   await check(page, '4-boards');
   await page.getByTestId('nowo-task-plan-next').click();
   await expect(page.getByTestId('nowo-task-plan-status-table').first()).toBeVisible();

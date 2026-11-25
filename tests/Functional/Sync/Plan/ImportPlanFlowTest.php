@@ -10,6 +10,7 @@ use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncImportPlan;
 use Nowo\TaskBoardBundle\Sync\Plan\ImportPlanStatus;
 use Nowo\TaskBoardBundle\Tests\Functional\App\PredictableCsrfTokenManager;
 use Nowo\TaskBoardBundle\Tests\Functional\App\TestCredentialResolver;
+use Nowo\TaskBoardBundle\Tests\Support\TwinPorts\TwinPortAdapters;
 use Symfony\Component\DomCrawler\Crawler;
 
 use function in_array;
@@ -48,9 +49,12 @@ final class ImportPlanFlowTest extends ImportPlanTestCase
         self::assertResponseStatusCodeSame(404);
         $this->client->request('GET', self::BASE . '/00000000-0000-4000-8000-000000000000');
         self::assertResponseStatusCodeSame(404);
-        TestCredentialResolver::$tenants = false;
-        $this->client->request('GET', self::BASE);
-        self::assertResponseStatusCodeSame(404);
+        if (!TwinPortAdapters::enabled()) {
+            // (The twin host source always implements the tenant interface.)
+            TestCredentialResolver::$tenants = false;
+            $this->client->request('GET', self::BASE);
+            self::assertResponseStatusCodeSame(404);
+        }
     }
 
     public function testTheWholeWizardImportsSeveralBoards(): void
@@ -70,9 +74,13 @@ final class ImportPlanFlowTest extends ImportPlanTestCase
         $crawler = $this->next($crawler, ['workspace' => 'w:1']);
         // 3. Tree: open the space (a POST answered with the page), tick it.
         self::assertSelectorTextContains('[data-testid="nowo-task-plan"]', 'Space 1');
-        $form    = $crawler->filter('[data-testid="nowo-task-plan-node-open"]')->first()->form();
+        $form = $crawler->filter('[data-testid="nowo-task-plan-node-open"]')->first()->form();
+        foreach ($form['task_board_import_plan[containers]'] as $box) {
+            $box->tick();
+        }
         $crawler = $this->client->submit($form);
         self::assertResponseIsSuccessful();
+        self::assertSame('s:1', $crawler->filter('input[type="checkbox"][value="s:1"]')->attr('checked') !== null ? 's:1' : '', 'a ticked box stays ticked');
         self::assertSelectorTextContains('[data-testid="nowo-task-plan"]', 'Backlog');
         $crawler = $this->next($crawler, ['containers' => ['s:1'], 'layout' => 'per_list', 'attachments' => false]);
         // 4. Boards: one per list (the folder brought its list); rename one.

@@ -22,9 +22,11 @@
     {% set _b = 'NowoTaskBoardBundle' %}
     {% set _draft = plan.status.value == 'draft' %}
     <div class="nowo-task-plan" data-testid="nowo-task-plan" data-step="{{ step.value }}">
+        {# Seven markers (UiKit steps stay readable): Boards is part of Lists, and Run is the page itself. #}
+        {% set _shown = step.value == 'boards' ? 'tree' : step.value %}
         {% set _stepItems = [] %}
-        {% for _s in steps %}
-            {% set _status = _s == step ? 'current' : (_s.position < plan.step.position or not _draft ? 'done' : 'upcoming') %}
+        {% for _s in steps|filter(_s => _s.value not in ['boards', 'run']) %}
+            {% set _status = _s.value == _shown ? 'current' : (_s.position < plan.step.position or not _draft ? 'done' : 'upcoming') %}
             {% set _stepItems = _stepItems|merge([{
                 label: ('task_board.import_plan.step.' ~ _s.value)|trans({}, _b),
                 status: _status,

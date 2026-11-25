@@ -163,6 +163,7 @@ final readonly class ImportPlanService
         $plan = $this->lockStep($plan, $version);
         if ($choice->ref !== $plan->getConnectionRef()) {
             $plan->useConnection($choice->ref, $choice->label);
+            // @igor-ignore - Request data: the plan / item row read by id for this call, or a database write through the store; not service state.
             $this->store->removeItems($plan);
             $plan->rewindTo(ImportPlanStep::Workspace);
         }
@@ -199,10 +200,13 @@ final readonly class ImportPlanService
         $plan        = $this->lockStep($plan, $version);
         $workspaceId = self::workspaceIdOf($workspace->id);
         if ($workspaceId !== $plan->getWorkspaceId()) {
+            // @igor-ignore - Request data: the plan / item row read by id for this call, or a database write through the store; not service state.
             $plan->setWorkspace($workspaceId, $workspace->name);
+            // @igor-ignore - Request data: the plan / item row read by id for this call, or a database write through the store; not service state.
             $this->store->removeItems($plan);
             $plan->rewindTo(ImportPlanStep::Tree);
             $provider = $this->provider($plan);
+            // @igor-ignore - Request data: the plan / item row read by id for this call, or a database write through the store; not service state.
             $plan->setDirectory($this->people instanceof TaskSyncPeopleDirectoryService && $provider instanceof PeopleProviderInterface && $provider->capabilities()->people
                 ? $this->people->directoryForTenant($provider->id(), $plan->getTenantKey(), $workspaceId)
                 : null);
@@ -258,6 +262,7 @@ final readonly class ImportPlanService
             }
         }
         $plan = $this->lockStep($plan, $version);
+        // @igor-ignore - Request data: the plan / item row read by id for this call, or a database write through the store; not service state.
         $this->store->removeItems($plan);
         $position = 0;
         foreach ($sources as $source) {
@@ -265,7 +270,9 @@ final readonly class ImportPlanService
             $kind     = $location instanceof RemoteLocation ? $location->kind : RemoteLocationKind::List;
             $this->entityManager->persist(new TaskSyncImportPlanItem($plan, $position++, $kind->value, $source->id, $source->name, $source->path, $source->name));
         }
+        // @igor-ignore - Request data: the plan / item row read by id for this call, or a database write through the store; not service state.
         $plan->setLayout($layout);
+        // @igor-ignore - Request data: the plan / item row read by id for this call, or a database write through the store; not service state.
         $plan->setOptions($options);
         $plan->rewindTo(ImportPlanStep::Boards);
         $plan->reach(ImportPlanStep::Tree);
@@ -445,6 +452,7 @@ final readonly class ImportPlanService
             }
         }
         $plan = $this->lockStep($plan, $version);
+        // @igor-ignore - Request data: the plan / item row read by id for this call, or a database write through the store; not service state.
         $plan->setExcludedFields(array_values(array_unique($excluded)));
         $plan->reach(ImportPlanStep::Fields);
         $this->entityManager->flush();
@@ -454,6 +462,7 @@ final readonly class ImportPlanService
     public function choosePeople(TaskSyncImportPlan $plan, int $version, bool $peopleFirst): void
     {
         $plan = $this->lockStep($plan, $version);
+        // @igor-ignore - Request data: the plan / item row read by id for this call, or a database write through the store; not service state.
         $plan->setOptions([TaskSyncImportPlan::OPTION_PEOPLE => $peopleFirst] + $plan->getOptions());
         $plan->reach(ImportPlanStep::People);
         $this->entityManager->flush();
@@ -463,6 +472,7 @@ final readonly class ImportPlanService
     public function confirmPreview(TaskSyncImportPlan $plan, int $version, ReimportMode $mode): void
     {
         $plan = $this->lockStep($plan, $version);
+        // @igor-ignore - Request data: the plan / item row read by id for this call, or a database write through the store; not service state.
         $plan->setReimportMode($mode);
         $plan->reach(ImportPlanStep::Preview);
         $this->entityManager->flush();
@@ -523,9 +533,11 @@ final readonly class ImportPlanService
         }
         $actorId = ConnectionCreatorActorResolver::idOf($actor);
         if ($mode instanceof ReimportMode) {
+            // @igor-ignore - Request data: the plan / item row read by id for this call, or a database write through the store; not service state.
             $plan->setReimportMode($mode);
         }
         $plan->markStarted($actorId, $this->clock->now(), (string) $plan->getLockKey());
+        // @igor-ignore - Request data: the plan / item row read by id for this call, or a database write through the store; not service state.
         $plan->setReport(['people_waited' => $plan->reportInt('people_waited')]);
         $this->entityManager->flush();
         $this->eventDispatcher?->dispatch(new ImportPlanEvent($plan->getId(), $plan->getTenantKey(), $plan->getProvider(), $plan->getWorkspaceId(), ImportPlanStatus::Queued->value, $actorId, $this->boardIds($plan)), TaskBoardEvents::SYNC_IMPORT_PLAN_STARTED);

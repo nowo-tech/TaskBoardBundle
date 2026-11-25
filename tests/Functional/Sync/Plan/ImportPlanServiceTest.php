@@ -20,6 +20,7 @@ use Nowo\TaskBoardBundle\Sync\Provider\RemoteContainer;
 use Nowo\TaskBoardBundle\Sync\Provider\TaskProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Status\StatusColumns;
 use Nowo\TaskBoardBundle\Tests\Functional\App\TestCredentialResolver;
+use Nowo\TaskBoardBundle\Tests\Support\TwinPorts\TwinPortAdapters;
 use ReflectionProperty;
 
 use function array_key_first;
@@ -88,10 +89,13 @@ final class ImportPlanServiceTest extends ImportPlanTestCase
 
         (new ReflectionProperty(TaskSyncImportPlan::class, 'provider'))->setValue($plan, 'gone');
         $this->refused(ImportPlanException::PROVIDER, static fn (): TaskProviderInterface => $plans->provider($plan));
-        TestCredentialResolver::$tenants = false;
-        self::assertFalse($plans->isAvailable());
-        self::assertSame([], $plans->connections($plan, $this->admin));
-        self::assertNull($plans->credentialFormUrl($plan));
+        if (!TwinPortAdapters::enabled()) {
+            // (The twin host source always implements the tenant interface.)
+            TestCredentialResolver::$tenants = false;
+            self::assertFalse($plans->isAvailable());
+            self::assertSame([], $plans->connections($plan, $this->admin));
+            self::assertNull($plans->credentialFormUrl($plan));
+        }
         self::assertSame('1', ImportPlanService::workspaceIdOf('w:1'));
         self::assertSame('x', ImportPlanService::workspaceIdOf('x'));
     }

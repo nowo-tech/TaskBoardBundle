@@ -146,17 +146,23 @@ class TaskSyncImportPlanItem
     /** A new board named `$name` (created when the plan starts). */
     public function targetNewBoard(string $name): void
     {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->createBoard = true;
-        $this->boardId     = null;
-        $this->boardName   = Text::cut($name, 255);
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->boardId = null;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->boardName = Text::cut($name, 255);
     }
 
     /** An existing board (chosen in the Boards step), or the board the plan just created for this item. */
     public function targetBoard(string $boardId, string $name): void
     {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->createBoard = false;
-        $this->boardId     = $boardId;
-        $this->boardName   = Text::cut($name, 255);
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->boardId = $boardId;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->boardName = Text::cut($name, 255);
     }
 
     /**
@@ -172,6 +178,7 @@ class TaskSyncImportPlanItem
      */
     public function setStatusMap(array $map): void
     {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->statusMap = array_values($map);
     }
 
@@ -202,6 +209,7 @@ class TaskSyncImportPlanItem
         foreach ($statuses as $status) {
             $rows[] = ['name' => Text::cut($status->name, 255), 'type' => $status->type?->value, 'color' => $status->color];
         }
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->remoteStatuses = $rows;
     }
 
@@ -217,8 +225,11 @@ class TaskSyncImportPlanItem
 
     public function advance(ImportPlanItemStatus $status, ImportPlanPhase $phase, ?string $errorCode = null): void
     {
-        $this->status    = $status->value;
-        $this->phase     = $phase->value;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->status = $status->value;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->phase = $phase->value;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->errorCode = $errorCode;
     }
 
@@ -238,6 +249,7 @@ class TaskSyncImportPlanItem
 
     public function setConnectionId(?string $connectionId): void
     {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->connectionId = $connectionId;
     }
 
@@ -248,6 +260,7 @@ class TaskSyncImportPlanItem
 
     public function setRunId(?string $runId): void
     {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->runId = $runId;
     }
 
@@ -264,6 +277,7 @@ class TaskSyncImportPlanItem
      */
     public function setReport(array $report): void
     {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
         $this->report = $report;
     }
 

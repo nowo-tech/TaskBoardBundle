@@ -260,6 +260,7 @@ final readonly class ImportPlanRunner
         $connection = $this->sync->link($board, $provider, $credential, $container, $actor, $options, $item->getStatusMap());
         $directory  = $plan->getDirectory();
         if ($directory instanceof TaskSyncDirectory) {
+            // @igor-ignore - Request data: the plan / item row read by id for this call, or a database write through the store; not service state.
             $connection->setDirectory($this->entityManager->find(TaskSyncDirectory::class, $directory->getId()));
         }
         $item = $this->entityManager->find(TaskSyncImportPlanItem::class, $item->getId()) ?? $item;

@@ -168,8 +168,10 @@ final class TaskSyncImportPlanController extends AbstractController
             // Without script, a folder or space opens by a POST answered with the page (no provider call on a GET).
             $this->denyUnlessValidCsrf($request, 'task_board_import_plan_tree', $posted);
             $opened = array_values(array_unique([...$opened, $open]));
+            // The boxes ticked so far stay ticked on the page with the new level.
+            $ticked = array_values(array_filter((array) ($posted['containers'] ?? []), static fn (mixed $id): bool => is_string($id) && preg_match(ImportPlanService::CONTAINER_ID, $id) === 1));
 
-            return $this->renderStep($plan, $current, $user, null, array_slice($opened, 0, self::MAX_OPEN));
+            return $this->renderStep($plan, $current, $user, null, array_slice($opened, 0, self::MAX_OPEN), Response::HTTP_OK, $ticked);
         }
         try {
             $form = $this->stepForm($plan, $current, $user, $opened);
@@ -381,10 +383,11 @@ final class TaskSyncImportPlanController extends AbstractController
      * The form of a step, with the plan's current values (and the provider's choices for the step).
      *
      * @param list<string> $opened
+     * @param list<string>|null $ticked the tree boxes ticked on the page that opened a level
      *
      * @return FormInterface<mixed>
      */
-    private function stepForm(TaskSyncImportPlan $plan, ImportPlanStep $step, UserInterface $user, array $opened): FormInterface
+    private function stepForm(TaskSyncImportPlan $plan, ImportPlanStep $step, UserInterface $user, array $opened, ?array $ticked = null): FormInterface
     {
         $options = ['step' => $step->value, 'version' => $plan->getVersion(), 'action' => $this->generateUrl($this->routes['import_plan_step']['name'], ['planId' => $plan->getId(), 'step' => $step->value])];
         switch ($step) {
@@ -401,7 +404,7 @@ final class TaskSyncImportPlanController extends AbstractController
                 break;
             case ImportPlanStep::Tree:
                 $options['choices']      = $this->treeChoices($this->tree($plan, $opened));
-                $options['selected']     = array_values(array_filter(array_map(static fn (TaskSyncImportPlanItem $item): string => $item->getSourceId(), $this->store->items($plan)), static fn (string $id): bool => array_key_exists($id, $options['choices'])));
+                $options['selected']     = array_values(array_filter($ticked ?? array_map(static fn (TaskSyncImportPlanItem $item): string => $item->getSourceId(), $this->store->items($plan)), static fn (string $id): bool => array_key_exists($id, $options['choices'])));
                 $options['opened']       = implode(',', $opened);
                 $options['layout']       = $plan->getLayout()->value;
                 $options['plan_options'] = $plan->getOptions();
@@ -441,8 +444,9 @@ final class TaskSyncImportPlanController extends AbstractController
     /**
      * @param FormInterface<mixed>|null $form a submitted form with errors, or null (a new one)
      * @param list<string> $opened
+     * @param list<string>|null $ticked the tree boxes ticked on the page that opened a level
      */
-    private function renderStep(TaskSyncImportPlan $plan, ImportPlanStep $step, UserInterface $user, ?FormInterface $form, array $opened, int $status = Response::HTTP_OK): Response
+    private function renderStep(TaskSyncImportPlan $plan, ImportPlanStep $step, UserInterface $user, ?FormInterface $form, array $opened, int $status = Response::HTTP_OK, ?array $ticked = null): Response
     {
         $vars = [
             'page'      => $this->page('task_board.import_plan.title', $plan),
@@ -454,7 +458,7 @@ final class TaskSyncImportPlanController extends AbstractController
             'error'     => null,
         ];
         try {
-            $vars += $this->stepView($plan, $step, $user, $form, $opened);
+            $vars += $this->stepView($plan, $step, $user, $form, $opened, $ticked);
         } catch (ImportPlanException $exception) {
             $vars['error'] = $exception->reason;
             $vars['form']  = null;
@@ -466,15 +470,16 @@ final class TaskSyncImportPlanController extends AbstractController
     /**
      * @param FormInterface<mixed>|null $form
      * @param list<string> $opened
+     * @param list<string>|null $ticked the tree boxes ticked on the page that opened a level
      *
      * @return array<string, mixed>
      */
-    private function stepView(TaskSyncImportPlan $plan, ImportPlanStep $step, UserInterface $user, ?FormInterface $form, array $opened): array
+    private function stepView(TaskSyncImportPlan $plan, ImportPlanStep $step, UserInterface $user, ?FormInterface $form, array $opened, ?array $ticked = null): array
     {
         if ($step === ImportPlanStep::Run) {
             return $this->runView($plan);
         }
-        $vars = ['form' => ($form ?? $this->stepForm($plan, $step, $user, $opened))->createView()];
+        $vars = ['form' => ($form ?? $this->stepForm($plan, $step, $user, $opened, $ticked))->createView()];
         switch ($step) {
             case ImportPlanStep::Connect:
                 $returnTo                  = $this->generateUrl($this->routes['import_plan']['name'], ['planId' => $plan->getId(), 'step' => ImportPlanStep::Connect->value]);
