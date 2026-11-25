@@ -5,6 +5,10 @@ This document describes how to upgrade between versions of TaskBoard Bundle.
 ## Table of contents
 
 - [Unreleased](#unreleased)
+- [To 3.2.0](#to-320)
+  - [Schema change for hosts with sync: import plans](#schema-change-for-hosts-with-sync-import-plans)
+  - [Import plans: what a host does (opt-in)](#import-plans-what-a-host-does-opt-in)
+  - [Shared request budget per token](#shared-request-budget-per-token)
 - [To 3.1.0](#to-310)
   - [ClickUp OAuth (additive)](#clickup-oauth-additive)
 - [To 3.0.0](#to-300)
@@ -223,6 +227,89 @@ This document describes how to upgrade between versions of TaskBoard Bundle.
   - [FormKitBundle (admin forms)](#formkitbundle-admin-forms)
 
 ## Unreleased
+
+## To 3.2.0
+
+```bash
+composer require nowo-tech/task-board-bundle:^3.2
+```
+
+### Schema change for hosts with sync: import plans
+
+With `sync.enabled` the bundle maps two new tables (whether or not `sync.plans.enabled` is on). Generate a migration
+(`doctrine:migrations:diff`) or apply the SQL of your platform (table prefix `task_board_`; change it if you set
+`table_prefix`). On MySQL / MariaDB the key columns compare byte for byte, as the other key columns since 2.15.1
+(MariaDB: `utf8mb4_nopad_bin` instead of `utf8mb4_0900_bin`).
+
+MySQL 8 / 9:
+
+```sql
+CREATE TABLE task_board_sync_import_plan_items (id VARCHAR(36) NOT NULL, board_id VARCHAR(36) DEFAULT NULL, create_board TINYINT NOT NULL, status_map JSON NOT NULL, remote_statuses JSON DEFAULT NULL, status VARCHAR(16) NOT NULL, phase VARCHAR(16) NOT NULL, connection_id VARCHAR(36) DEFAULT NULL, run_id VARCHAR(36) DEFAULT NULL, report JSON NOT NULL, error_code VARCHAR(64) DEFAULT NULL, position INT NOT NULL, source_type VARCHAR(8) NOT NULL, source_id VARCHAR(128) COLLATE `utf8mb4_0900_bin` NOT NULL, source_label VARCHAR(255) NOT NULL, source_path JSON NOT NULL, board_name VARCHAR(255) NOT NULL, plan_id VARCHAR(36) NOT NULL, INDEX idx_task_board_sync_import_plan_items_board (board_id), UNIQUE INDEX uniq_task_board_sync_import_plan_items_source (plan_id, source_type, source_id), INDEX IDX_3CE5A2CFE899029B (plan_id), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4;
+CREATE TABLE task_board_sync_import_plans (id VARCHAR(36) NOT NULL, created_at DATETIME NOT NULL, workspace_id VARCHAR(64) COLLATE `utf8mb4_0900_bin` DEFAULT NULL, workspace_name VARCHAR(255) DEFAULT NULL, status VARCHAR(16) NOT NULL, layout VARCHAR(16) NOT NULL, reimport_mode VARCHAR(16) NOT NULL, step VARCHAR(16) NOT NULL, options JSON NOT NULL, field_map JSON NOT NULL, started_by_id VARCHAR(191) COLLATE `utf8mb4_0900_bin` DEFAULT NULL, started_at DATETIME DEFAULT NULL, finished_at DATETIME DEFAULT NULL, heartbeat_at DATETIME DEFAULT NULL, resume_at DATETIME DEFAULT NULL, report JSON NOT NULL, lock_key VARCHAR(64) DEFAULT NULL, error_code VARCHAR(64) DEFAULT NULL, cancel_requested TINYINT NOT NULL, version INT NOT NULL, tenant_key VARCHAR(191) COLLATE `utf8mb4_0900_bin` DEFAULT NULL, provider VARCHAR(32) NOT NULL, connection_ref VARCHAR(191) NOT NULL, connection_label VARCHAR(255) NOT NULL, created_by_id VARCHAR(191) COLLATE `utf8mb4_0900_bin` DEFAULT NULL, directory_id VARCHAR(36) DEFAULT NULL, INDEX idx_task_board_sync_import_plans_tenant (tenant_key, status), UNIQUE INDEX uniq_task_board_sync_import_plans_lock (lock_key), INDEX IDX_87D435692C94069F (directory_id), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4;
+ALTER TABLE task_board_sync_import_plan_items ADD CONSTRAINT FK_3CE5A2CFE899029B FOREIGN KEY (plan_id) REFERENCES task_board_sync_import_plans (id) ON DELETE CASCADE;
+ALTER TABLE task_board_sync_import_plans ADD CONSTRAINT FK_87D435692C94069F FOREIGN KEY (directory_id) REFERENCES task_board_sync_directories (id) ON DELETE SET NULL;
+```
+
+PostgreSQL:
+
+```sql
+CREATE TABLE task_board_sync_import_plan_items (id VARCHAR(36) NOT NULL, board_id VARCHAR(36) DEFAULT NULL, create_board BOOLEAN NOT NULL, status_map JSON NOT NULL, remote_statuses JSON DEFAULT NULL, status VARCHAR(16) NOT NULL, phase VARCHAR(16) NOT NULL, connection_id VARCHAR(36) DEFAULT NULL, run_id VARCHAR(36) DEFAULT NULL, report JSON NOT NULL, error_code VARCHAR(64) DEFAULT NULL, position INT NOT NULL, source_type VARCHAR(8) NOT NULL, source_id VARCHAR(128) NOT NULL, source_label VARCHAR(255) NOT NULL, source_path JSON NOT NULL, board_name VARCHAR(255) NOT NULL, plan_id VARCHAR(36) NOT NULL, PRIMARY KEY (id));
+CREATE INDEX idx_task_board_sync_import_plan_items_board ON task_board_sync_import_plan_items (board_id);
+CREATE UNIQUE INDEX uniq_task_board_sync_import_plan_items_source ON task_board_sync_import_plan_items (plan_id, source_type, source_id);
+CREATE INDEX IDX_3CE5A2CFE899029B ON task_board_sync_import_plan_items (plan_id);
+CREATE TABLE task_board_sync_import_plans (id VARCHAR(36) NOT NULL, created_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, workspace_id VARCHAR(64) DEFAULT NULL, workspace_name VARCHAR(255) DEFAULT NULL, status VARCHAR(16) NOT NULL, layout VARCHAR(16) NOT NULL, reimport_mode VARCHAR(16) NOT NULL, step VARCHAR(16) NOT NULL, options JSON NOT NULL, field_map JSON NOT NULL, started_by_id VARCHAR(191) DEFAULT NULL, started_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL, finished_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL, heartbeat_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL, resume_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL, report JSON NOT NULL, lock_key VARCHAR(64) DEFAULT NULL, error_code VARCHAR(64) DEFAULT NULL, cancel_requested BOOLEAN NOT NULL, version INT NOT NULL, tenant_key VARCHAR(191) DEFAULT NULL, provider VARCHAR(32) NOT NULL, connection_ref VARCHAR(191) NOT NULL, connection_label VARCHAR(255) NOT NULL, created_by_id VARCHAR(191) DEFAULT NULL, directory_id VARCHAR(36) DEFAULT NULL, PRIMARY KEY (id));
+CREATE INDEX idx_task_board_sync_import_plans_tenant ON task_board_sync_import_plans (tenant_key, status);
+CREATE UNIQUE INDEX uniq_task_board_sync_import_plans_lock ON task_board_sync_import_plans (lock_key);
+CREATE INDEX IDX_87D435692C94069F ON task_board_sync_import_plans (directory_id);
+ALTER TABLE task_board_sync_import_plan_items ADD CONSTRAINT FK_3CE5A2CFE899029B FOREIGN KEY (plan_id) REFERENCES task_board_sync_import_plans (id) ON DELETE CASCADE NOT DEFERRABLE;
+ALTER TABLE task_board_sync_import_plans ADD CONSTRAINT FK_87D435692C94069F FOREIGN KEY (directory_id) REFERENCES task_board_sync_directories (id) ON DELETE SET NULL NOT DEFERRABLE;
+```
+
+SQLite:
+
+```sql
+CREATE TABLE task_board_sync_import_plan_items (id VARCHAR(36) NOT NULL, board_id VARCHAR(36) DEFAULT NULL, create_board BOOLEAN NOT NULL, status_map CLOB NOT NULL, remote_statuses CLOB DEFAULT NULL, status VARCHAR(16) NOT NULL, phase VARCHAR(16) NOT NULL, connection_id VARCHAR(36) DEFAULT NULL, run_id VARCHAR(36) DEFAULT NULL, report CLOB NOT NULL, error_code VARCHAR(64) DEFAULT NULL, position INTEGER NOT NULL, source_type VARCHAR(8) NOT NULL, source_id VARCHAR(128) NOT NULL, source_label VARCHAR(255) NOT NULL, source_path CLOB NOT NULL, board_name VARCHAR(255) NOT NULL, plan_id VARCHAR(36) NOT NULL, PRIMARY KEY (id), CONSTRAINT FK_3CE5A2CFE899029B FOREIGN KEY (plan_id) REFERENCES task_board_sync_import_plans (id) ON DELETE CASCADE NOT DEFERRABLE INITIALLY IMMEDIATE);
+CREATE INDEX idx_task_board_sync_import_plan_items_board ON task_board_sync_import_plan_items (board_id);
+CREATE UNIQUE INDEX uniq_task_board_sync_import_plan_items_source ON task_board_sync_import_plan_items (plan_id, source_type, source_id);
+CREATE INDEX IDX_3CE5A2CFE899029B ON task_board_sync_import_plan_items (plan_id);
+CREATE TABLE task_board_sync_import_plans (id VARCHAR(36) NOT NULL, created_at DATETIME NOT NULL, workspace_id VARCHAR(64) DEFAULT NULL, workspace_name VARCHAR(255) DEFAULT NULL, status VARCHAR(16) NOT NULL, layout VARCHAR(16) NOT NULL, reimport_mode VARCHAR(16) NOT NULL, step VARCHAR(16) NOT NULL, options CLOB NOT NULL, field_map CLOB NOT NULL, started_by_id VARCHAR(191) DEFAULT NULL, started_at DATETIME DEFAULT NULL, finished_at DATETIME DEFAULT NULL, heartbeat_at DATETIME DEFAULT NULL, resume_at DATETIME DEFAULT NULL, report CLOB NOT NULL, lock_key VARCHAR(64) DEFAULT NULL, error_code VARCHAR(64) DEFAULT NULL, cancel_requested BOOLEAN NOT NULL, version INTEGER NOT NULL, tenant_key VARCHAR(191) DEFAULT NULL, provider VARCHAR(32) NOT NULL, connection_ref VARCHAR(191) NOT NULL, connection_label VARCHAR(255) NOT NULL, created_by_id VARCHAR(191) DEFAULT NULL, directory_id VARCHAR(36) DEFAULT NULL, PRIMARY KEY (id), CONSTRAINT FK_87D435692C94069F FOREIGN KEY (directory_id) REFERENCES task_board_sync_directories (id) ON DELETE SET NULL NOT DEFERRABLE INITIALLY IMMEDIATE);
+CREATE INDEX idx_task_board_sync_import_plans_tenant ON task_board_sync_import_plans (tenant_key, status);
+CREATE UNIQUE INDEX uniq_task_board_sync_import_plans_lock ON task_board_sync_import_plans (lock_key);
+CREATE INDEX IDX_87D435692C94069F ON task_board_sync_import_plans (directory_id);
+```
+
+Nothing existing changes. Without this schema the plan pages fail; the rest of the sync keeps working.
+
+### Import plans: what a host does (opt-in)
+
+- Turn the pages on with `sync.plans.enabled: true` (default `false`: no route, no index entry).
+- Implement `Sync\Hook\TenantCredentialSourceInterface` on your `credential_resolver` service: the tenant's
+  connections, credential, token page and OAuth start (`TenantRef` holds the tenant key). A reference returned here
+  must also work in `credentialFor()` for every board of that tenant.
+- Grant the tenant action `import_plan` in a `TaskBoardEvents::TENANT_ACCESS_CHECK` listener
+  (`TenantAccessCheckEvent::ACTION_IMPORT_PLAN`); by default only `security.manage_roles` holders may import.
+- Pick the runner: inline by default (one slice per request, fine for small imports), `sync.plans.messenger.enabled:
+  true` (route `Nowo\TaskBoardBundle\Sync\Plan\RunImportPlanSlice` to an async transport), or your own
+  `sync.plans.runner` calling `ImportPlanRunner::runSlice()`.
+- Optional: notify the actor on `SYNC_IMPORT_PLAN_FINISHED` / `SYNC_IMPORT_PLAN_FAILED`.
+- New routes (`routes.import_plan*`) and templates (`templates.import_plans`, `templates.import_plan`) only matter if
+  you override names, paths or templates.
+
+### Shared request budget per token
+
+`sync.rate_limit.enabled` is **on by default**: every ClickUp request of a token takes from a one-minute budget kept
+in `cache.app` (or `sync.rate_limit.storage`). Point `storage` at a pool every web and worker process shares (Redis,
+database); with a per-process pool (APCu, array) each process counts alone, as before. Set `enabled: false` to keep
+the 3.1 behaviour (only ClickUp's 429 answers slow the sync down).
+
+Code changes that may touch you:
+
+- `ProviderHttpClient::getJson()` takes an optional fourth argument (`?string $budgetKey`) and its constructor an
+  optional `?ProviderRateBudget $budget`; both default to the 3.1 behaviour.
+- `SyncOptions` gains `createOnly` (default `false`); `InMemoryTaskProvider` implements the new optional
+  `CustomFieldListProviderInterface`.
+- `TaskBoardConnection` options may hold `excludedFields` (provider field ids, one per line) on connections an import
+  plan made.
 
 ## To 3.1.0
 

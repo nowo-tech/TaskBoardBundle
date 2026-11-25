@@ -32,7 +32,9 @@ use Symfony\Component\Clock\NativeClock;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 use Throwable;
 
+use function hash;
 use function preg_match;
+use function substr;
 
 /**
  * Since 1.25: the people directory of a scope (§4 of the contract): find or create it, refresh it from the provider
@@ -91,6 +93,13 @@ final readonly class TaskSyncPeopleDirectoryService
         if (preg_match('/^[a-z0-9:_-]{1,64}$/D', $scope) !== 1) {
             throw new InvalidMappingException('invalid_scope');
         }
+
+        return $this->directoryOf($provider, $scope, $workspaceId);
+    }
+
+    /** The directory of a scope and workspace, created when missing (since 3.2.0 shared by the board and tenant scopes). */
+    private function directoryOf(string $provider, string $scope, string $workspaceId): TaskSyncDirectory
+    {
         $workspaceId = Text::cut($workspaceId, 64);
         $lookAlike   = false;
         $directory   = $this->people->findDirectory($provider, $scope, $workspaceId, $lookAlike);
@@ -106,6 +115,22 @@ final readonly class TaskSyncPeopleDirectoryService
         }
 
         return $directory;
+    }
+
+    /**
+     * Since 3.2.0 (CU-2, Q-CU-6): the directory of an import plan — one per tenant and workspace (scope
+     * `tenant:<40 hex of the key's SHA-256>`), shared by every board of the tenant's plans, so a person is mapped once.
+     * Created when missing.
+     */
+    public function directoryForTenant(string $provider, ?string $tenantKey, string $workspaceId): TaskSyncDirectory
+    {
+        return $this->directoryOf($provider, self::tenantScope($tenantKey), $workspaceId);
+    }
+
+    /** Since 3.2.0: the directory scope of a tenant's import plans. */
+    public static function tenantScope(?string $tenantKey): string
+    {
+        return 'tenant:' . substr(hash('sha256', $tenantKey ?? ''), 0, 40);
     }
 
     /** A session (one page of a run, one scan) on the board. */

@@ -44,6 +44,7 @@ final class AttributeRoutesTest extends TestCase
             multiBoardPath: $config['multi_board']['path'],
             templatesEnabled: true,
             questionsEnabled: true,
+            importPlansEnabled: true,
         );
 
         $declared = [];

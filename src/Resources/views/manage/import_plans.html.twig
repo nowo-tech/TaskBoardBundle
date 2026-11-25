@@ -1,0 +1,51 @@
+{% extends '@NowoUiKitBundle/page/show.html.twig' %}
+{#
+    Since 3.2.0 (CU-2): the tenant's import plans (newest first) and *New import from ClickUp*. Vars: page, plans,
+    newForm, templates. Override with templates.import_plans.
+#}
+
+{% block nowo_ui_styles %}
+    {{ parent() }}
+    <link rel="stylesheet" href="{{ asset('css/task-board.css', 'nowo_task_board') }}">
+{% endblock %}
+
+{% block nowo_ui_show_sections %}
+    <section class="{{ nowo_ui_class('card', 'NowoTaskBoardBundle') }} nowo-task-plan" aria-labelledby="nowo-task-plans-title" data-testid="nowo-task-plans">
+        <div class="{{ nowo_ui_class('card_header', 'NowoTaskBoardBundle') }}">
+            <h2 class="{{ nowo_ui_class('card_title', 'NowoTaskBoardBundle') }}" id="nowo-task-plans-title">{{ 'task_board.import_plan.list.heading'|trans({}, 'NowoTaskBoardBundle') }}</h2>
+        </div>
+        <div class="{{ nowo_ui_class('card_body', 'NowoTaskBoardBundle') }}">
+            <p class="nowo-task-mb-3">{{ 'task_board.import_plan.list.intro'|trans({}, 'NowoTaskBoardBundle') }}</p>
+            {{ form_start(newForm, {action: path(nowo_task_board_route('import_plan_new')), method: 'POST', attr: {class: 'nowo-task-mb-3'}}) }}
+                <button type="submit" class="{{ nowo_ui_class('btn_primary', 'NowoTaskBoardBundle') }}" data-testid="nowo-task-plan-new">
+                    {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'download'}) }}{{ 'task_board.import_plan.list.new'|trans({}, 'NowoTaskBoardBundle') }}
+                </button>
+            {{ form_end(newForm) }}
+            {% if plans is empty %}
+                <p class="{{ nowo_ui_class('muted', 'NowoTaskBoardBundle') }}" data-testid="nowo-task-plans-empty">{{ 'task_board.import_plan.list.empty'|trans({}, 'NowoTaskBoardBundle') }}</p>
+            {% else %}
+                <div class="{{ nowo_ui_class('table_wrap', 'NowoTaskBoardBundle') }}">
+                    <table class="{{ nowo_ui_class('table', 'NowoTaskBoardBundle') }}">
+                        <caption class="visually-hidden">{{ 'task_board.import_plan.list.heading'|trans({}, 'NowoTaskBoardBundle') }}</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col">{{ 'task_board.import_plan.list.created'|trans({}, 'NowoTaskBoardBundle') }}</th>
+                                <th scope="col">{{ 'task_board.import_plan.list.workspace'|trans({}, 'NowoTaskBoardBundle') }}</th>
+                                <th scope="col">{{ 'task_board.import_plan.list.status'|trans({}, 'NowoTaskBoardBundle') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for plan in plans %}
+                                <tr data-testid="nowo-task-plan-row">
+                                    <td><a href="{{ path(nowo_task_board_route('import_plan'), {planId: plan.id}) }}">{{ plan.createdAt|date('Y-m-d H:i') }}</a></td>
+                                    <td>{{ plan.workspaceName ?? 'task_board.import_plan.list.no_workspace'|trans({}, 'NowoTaskBoardBundle') }}</td>
+                                    <td>{{ ('task_board.import_plan.status.' ~ plan.status.value)|trans({}, 'NowoTaskBoardBundle') }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endif %}
+        </div>
+    </section>
+{% endblock %}

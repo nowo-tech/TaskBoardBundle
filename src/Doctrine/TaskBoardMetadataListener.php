@@ -31,6 +31,8 @@ use Nowo\TaskBoardBundle\Question\Entity\TaskQuestionRecipient;
 use Nowo\TaskBoardBundle\Recurrence\Entity\TaskRecurrence;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncDirectory;
+use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncImportPlan;
+use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncImportPlanItem;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncItem;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPerson;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncRun;
@@ -60,6 +62,9 @@ final readonly class TaskBoardMetadataListener
         ColumnSet::class         => ['scopeKey'],
         TaskSyncDirectory::class => ['scopeKey', 'workspaceId'],
         TaskSyncItem::class      => ['externalId'],
+        // Since 3.2.0 (CU-2): the plan's tenant, workspace and user ids, and the item's source.
+        TaskSyncImportPlan::class     => ['tenantKey', 'workspaceId', 'createdById', 'startedById'],
+        TaskSyncImportPlanItem::class => ['sourceId'],
         // Since 2.16.0 (spec 234, FR-061): a template's tenant, mapped only with `task_templates.enabled`.
         TaskTemplate::class => ['tenantKey'],
         // Since 2.19.0 (Beacon spec 234, FR-031): a folder's tenant.

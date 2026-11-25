@@ -1365,6 +1365,13 @@ credential source implements `OAuthConnectionStartInterface`, the connection pag
 the host's own start / callback routes use `ClickUpOAuthClient` and store the token encrypted. OAuth connections are
 labelled "OAuth" in the picker. Recipe: [sync.md](sync.md#connecting-clickup-with-oauth-since-310).
 
+**Import from ClickUp (since 3.2.0).** With `sync.plans.enabled`, users granted `import_plan` (default:
+`security.manage_roles`) see *Import from ClickUp* on the board index: a guided import of several ClickUp lists of
+one workspace into boards of the tenant — connect, workspace, tree, boards, statuses, fields, people, preview with a
+duration estimate, then a background run with progress and a summary (re-import, retry failed lists, JSON report).
+One board per list by default; one per folder or one for everything as options. Re-running a plan never duplicates a
+board, task or comment. Host setup: [sync.md](sync.md#guided-import-from-clickup-import-plans-since-320).
+
 **What a linked board brings (since 1.27.0).** Managers map remote people to host users on the *People* page of the
 connection; a candidate of the same name is suggested, never selected for them. The task panel shows the typed custom fields and a read-only *From ClickUp* section: custom task id
 (also found by the list search), points, done and closed dates, location, estimate per assignee, recurrence and time in

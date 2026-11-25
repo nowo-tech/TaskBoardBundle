@@ -56,9 +56,11 @@ final readonly class SyncCustomFieldWriter
             $existing[$value->getField()->getRemoteId()] = $value;
         }
         $kept = [];
+        // Since 3.2.0 (CU-2): the fields the import plan's Fields step left out, like an excluded type.
+        $excluded = $ctx->connection->excludedFields();
         foreach ($fields as $position => $remote) {
             // What is already stored of an excluded type goes below, like any value the provider no longer gives.
-            if (in_array($remote->type->value, $this->excludeTypes, true)) {
+            if (in_array($remote->type->value, $this->excludeTypes, true) || in_array($remote->id, $excluded, true)) {
                 $ctx->count('fields.excluded');
                 continue;
             }

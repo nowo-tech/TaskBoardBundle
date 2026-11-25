@@ -1,6 +1,6 @@
 # ClickUp OAuth connection and guided import: design
 
-Status 2026-11-25: owner accepted every Q-CU recommendation; **CU-1 (OAuth connection, 3.1.0) built**, CU-2 onwards not started. For symfony-beacon decision **D-20261124-07** ("Connect to ClickUp"
+Status 2026-11-25: owner accepted every Q-CU recommendation; **CU-1 (OAuth connection, 3.1.0) released, CU-2 (import plans and wizard, 3.2.0) built** (see the deviations in §23), CU-3 onwards not started. For symfony-beacon decision **D-20261124-07** ("Connect to ClickUp"
 by OAuth and a guided ClickUp import). Target: the 3.x line of TaskBoardBundle (3.0.0 is on `main`; the 2.x maintenance
 branch gets nothing of this). The owner answers the questions in [§24](#24-questions-for-the-owner-q-cu) before the
 first build task starts; until then every recommended answer is the working assumption.
@@ -600,6 +600,29 @@ Tests: two-process integration tests (under `tests/Integration`, like the existi
 | **CU-3** Native fields | 3.3.0 | Native mapping for text / number / drop-down, provenance marker, conflict rule |
 | **Phase 2a** Scheduled incremental | 3.4.0 | `mode = follow` per item: scheduled `runLinked()` incremental (existing engine), "future lists of a chosen folder / space" option |
 | **Phase 2b** Webhooks | later | Host-owned receiver route recipe + bundle verifier / dispatcher, `taskCreated` / `taskUpdated` / `taskDeleted` / `taskMoved` / `taskComment*` → enqueue an incremental slice of the board; nightly full scan stays as the safety net |
+
+**CU-2 as built (3.2.0), deviations from the text above**
+
+- New boards are created when the plan **starts** (in the request, by the actor, one transaction per board with its
+  item), not by the runner: the worker then always has a board to resolve the actor and the credential with, through
+  the existing board-scoped ports. The item phases are therefore `link` / `sync` / `done`.
+- The wizard asks the tenant's connections through a new optional `TenantCredentialSourceInterface` (+ `TenantRef`)
+  on the credential source; `OAuthConnectionStartInterface` keeps its board signature (the tenant OAuth start is
+  `tenantConnectUrl()`).
+- "One board for everything" takes exactly one chosen container (a space, a folder or a list): a board follows one
+  source, so several unrelated lists cannot share a board.
+- Options offered: comments, attachments, checklists, tracked time (with a sink) and deleting unused columns. Closed,
+  archived and subtasks follow the existing global settings (`sync.import_archived`; closed tasks and subtasks are
+  always read).
+- Fields step: *Synced* or *Do not import* per field (`excludedFields` on the connection, typed fields only); native
+  fields stay CU-3.
+- People step: the tenant directory's counts and the option to pause after the first board is linked (its People
+  page maps the workspace's members, *Resume* continues). Mapping inside the wizard before any board exists is not
+  possible with the board-scoped candidates port.
+- Plan users are stored by id (`created_by_id`, `started_by_id` strings), not through `database.user_reference`.
+- The workspace lock is a unique `lock_key` column on the plan (no Symfony Lock dependency); the rate budget uses a
+  PSR-6 pool directly (no symfony/rate-limiter dependency), fixed one-minute windows.
+- The progress page polls the plan's overall counters (per-board rows are refreshed on reload).
 
 Each slice closes every REQ gap of the bundle before its tag (owner rule "touched bundle = 100 % REQs"); one batched audit
 before the tags, immediate audit for CU-1 (auth).

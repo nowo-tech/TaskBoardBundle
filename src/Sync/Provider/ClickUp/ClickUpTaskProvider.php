@@ -15,6 +15,7 @@ use Nowo\TaskBoardBundle\Sync\Field\SyncFieldType;
 use Nowo\TaskBoardBundle\Sync\Http\ProviderHttpClient;
 use Nowo\TaskBoardBundle\Sync\Provider\ContainerPage;
 use Nowo\TaskBoardBundle\Sync\Provider\ContainerType;
+use Nowo\TaskBoardBundle\Sync\Provider\CustomFieldListProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\FieldCoverageProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\PeopleProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\ProviderApiGapsInterface;
@@ -108,7 +109,7 @@ use const JSON_UNESCAPED_UNICODE;
  * {@see ProviderHttpClient}. Tree ids carry their level: "w:<workspace>", "s:<space>", "f:<folder>"; a list is its
  * plain ClickUp id.
  */
-final readonly class ClickUpTaskProvider implements TaskProviderInterface, ThreadedCommentProviderInterface, PeopleProviderInterface, TimeEntryProviderInterface, SourceProviderInterface, TaskDetailProviderInterface, StatusHistoryProviderInterface, FieldCoverageProviderInterface, ProviderApiGapsInterface, TaskTypeProviderInterface
+final readonly class ClickUpTaskProvider implements TaskProviderInterface, ThreadedCommentProviderInterface, CustomFieldListProviderInterface, PeopleProviderInterface, TimeEntryProviderInterface, SourceProviderInterface, TaskDetailProviderInterface, StatusHistoryProviderInterface, FieldCoverageProviderInterface, ProviderApiGapsInterface, TaskTypeProviderInterface
 {
     public const BASE_URI = 'https://api.clickup.com/api/v2/';
 
@@ -690,6 +691,17 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Threa
     }
 
     /**
+     * Since 3.2.0 (CU-2): the custom field definitions of a source — `GET list/{id}/field`, `folder/{id}/field` or
+     * `space/{id}/field` (one call), parsed like a task's fields, without values.
+     */
+    public function listCustomFields(ProviderCredential $credential, RemoteSource $source): array
+    {
+        $data = $this->get($credential, sprintf('%s/%s/field', $source->location->kind->value, $this->checkId($source->location->id)));
+
+        return $this->fieldParser->parse($data['fields'] ?? null);
+    }
+
+    /**
      * Since 1.25: the list id of a pasted ClickUp address (`https://app.clickup.com/` only, no credentials or port):
      * `/<team>/v/li/<id>`, `/v/li/<id>` or a list view `/<team>/v/<view>/6-<id>-<n>`. No network call.
      */
@@ -1237,7 +1249,8 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Threa
      */
     private function get(ProviderCredential $credential, string $path, array $query = []): array
     {
-        return $this->http->getJson(self::BASE_URI . $path, $query, ['Authorization' => ClickUpAuthorization::header($credential)]);
+        // Since 3.2.0 (CU-2): every call of a token takes from its shared budget (keyed by the reference, never the token).
+        return $this->http->getJson(self::BASE_URI . $path, $query, ['Authorization' => ClickUpAuthorization::header($credential)], self::ID . ':' . $credential->connectionRef);
     }
 
     /**

@@ -334,6 +334,9 @@ final class TaskBoardManageController extends AbstractController
         private readonly ?ConflictResponsePolicy $conflictPolicy = null,
         // Since 2.31.0 (owner rule 2026-11-23): UiKit's remote dialog answers, with the host's configured header names.
         private readonly ?RemoteDialogResponder $remoteDialog = null,
+        // Since 3.2.0 (CU-2): the import plans' route name with `sync.plans.enabled` (the index's "Import from ClickUp",
+        // for users granted `import_plan`).
+        private readonly ?string $importPlansRoute = null,
     ) {
     }
 
@@ -2743,7 +2746,7 @@ final class TaskBoardManageController extends AbstractController
         $canCreate = $form->has('scope') || $this->canCreateBoard($user, $tenant?->key);
 
         return $this->render($this->templates['index'], [
-            'page'           => $this->indexPage($boards, $canCreate),
+            'page'           => $this->indexPage($boards, $canCreate, $this->importPlansRoute !== null && $this->resourceAccessChecker->canImportPlan($user, $tenant?->key)),
             'boards'         => $boards,
             'boardForm'      => $form,
             'dashboardRoute' => $this->dashboardRoute,
@@ -2762,7 +2765,7 @@ final class TaskBoardManageController extends AbstractController
      *
      * @param list<TaskBoard> $boards
      */
-    private function indexPage(array $boards, bool $canCreate): ListPage
+    private function indexPage(array $boards, bool $canCreate, bool $canImportPlans = false): ListPage
     {
         // Since 2.0.2: a toolbar action draws its kind's icon only when the host maps the kind, so the plus stays for the
         // rest, as Tabler for ux_icon: a bare name becomes `bi:plus` there, a 500 on a host that imported Tabler only.
@@ -2779,6 +2782,9 @@ final class TaskBoardManageController extends AbstractController
             dialogId: TaskBoardPages::BOARD_CREATE_DIALOG,
         );
         $actions = $canCreate && $boards !== [] ? [$newBoard('nowo-task-board-new')] : [];
+        if ($canImportPlans && $this->importPlansRoute !== null) {
+            $actions[] = new Action(label: TaskBoardPages::label('task_board.import_plan.index_action'), href: $this->generateUrl($this->importPlansRoute), attributes: ['data-testid' => 'nowo-task-board-import-plans']);
+        }
         if ($this->dashboardRoute !== null) {
             $actions[] = Action::route('custom', $this->dashboardRoute, [], TaskBoardPages::label('task_board.action.back'));
         }

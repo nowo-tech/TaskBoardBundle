@@ -19,6 +19,7 @@ use Nowo\TaskBoardBundle\Controller\TaskCopyController;
 use Nowo\TaskBoardBundle\Controller\TaskMenuController;
 use Nowo\TaskBoardBundle\Controller\TaskQuestionController;
 use Nowo\TaskBoardBundle\Controller\TaskRecurrenceController;
+use Nowo\TaskBoardBundle\Controller\TaskSyncImportPlanController;
 use Symfony\Component\Config\Loader\Loader;
 use Symfony\Component\Routing\Route;
 use Symfony\Component\Routing\RouteCollection;
@@ -71,6 +72,8 @@ final class TaskBoardRouteLoader extends Loader
         // Since 2.23.0 (Beacon spec 242).
         TaskQuestionController::class,
         TaskApiQuestionController::class,
+        // Since 3.2.0 (CU-2).
+        TaskSyncImportPlanController::class,
     ];
 
     /**
@@ -186,6 +189,8 @@ final class TaskBoardRouteLoader extends Loader
         private readonly bool $templatesEnabled = false,
         // Since 2.23.0 (Beacon spec 242): the question routes (pages and API) exist only with `task_questions.enabled`.
         private readonly bool $questionsEnabled = false,
+        // Since 3.2.0 (CU-2): the import plan routes exist only with `sync.enabled` and `sync.plans.enabled`.
+        private readonly bool $importPlansEnabled = false,
     ) {
         parent::__construct();
         $this->attributeLoader = new ControllerAttributeRouteLoader();
@@ -274,6 +279,12 @@ final class TaskBoardRouteLoader extends Loader
             $this->addRoute($collection, $attributes, 'board_connection_people', TaskBoardConnectionController::class . '::people');
             $this->addRoute($collection, $attributes, 'board_connection_people_save', TaskBoardConnectionController::class . '::peopleSave');
             $this->addRoute($collection, $attributes, 'board_connection_people_former', TaskBoardConnectionController::class . '::peopleFormer');
+            if ($this->importPlansEnabled) {
+                // Since 3.2.0 (CU-2): the guided import.
+                foreach (['import_plans' => 'plans', 'import_plan_new' => 'create', 'import_plan' => 'show', 'import_plan_step' => 'save', 'import_plan_start' => 'start', 'import_plan_progress' => 'progress', 'import_plan_cancel' => 'cancel', 'import_plan_resume' => 'resume', 'import_plan_delete' => 'delete', 'import_plan_report' => 'report'] as $key => $action) {
+                    $this->addRoute($collection, $attributes, $key, TaskSyncImportPlanController::class . '::' . $action);
+                }
+            }
         }
 
         $this->addTenantCopies($collection);

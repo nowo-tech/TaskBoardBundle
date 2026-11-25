@@ -17,6 +17,7 @@ and which tests prove it on which databases. Worker mode (kernel not reset) is c
 - [Lock conflicts and replays](#lock-conflicts-and-replays)
 - [Remote sync, imports and the number backfill](#remote-sync-imports-and-the-number-backfill)
 - [ClickUp OAuth helper (3.1)](#clickup-oauth-helper-31)
+- [ClickUp import plans (3.2)](#clickup-import-plans-32)
 - [The application's entity manager](#the-applications-entity-manager)
 - [Residual risks](#residual-risks)
 - [Tests](#tests)
@@ -215,3 +216,22 @@ Accepted. None of them leaks data or bypasses a permission.
 
 Run them on a server with `make test-with-db` (MySQL and PostgreSQL) or with `TASK_BOARD_TEST_DATABASE_URL` set to a
 MariaDB URL (`mysql://…?serverVersion=11.4.0-MariaDB`).
+
+## ClickUp import plans (3.2)
+
+REQ-RUNTIME-003 for the guided import (design §19):
+
+| Race | Guard |
+| --- | --- |
+| Two plans of one tenant and workspace started at once | `lock_key` (SHA-256 of tenant, provider, workspace) is set in the same `UPDATE … WHERE version = ? AND lock_key IS NULL` that checks the version; its unique key refuses the second (`workspace_busy`) |
+| Two managers editing a draft | every step is `UPDATE … SET version = version + 1 WHERE version = ? AND status = 'draft'`; the loser gets `stale` |
+| Two workers on one plan (redelivery, inline poll + worker) | `claim()`: `UPDATE … SET status = 'running', heartbeat_at = now WHERE status IN (queued, paused, rate_limited) OR (running AND heartbeat older than 10 min)`; the loser runs nothing |
+| A crash between "board created" and "item updated" | the board and its item are written in one transaction; a resumed start creates only the boards still missing |
+| A crash after the link, before the item recorded it | the next slice adopts the board's connection when it follows the item's source (no second link) |
+| A plan item and a manual Refresh of the same board | the board's run lock: the item gets `busy` and the plan retries 30 s later |
+| People mapped while the plan runs | the existing re-association locks per board and `PeopleMappingService::resume()` after each board run |
+| Token replaced while running | the next slice resolves it through `credentialFor()`; nothing is cached |
+| Shared request budget | read-modify-write per one-minute window in a PSR-6 pool: two processes may both take the last request; the 10 % margin and the 429 handling cover it |
+
+Tests: `ImportPlanRunnerTest` (lock, claim, adoption, busy board, cancel), `ImportPlanFlowTest` (stale and forged
+steps).

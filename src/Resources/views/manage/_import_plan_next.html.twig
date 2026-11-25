@@ -1,0 +1,7 @@
+{# Since 3.2.0 (CU-2): Save and continue, and Back to the step before (a link, nothing is saved). Vars: plan, step. #}
+<div class="nowo-task-flex nowo-task-wrap nowo-task-gap nowo-task-plan__actions">
+    <button type="submit" class="{{ nowo_ui_class('btn_primary', 'NowoTaskBoardBundle') }}" data-testid="nowo-task-plan-next">{{ 'task_board.import_plan.next'|trans({}, 'NowoTaskBoardBundle') }}</button>
+    {% if step.position > 0 %}
+        <a class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" href="{{ path(nowo_task_board_route('import_plan'), {planId: plan.id, step: steps[step.position - 1].value}) }}" data-testid="nowo-task-plan-back">{{ 'task_board.import_plan.back'|trans({}, 'NowoTaskBoardBundle') }}</a>
+    {% endif %}
+</div>

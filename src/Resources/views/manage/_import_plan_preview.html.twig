@@ -1,0 +1,86 @@
+{#
+    Since 3.2.0 (CU-2, design §8.7): the dry run — per board the counts read from ClickUp (estimated past the pages read),
+    the requests and the duration at the token's rate, the host's quota answer and the warnings; then the re-import mode
+    and *Start import* behind a confirm dialog. Vars: preview (PlanPreview), form, plan, step, timeSink.
+#}
+{% set _b = 'NowoTaskBoardBundle' %}
+<p data-testid="nowo-task-plan-eta">{{ 'task_board.import_plan.preview.eta'|trans({'%requests%': preview.requests, '%minutes%': preview.minutes, '%rate%': preview.perMinute}, _b) }}</p>
+{% if preview.refusal %}
+    <p class="{{ nowo_ui_class('flash_error', _b) }}" role="alert" data-testid="nowo-task-plan-refusal">{{ 'task_board.import_plan.preview.refusal'|trans({'%reason%': preview.refusal}, _b) }}</p>
+{% endif %}
+{% for warning in preview.warnings %}
+    <p class="{{ nowo_ui_class('flash_warning', _b) }}" role="status" data-testid="nowo-task-plan-warning-{{ warning }}">{{ ('task_board.import_plan.preview.warning.' ~ warning)|trans({'%count%': preview.people.unreviewed}, _b) }}</p>
+{% endfor %}
+<div class="{{ nowo_ui_class('table_wrap', _b) }} nowo-task-mb-3">
+    <table class="{{ nowo_ui_class('table', _b) }}" data-testid="nowo-task-plan-preview">
+        <caption class="visually-hidden">{{ 'task_board.import_plan.preview.title'|trans({}, _b) }}</caption>
+        <thead>
+            <tr>
+                <th scope="col">{{ 'task_board.import_plan.preview.board'|trans({}, _b) }}</th>
+                <th scope="col">{{ 'task_board.import_plan.preview.tasks'|trans({}, _b) }}</th>
+                <th scope="col">{{ 'task_board.import_plan.preview.subtasks'|trans({}, _b) }}</th>
+                <th scope="col">{{ 'task_board.import_plan.preview.closed'|trans({}, _b) }}</th>
+                <th scope="col">{{ 'task_board.import_plan.preview.attachments'|trans({}, _b) }}</th>
+                <th scope="col">{{ 'task_board.import_plan.preview.columns'|trans({}, _b) }}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in preview.items %}
+                <tr data-testid="nowo-task-plan-preview-row">
+                    <th scope="row">
+                        {{ row.board }}
+                        <span class="{{ nowo_ui_class(row.newBoard ? 'badge_info' : 'badge_neutral', _b) }} nowo-task-badge">{{ (row.newBoard ? 'task_board.import_plan.preview.new_board' : 'task_board.import_plan.preview.existing_board')|trans({}, _b) }}</span>
+                        {% if row.error %}<span class="{{ nowo_ui_class('badge_warning', _b) }} nowo-task-badge">{{ ('task_board.sync.error.' ~ row.error)|trans({}, _b) }}</span>{% endif %}
+                    </th>
+                    <td>{{ row.estimated ? '≈ ' }}{{ row.tasks }}</td>
+                    <td>{{ row.subtasks }}</td>
+                    <td>{{ row.closed }}</td>
+                    <td>{{ row.attachments }}</td>
+                    <td>{{ row.columns }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr>
+                <th scope="row">{{ 'task_board.import_plan.preview.total'|trans({'%boards%': preview.boardsToCreate}, _b) }}</th>
+                <td>{{ preview.total('tasks') }}</td>
+                <td>{{ preview.total('subtasks') }}</td>
+                <td>{{ preview.total('closed') }}</td>
+                <td>{{ preview.total('attachments') }}</td>
+                <td>{{ preview.total('columns') }}</td>
+            </tr>
+        </tfoot>
+    </table>
+</div>
+<p data-testid="nowo-task-plan-people">{{ 'task_board.import_plan.people.counts'|trans({'%total%': preview.people.total, '%mapped%': preview.people.mapped, '%unreviewed%': preview.people.unreviewed}, _b) }}</p>
+{% if form %}
+    {{ form_start(form, {attr: {id: 'nowo-task-plan-start-form', class: 'nowo-task-plan__form'}}) }}
+        {{ form_widget(form.version) }}
+        {{ form_row(form.mode) }}
+        <div class="nowo-task-flex nowo-task-wrap nowo-task-gap nowo-task-plan__actions">
+            <button type="button" class="{{ nowo_ui_class('btn_primary', _b) }}" data-nowo-ui-dialog-open="nowo-task-plan-start" data-testid="nowo-task-plan-start"{% if preview.refusal or preview.hasWarning('workspace_busy') %} disabled aria-disabled="true"{% endif %}>
+                {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'download'}) }}{{ 'task_board.import_plan.preview.start'|trans({}, _b) }}
+            </button>
+            <a class="{{ nowo_ui_class('btn_secondary', _b) }}" href="{{ path(nowo_task_board_route('import_plan'), {planId: plan.id, step: 'people'}) }}" data-testid="nowo-task-plan-back">{{ 'task_board.import_plan.back'|trans({}, _b) }}</a>
+        </div>
+        <noscript><p><button type="submit" class="{{ nowo_ui_class('btn_primary', _b) }}">{{ 'task_board.import_plan.preview.start'|trans({}, _b) }}</button></p></noscript>
+    {{ form_end(form) }}
+    {% set _body %}
+        <div class="nowo-task-dialog__body">
+            <p>{{ 'task_board.import_plan.preview.confirm'|trans({'%boards%': preview.items|length, '%new%': preview.boardsToCreate, '%minutes%': preview.minutes}, _b) }}</p>
+        </div>
+    {% endset %}
+    {% set _footer %}
+        <button type="button" class="{{ nowo_ui_class('btn_secondary', _b) }}" data-nowo-ui-dialog-close>{{ 'task_board.action.cancel'|trans({}, _b) }}</button>
+        <button type="submit" form="nowo-task-plan-start-form" class="{{ nowo_ui_class('btn_primary', _b) }}" data-testid="nowo-task-plan-start-confirm">{{ 'task_board.import_plan.preview.start'|trans({}, _b) }}</button>
+    {% endset %}
+    {{ include(nowo_ui_partial('dialog', _b), {
+        id: 'nowo-task-plan-start',
+        title: 'task_board.import_plan.preview.confirm_title'|trans({}, _b),
+        bundle: _b,
+        root_class: 'nowo-task-dialog nowo-task-dialog--native',
+        body: _body,
+        footer: _footer,
+        footer_attr: {class: 'nowo-task-dialog__footer nowo-task-dialog__actions'},
+    }, false) }}
+{% endif %}
