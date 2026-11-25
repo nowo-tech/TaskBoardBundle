@@ -89,15 +89,22 @@ class TaskSyncImportPlan
     private ?DateTimeImmutable $startedAt = null;
 
     #[ORM\Column(name: 'finished_at', type: 'datetime_immutable', nullable: true)]
-    private ?DateTimeImmutable $finishedAt = null;
+    private ?DateTimeImmutable $finishedAt = null; // @phpstan-ignore property.unusedType (written by the store's conditional updates)
 
     /** Written by {@see ImportPlanStore}'s claim query. */
     #[ORM\Column(name: 'heartbeat_at', type: 'datetime_immutable', nullable: true)]
     private ?DateTimeImmutable $heartbeatAt = null; // @phpstan-ignore property.unusedType
 
+    /**
+     * Since the audit ZBY-L2 fencing: the token of the slice that claimed the plan; every write of that slice is
+     * conditional on it, so a slice that was taken over (or a cancelled plan) cannot write or free the lock any more.
+     */
+    #[ORM\Column(name: 'run_token', type: 'string', length: 36, nullable: true)]
+    private ?string $runToken = null; // @phpstan-ignore property.unusedType
+
     /** When a paused or rate-limited plan may go on (the inline runner waits for it). */
     #[ORM\Column(name: 'resume_at', type: 'datetime_immutable', nullable: true)]
-    private ?DateTimeImmutable $resumeAt = null;
+    private ?DateTimeImmutable $resumeAt = null; // @phpstan-ignore property.unusedType (written by the store's conditional updates)
 
     /** @var array<string, int|list<string>|string> counts and codes only */
     #[ORM\Column(type: 'json')]
@@ -111,7 +118,7 @@ class TaskSyncImportPlan
     private ?string $lockKey = null;
 
     #[ORM\Column(name: 'error_code', type: 'string', length: 64, nullable: true)]
-    private ?string $errorCode = null;
+    private ?string $errorCode = null; // @phpstan-ignore property.unusedType (written by the store's conditional updates)
 
     #[ORM\Column(name: 'cancel_requested', type: 'boolean')]
     private bool $cancelRequested = false;
@@ -337,21 +344,6 @@ class TaskSyncImportPlan
         return $this->finishedAt;
     }
 
-    /** A final state: the workspace is free again for the tenant. */
-    public function finish(ImportPlanStatus $status, DateTimeImmutable $now, ?string $errorCode = null): void
-    {
-        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
-        $this->status = $status->value;
-        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
-        $this->finishedAt = $now;
-        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
-        $this->lockKey = null;
-        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
-        $this->resumeAt = null;
-        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
-        $this->errorCode = $errorCode;
-    }
-
     public function getLockKey(): ?string
     {
         return $this->lockKey;
@@ -363,20 +355,15 @@ class TaskSyncImportPlan
         return $this->heartbeatAt;
     }
 
+    /** The token of the slice that holds the plan (null when none runs). */
+    public function getRunToken(): ?string
+    {
+        return $this->runToken;
+    }
+
     public function getResumeAt(): ?DateTimeImmutable
     {
         return $this->resumeAt;
-    }
-
-    /** Stops the slice in a resumable state (`paused` or `rate_limited`), going on at `$resumeAt`. */
-    public function hold(ImportPlanStatus $status, ?DateTimeImmutable $resumeAt, ?string $errorCode = null): void
-    {
-        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
-        $this->status = $status->value;
-        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
-        $this->resumeAt = $resumeAt;
-        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
-        $this->errorCode = $errorCode;
     }
 
     public function getErrorCode(): ?string
@@ -387,12 +374,6 @@ class TaskSyncImportPlan
     public function isCancelRequested(): bool
     {
         return $this->cancelRequested;
-    }
-
-    public function requestCancel(): void
-    {
-        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
-        $this->cancelRequested = true;
     }
 
     /**

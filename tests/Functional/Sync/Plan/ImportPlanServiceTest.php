@@ -112,10 +112,13 @@ final class ImportPlanServiceTest extends ImportPlanTestCase
         [$first, $second] = $this->store()->items($plan);
 
         $this->refused(ImportPlanException::BOARD_UNAVAILABLE, fn () => $plans->chooseBoards($plan, $plan->getVersion(), [$first->getId() => ['target' => 'nope', 'name' => '']], $this->admin));
+        // A refused step leaves nothing behind (one transaction); the caller reads the plan again.
+        $plan = $this->fresh($plan);
         $this->refused(ImportPlanException::BOARD_UNAVAILABLE, fn () => $plans->chooseBoards($plan, $plan->getVersion(), [
             $first->getId()  => ['target' => $existing->getId(), 'name' => ''],
             $second->getId() => ['target' => $existing->getId(), 'name' => ''],
         ], $this->admin));
+        $plan = $this->fresh($plan);
         $plans->chooseBoards($plan, $plan->getVersion(), [$first->getId() => ['target' => $existing->getId(), 'name' => ''], $second->getId() => ['target' => 'new', 'name' => "  \x01 "]], $this->admin);
         $items = $this->store()->items($plan);
         self::assertSame([$existing->getId(), false], [$items[0]->getBoardId(), $items[0]->isCreateBoard()]);
@@ -129,6 +132,7 @@ final class ImportPlanServiceTest extends ImportPlanTestCase
         self::assertSame(array_key_first($columns), ImportPlanService::defaultColumn('TO DO', $columns));
         self::assertSame(StatusColumns::CREATE, ImportPlanService::defaultColumn('Review', $columns));
         $this->refused(ImportPlanException::INVALID, static fn () => $plans->mapStatuses($plan, $plan->getVersion(), [$groups[0]['key'] => ['forged']]));
+        $plan = $this->fresh($plan);
         $plans->mapStatuses($plan, $plan->getVersion(), [$groups[0]['key'] => [StatusColumns::SKIP]]);
         $map = $this->store()->items($plan)[0]->getStatusMap();
         self::assertSame([StatusColumns::SKIP, 'open'], [$map[0]['column'], $map[0]['type'] ?? null]);

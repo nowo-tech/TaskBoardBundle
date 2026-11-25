@@ -9,6 +9,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncImportPlan;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncImportPlanItem;
 use Nowo\TaskBoardBundle\Sync\Plan\ImportPlanStatus;
+use Nowo\TaskBoardBundle\ValueObject\Uuid;
 
 use function array_filter;
 use function array_map;
@@ -16,12 +17,17 @@ use function array_values;
 use function count;
 use function hash;
 
+use const DATE_ATOM;
+
 /**
  * Since 3.2.0 (CU-2): the queries of import plans — their items, the run claim (one worker per plan, REQ-RUNTIME-003),
  * the workspace lock key and the retention prune. Stateless: every call goes to the database.
  */
 final readonly class ImportPlanStore
 {
+    /** The states a slice may claim. */
+    private const WAITING = ['queued', 'paused', 'rate_limited'];
+
     public function __construct(
         private EntityManagerInterface $entityManager,
     ) {
@@ -92,33 +98,159 @@ final readonly class ImportPlanStore
 
     /**
      * Takes the run of a plan for one slice: a queued, paused or rate-limited plan, or a running one whose heartbeat is
-     * older than `$staleBefore` (a worker that died). A compare-and-set: of two workers (a redelivery) one wins. The plan
-     * row is read again afterwards.
+     * older than `$staleBefore` (a worker that died). A compare-and-set: of two workers (a redelivery) one wins. Returns
+     * the slice's token (every later write of the slice names it, audit ZBY-L2) or null; the plan row is read again.
      */
-    public function claim(TaskSyncImportPlan $plan, DateTimeImmutable $now, DateTimeImmutable $staleBefore): bool
+    public function claim(TaskSyncImportPlan $plan, DateTimeImmutable $now, DateTimeImmutable $staleBefore): ?string
     {
+        $token   = Uuid::generate()->toString();
         $updated = $this->entityManager->createQuery(
-            'UPDATE ' . TaskSyncImportPlan::class . ' p SET p.status = :running, p.heartbeatAt = :now
+            'UPDATE ' . TaskSyncImportPlan::class . ' p SET p.status = :running, p.heartbeatAt = :now, p.runToken = :token
              WHERE p.id = :id AND (p.status IN (:waiting) OR (p.status = :running AND (p.heartbeatAt IS NULL OR p.heartbeatAt < :stale)))',
         )
             ->setParameter('running', ImportPlanStatus::Running->value)
-            ->setParameter('waiting', [ImportPlanStatus::Queued->value, ImportPlanStatus::Paused->value, ImportPlanStatus::RateLimited->value])
+            ->setParameter('waiting', self::WAITING)
             ->setParameter('now', $now, 'datetime_immutable')
             ->setParameter('stale', $staleBefore, 'datetime_immutable')
+            ->setParameter('token', $token)
             ->setParameter('id', $plan->getId())
             ->execute();
         $this->entityManager->refresh($plan);
 
-        return (int) $updated === 1;
+        return (int) $updated === 1 ? $token : null;
     }
 
-    public function heartbeat(TaskSyncImportPlan $plan, DateTimeImmutable $now): void
+    /** The heartbeat of the slice holding `$token`; false when another slice took the plan over (or it ended). */
+    public function heartbeat(string $planId, string $token, DateTimeImmutable $now): bool
     {
-        $this->entityManager->createQuery('UPDATE ' . TaskSyncImportPlan::class . ' p SET p.heartbeatAt = :now WHERE p.id = :id AND p.status = :running')
-            ->setParameter('now', $now, 'datetime_immutable')
-            ->setParameter('id', $plan->getId())
-            ->setParameter('running', ImportPlanStatus::Running->value)
-            ->execute();
+        return $this->fenced('p.heartbeatAt = :now', $planId, $token, ['now' => [$now, 'datetime_immutable']]);
+    }
+
+    /**
+     * @param array<string, int|list<string>|string> $report
+     */
+    public function saveReport(string $planId, string $token, array $report): bool
+    {
+        return $this->fenced('p.report = :report', $planId, $token, ['report' => [$report, 'json']]);
+    }
+
+    /**
+     * Ends the slice in a resumable state (`paused` or `rate_limited`), due at `$resumeAt` (null: until *Resume*).
+     *
+     * @param array<string, int|list<string>|string> $report
+     */
+    public function hold(string $planId, string $token, ImportPlanStatus $status, ?DateTimeImmutable $resumeAt, ?string $errorCode, array $report): bool
+    {
+        return $this->fenced(
+            'p.status = :status, p.resumeAt = :resume, p.errorCode = :code, p.report = :report, p.runToken = NULL, p.heartbeatAt = NULL',
+            $planId,
+            $token,
+            ['status' => [$status->value, null], 'resume' => [$resumeAt, 'datetime_immutable'], 'code' => [$errorCode, null], 'report' => [$report, 'json']],
+        );
+    }
+
+    /**
+     * A final state of the slice holding `$token`: the workspace lock is released only by it.
+     *
+     * @param array<string, int|list<string>|string> $report
+     */
+    public function finish(string $planId, string $token, ImportPlanStatus $status, DateTimeImmutable $now, ?string $errorCode, array $report): bool
+    {
+        return $this->fenced(
+            'p.status = :status, p.finishedAt = :now, p.errorCode = :code, p.report = :report, p.lockKey = NULL, p.resumeAt = NULL, p.runToken = NULL, p.heartbeatAt = NULL',
+            $planId,
+            $token,
+            ['status' => [$status->value, null], 'now' => [$now, 'datetime_immutable'], 'code' => [$errorCode, null], 'report' => [$report, 'json']],
+        );
+    }
+
+    /** Cancel of a plan nobody runs (queued, paused, rate-limited): a compare-and-set on its status. */
+    public function cancelWaiting(string $planId, DateTimeImmutable $now): bool
+    {
+        return $this->update(
+            'p.status = :cancelled, p.finishedAt = :now, p.lockKey = NULL, p.resumeAt = NULL, p.runToken = NULL, p.heartbeatAt = NULL, p.cancelRequested = true',
+            'p.id = :id AND p.status IN (:waiting)',
+            ['cancelled' => [ImportPlanStatus::Cancelled->value, null], 'now' => [$now, 'datetime_immutable'], 'id' => [$planId, null], 'waiting' => [self::WAITING, null]],
+        );
+    }
+
+    /** Cancel of a running plan: its slice stops before its next item. */
+    public function requestCancel(string $planId): bool
+    {
+        return $this->update('p.cancelRequested = true', 'p.id = :id AND p.status = :running', ['id' => [$planId, null], 'running' => [ImportPlanStatus::Running->value, null]]);
+    }
+
+    /** *Resume*: a paused or rate-limited plan is due now (a compare-and-set on its status). */
+    public function makeDue(string $planId, DateTimeImmutable $now): bool
+    {
+        return $this->update('p.resumeAt = :now', 'p.id = :id AND p.status IN (:held)', ['now' => [$now, 'datetime_immutable'], 'id' => [$planId, null], 'held' => [[ImportPlanStatus::Paused->value, ImportPlanStatus::RateLimited->value], null]]);
+    }
+
+    /** The plan as the database holds it now (the conditional updates bypass the identity map). */
+    public function reload(string $planId): ?TaskSyncImportPlan
+    {
+        $plan = $this->find($planId);
+        if ($plan instanceof TaskSyncImportPlan) {
+            $this->entityManager->refresh($plan);
+        }
+
+        return $plan;
+    }
+
+    /**
+     * A write of the running slice holding `$token`.
+     *
+     * @param array<string, array{0: mixed, 1: string|null}> $parameters
+     */
+    private function fenced(string $set, string $planId, string $token, array $parameters): bool
+    {
+        return $this->update($set, 'p.id = :id AND p.runToken = :token AND p.status = :running', $parameters + ['id' => [$planId, null], 'token' => [$token, null], 'running' => [ImportPlanStatus::Running->value, null]]);
+    }
+
+    /**
+     * @param array<string, array{0: mixed, 1: string|null}> $parameters
+     */
+    private function update(string $set, string $where, array $parameters): bool
+    {
+        $query = $this->entityManager->createQuery('UPDATE ' . TaskSyncImportPlan::class . ' p SET ' . $set . ' WHERE ' . $where);
+        foreach ($parameters as $name => [$value, $type]) {
+            $query->setParameter($name, $value, $type);
+        }
+
+        return (int) $query->execute() === 1;
+    }
+
+    /**
+     * Since the audit ZBY-I6: the plans a user created or started, for the host's access (export) request — ids,
+     * dates and states only.
+     *
+     * @return list<array{planId: string, tenantKey: string|null, provider: string, workspaceId: string|null, role: string, status: string, createdAt: string, startedAt: string|null, finishedAt: string|null}>
+     */
+    public function exportFor(string $userId): array
+    {
+        /** @var list<array{id: string, tenantKey: string|null, provider: string, workspaceId: string|null, createdById: string|null, startedById: string|null, status: string, createdAt: DateTimeImmutable, startedAt: DateTimeImmutable|null, finishedAt: DateTimeImmutable|null}> $plans */
+        $plans = $this->entityManager->createQuery(
+            'SELECT p.id, p.tenantKey, p.provider, p.workspaceId, p.createdById, p.startedById, p.status, p.createdAt, p.startedAt, p.finishedAt
+             FROM ' . TaskSyncImportPlan::class . ' p WHERE p.createdById = :id OR p.startedById = :id ORDER BY p.createdAt ASC',
+        )
+            ->setParameter('id', $userId)
+            ->getArrayResult();
+        $rows = [];
+        foreach ($plans as $plan) {
+            $rows[] = [
+                'planId'      => $plan['id'],
+                'tenantKey'   => $plan['tenantKey'],
+                'provider'    => $plan['provider'],
+                'workspaceId' => $plan['workspaceId'],
+                'role'        => $plan['startedById'] === $userId ? ($plan['createdById'] === $userId ? 'created_started' : 'started') : 'created',
+                'status'      => $plan['status'],
+                'createdAt'   => $plan['createdAt']->format(DATE_ATOM),
+                'startedAt'   => $plan['startedAt']?->format(DATE_ATOM),
+                'finishedAt'  => $plan['finishedAt']?->format(DATE_ATOM),
+            ];
+        }
+
+        return $rows;
     }
 
     /**

@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Tests\Functional\Sync\Plan;
 use DateTimeImmutable;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
+use Nowo\TaskBoardBundle\Event\TenantAccessCheckEvent;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncImportPlan;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncImportPlanItem;
@@ -31,6 +32,7 @@ use RuntimeException;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 
 use function array_key_last;
+use function json_encode;
 
 /**
  * Since 3.2.0 (CU-2, design §9.2, §13, §14, §19): the plan runner — start creates the boards and takes the workspace
@@ -63,7 +65,7 @@ final class ImportPlanRunnerTest extends ImportPlanTestCase
     {
         $plan = $this->started(['L1', 'L2'], ['deleteUnusedColumns' => true]);
         self::assertCount(1, RecordingPlanRunner::$requests);
-        self::assertSame([$plan->getId(), (string) $this->admin->getId()], [RecordingPlanRunner::$requests[0]->planId, RecordingPlanRunner::$requests[0]->actorId]);
+        self::assertSame([$plan->getId(), 0], [RecordingPlanRunner::$requests[0]->planId, RecordingPlanRunner::$requests[0]->delaySeconds]);
         $plan = $this->fresh($plan);
         self::assertSame(ImportPlanStatus::Queued, $plan->getStatus());
         self::assertNotNull($plan->getLockKey());
@@ -74,17 +76,17 @@ final class ImportPlanRunnerTest extends ImportPlanTestCase
             self::assertNotNull($item->getBoardId());
         }
 
-        self::assertNull($this->runner()->runSlice('00000000-0000-4000-8000-000000000000', null, 60));
-        self::assertSame(ImportPlanStatus::Succeeded, $this->runner()->runSlice($plan->getId(), null, 60));
+        self::assertNull($this->runner()->runSlice('00000000-0000-4000-8000-000000000000', 60));
+        self::assertSame(ImportPlanStatus::Succeeded, $this->runner()->runSlice($plan->getId(), 60));
         $plan = $this->fresh($plan);
         self::assertSame([3, 2, 0, null], [$plan->reportInt('created'), $plan->reportInt('items_done'), $plan->reportInt('items_failed'), $plan->getLockKey()]);
         self::assertSame(TaskBoardEvents::SYNC_IMPORT_PLAN_FINISHED, $this->events[1][0]);
         self::assertSame(['created' => 3], ['created' => $this->events[1][1]->counts['created']]);
-        self::assertNull($this->runner()->runSlice($plan->getId(), null, 60), 'an ended plan is left alone');
+        self::assertNull($this->runner()->runSlice($plan->getId(), 60), 'an ended plan is left alone');
 
         // Re-import, only new tasks: the imported ones stay as they are (counted unchanged).
         $this->plans()->start($plan, $plan->getVersion(), $this->admin, ReimportMode::AddNewOnly);
-        self::assertSame(ImportPlanStatus::Succeeded, $this->runner()->runSlice($plan->getId(), null, 60));
+        self::assertSame(ImportPlanStatus::Succeeded, $this->runner()->runSlice($plan->getId(), 60));
         self::assertSame([0, 3], [$this->fresh($plan)->reportInt('created'), $this->fresh($plan)->reportInt('unchanged')]);
     }
 
@@ -99,7 +101,7 @@ final class ImportPlanRunnerTest extends ImportPlanTestCase
 
         // Once the first ended, the workspace may be imported again; the preview says it was before (Q-CU-12).
         $elsewhere = $this->preparedPlan(['L2']);
-        $this->runner()->runSlice($first->getId(), null, 60);
+        $this->runner()->runSlice($first->getId(), 60);
         self::assertTrue($this->previewer()->preview($elsewhere, $this->admin)->hasWarning('workspace_imported_before'));
         $this->plans()->start($elsewhere, $this->fresh($elsewhere)->getVersion(), $this->admin);
         self::assertSame(ImportPlanStatus::Queued, $this->fresh($elsewhere)->getStatus());
@@ -126,39 +128,37 @@ final class ImportPlanRunnerTest extends ImportPlanTestCase
     {
         $plan = $this->started(['L1']);
         $this->provider->failOn('fetchTasks:L1', new RateLimitedException(30));
-        self::assertSame(ImportPlanStatus::RateLimited, $this->runner()->runSlice($plan->getId(), null, 60));
+        self::assertSame(ImportPlanStatus::RateLimited, $this->runner()->runSlice($plan->getId(), 60));
         $plan = $this->fresh($plan);
         self::assertGreaterThanOrEqual((new DateTimeImmutable('+29 seconds'))->getTimestamp(), $plan->getResumeAt()?->getTimestamp());
-        self::assertNull($this->runner()->runSlice($plan->getId(), null, 60), 'not due yet');
+        self::assertNull($this->runner()->runSlice($plan->getId(), 60), 'not due yet');
 
-        $this->plans()->resume($plan, $this->admin);
+        $this->plans()->resume($plan);
         self::assertCount(2, RecordingPlanRunner::$requests);
         $this->provider->failOn('fetchTasks:L1', new ProviderException(ProviderErrorCode::ServerError));
-        self::assertSame(ImportPlanStatus::Paused, $this->runner()->runSlice($plan->getId(), null, 60));
+        self::assertSame(ImportPlanStatus::Paused, $this->runner()->runSlice($plan->getId(), 60));
         $plan = $this->fresh($plan);
         self::assertSame(['server_error', 1], [$plan->getErrorCode(), $plan->reportInt('transient_retries')]);
 
         // Every retry spent: the item fails, the plan goes on (here: ends failed, its only item failed).
-        $plan->setReport(['transient_retries' => 5] + $plan->getReport());
-        $plan->hold(ImportPlanStatus::Paused, new DateTimeImmutable('-1 second'));
-        $this->em->flush();
+        $this->sql('UPDATE task_board_sync_import_plans SET report = ?, resume_at = ? WHERE id = ?', [json_encode(['transient_retries' => 5] + $plan->getReport()), (new DateTimeImmutable('-1 second'))->format('Y-m-d H:i:s'), $plan->getId()]);
         $this->provider->failOn('fetchTasks:L1', new ProviderException(ProviderErrorCode::ServerError));
-        self::assertSame(ImportPlanStatus::Failed, $this->runner()->runSlice($plan->getId(), null, 60));
+        self::assertSame(ImportPlanStatus::Failed, $this->runner()->runSlice($plan->getId(), 60));
         self::assertSame('items_failed', $this->fresh($plan)->getErrorCode());
         self::assertSame(TaskBoardEvents::SYNC_IMPORT_PLAN_FAILED, $this->events[array_key_last($this->events)][0]);
 
         // Retry the failed lists.
         $plan = $this->fresh($plan);
         $this->plans()->start($plan, $plan->getVersion(), $this->admin, null, true);
-        self::assertSame(ImportPlanStatus::Succeeded, $this->runner()->runSlice($plan->getId(), null, 60));
-        $this->plans()->resume($this->fresh($plan), $this->admin);
+        self::assertSame(ImportPlanStatus::Succeeded, $this->runner()->runSlice($plan->getId(), 60));
+        $this->plans()->resume($this->fresh($plan));
     }
 
     public function testItemFailuresDoNotStopThePlan(): void
     {
         $plan = $this->started(['L1', 'L2']);
         $this->provider->failOn('findSource:L1', new ProviderException(ProviderErrorCode::Forbidden));
-        self::assertSame(ImportPlanStatus::Succeeded, $this->runner()->runSlice($plan->getId(), null, 60));
+        self::assertSame(ImportPlanStatus::Succeeded, $this->runner()->runSlice($plan->getId(), 60));
         $items = $this->itemsOf($plan);
         self::assertSame([ImportPlanItemStatus::Failed, 'forbidden'], [$items[0]->getStatus(), $items[0]->getErrorCode()]);
         self::assertSame(ImportPlanItemStatus::Succeeded, $items[1]->getStatus());
@@ -170,7 +170,7 @@ final class ImportPlanRunnerTest extends ImportPlanTestCase
         (new ReflectionProperty(TaskSyncImportPlanItem::class, 'sourceId'))->setValue($items[0], 'L9');
         $this->em->flush();
         $this->plans()->start($plan, $plan->getVersion(), $this->admin, null, true);
-        $this->runner()->runSlice($plan->getId(), null, 60);
+        $this->runner()->runSlice($plan->getId(), 60);
         self::assertSame('not_found', $this->itemsOf($plan)[0]->getErrorCode());
 
         $plan  = $this->fresh($plan);
@@ -181,12 +181,12 @@ final class ImportPlanRunnerTest extends ImportPlanTestCase
         $items = $this->itemsOf($plan);
         (new ReflectionProperty(TaskSyncImportPlanItem::class, 'boardId'))->setValue($items[0], 'gone');
         $this->em->flush();
-        $this->runner()->runSlice($plan->getId(), null, 60);
+        $this->runner()->runSlice($plan->getId(), 60);
         self::assertSame('board_unavailable', $this->itemsOf($plan)[0]->getErrorCode());
 
         $plan                              = $this->started(['L1'], fresh: true);
         TestSyncLimitChecker::$refuseTasks = true;
-        $this->runner()->runSlice($plan->getId(), null, 60);
+        $this->runner()->runSlice($plan->getId(), 60);
         self::assertNotNull($this->itemsOf($plan)[0]->getErrorCode());
     }
 
@@ -194,33 +194,47 @@ final class ImportPlanRunnerTest extends ImportPlanTestCase
     {
         $plan = $this->started(['L1']);
         $this->provider->failOn('findSource:L1', new ProviderException(ProviderErrorCode::AuthFailed));
-        self::assertSame(ImportPlanStatus::Failed, $this->runner()->runSlice($plan->getId(), null, 60));
+        self::assertSame(ImportPlanStatus::Failed, $this->runner()->runSlice($plan->getId(), 60));
         self::assertSame('credential', $this->fresh($plan)->getErrorCode());
 
         $plan = $this->fresh($plan);
         $this->plans()->start($plan, $plan->getVersion(), $this->admin);
         TestCredentialResolver::$available = false;
-        self::assertSame(ImportPlanStatus::Failed, $this->runner()->runSlice($plan->getId(), null, 60));
+        self::assertSame(ImportPlanStatus::Failed, $this->runner()->runSlice($plan->getId(), 60));
         TestCredentialResolver::$available = true;
+
+        // Audit ZBY-M1: a starter who no longer exists, or who may no longer import here, stops the plan; nobody else
+        // runs it in their place.
+        $plan = $this->fresh($plan);
+        $this->plans()->start($plan, $plan->getVersion(), $this->admin);
+        $this->sql('UPDATE task_board_sync_import_plans SET started_by_id = ? WHERE id = ?', ['no-such-user', $plan->getId()]);
+        self::assertSame(ImportPlanStatus::Failed, $this->runner()->runSlice($plan->getId(), 60));
+        self::assertSame('actor', $this->fresh($plan)->getErrorCode());
 
         $plan = $this->fresh($plan);
         $this->plans()->start($plan, $plan->getVersion(), $this->admin);
-        self::assertSame(ImportPlanStatus::Failed, $this->runner()->runSlice($plan->getId(), 'no-such-user', 60));
+        $deny = static function (TenantAccessCheckEvent $event): void {
+            $event->deny();
+        };
+        $dispatcher = self::getContainer()->get('event_dispatcher');
+        $dispatcher->addListener(TaskBoardEvents::TENANT_ACCESS_CHECK, $deny);
+        self::assertSame(ImportPlanStatus::Failed, $this->runner()->runSlice($plan->getId(), 60));
         self::assertSame('actor', $this->fresh($plan)->getErrorCode());
+        $dispatcher->removeListener(TaskBoardEvents::TENANT_ACCESS_CHECK, $deny);
 
         $plan = $this->fresh($plan);
         $this->plans()->start($plan, $plan->getVersion(), $this->admin);
         $plan = $this->fresh($plan);
         (new ReflectionProperty(TaskSyncImportPlan::class, 'provider'))->setValue($plan, 'gone');
         $this->em->flush();
-        self::assertSame(ImportPlanStatus::Failed, $this->runner()->runSlice($plan->getId(), null, 60));
+        self::assertSame(ImportPlanStatus::Failed, $this->runner()->runSlice($plan->getId(), 60));
         self::assertSame('provider_unavailable', $this->fresh($plan)->getErrorCode());
     }
 
     public function testCancelDeadlineAndAnUnexpectedError(): void
     {
         $plan = $this->started(['L1', 'L2']);
-        self::assertSame(ImportPlanStatus::Paused, $this->runner()->runSlice($plan->getId(), null, 0), 'no time left');
+        self::assertSame(ImportPlanStatus::Paused, $this->runner()->runSlice($plan->getId(), 0), 'no time left');
 
         // An unexpected error pauses the plan (outage rules); nothing is lost.
         $dispatcher = self::getContainer()->get('event_dispatcher');
@@ -228,17 +242,15 @@ final class ImportPlanRunnerTest extends ImportPlanTestCase
             throw new RuntimeException('host listener failed');
         };
         $dispatcher->addListener(TaskBoardEvents::BOARD_CONNECTION_LINKED, $boom);
-        $this->plans()->resume($this->fresh($plan), $this->admin);
-        self::assertSame(ImportPlanStatus::Paused, $this->runner()->runSlice($plan->getId(), null, 60));
+        $this->plans()->resume($this->fresh($plan));
+        self::assertSame(ImportPlanStatus::Paused, $this->runner()->runSlice($plan->getId(), 60));
         self::assertSame('internal', $this->fresh($plan)->getErrorCode());
         $dispatcher->removeListener(TaskBoardEvents::BOARD_CONNECTION_LINKED, $boom);
 
         // The link was saved before the listener failed: the next slice adopts it (no second link).
-        $this->plans()->resume($this->fresh($plan), $this->admin);
-        $plan = $this->fresh($plan);
-        $plan->requestCancel();
-        $this->em->flush();
-        self::assertSame(ImportPlanStatus::Cancelled, $this->runner()->runSlice($plan->getId(), null, 60));
+        $this->plans()->resume($this->fresh($plan));
+        $this->sql('UPDATE task_board_sync_import_plans SET cancel_requested = ? WHERE id = ?', [true, $plan->getId()]);
+        self::assertSame(ImportPlanStatus::Cancelled, $this->runner()->runSlice($plan->getId(), 60));
 
         // Cancel of a waiting plan ends it at once; of an ended plan does nothing.
         $plan = $this->fresh($plan);
@@ -257,7 +269,7 @@ final class ImportPlanRunnerTest extends ImportPlanTestCase
         self::assertNotNull($board);
         $sync = self::getContainer()->get(TaskBoardSyncService::class);
         $sync->link($board, $this->provider, new ProviderCredential(TestCredentialResolver::$secret, 'conn-1'), new RemoteContainer('L1', 'Backlog', ContainerType::List, 's:1', true, false), $this->admin);
-        self::assertSame(ImportPlanStatus::Succeeded, $this->runner()->runSlice($plan->getId(), null, 60));
+        self::assertSame(ImportPlanStatus::Succeeded, $this->runner()->runSlice($plan->getId(), 60));
         self::assertNotNull($this->itemsOf($plan)[0]->getConnectionId());
 
         $plan  = $this->started(['L2'], fresh: true);
@@ -265,7 +277,7 @@ final class ImportPlanRunnerTest extends ImportPlanTestCase
         $board = $this->em->find(TaskBoard::class, $items[0]->getBoardId());
         self::assertNotNull($board);
         $sync->link($board, $this->provider, new ProviderCredential(TestCredentialResolver::$secret, 'conn-1'), new RemoteContainer('L1', 'Backlog', ContainerType::List, 's:1', true, false), $this->admin);
-        $this->runner()->runSlice($plan->getId(), null, 60);
+        $this->runner()->runSlice($plan->getId(), 60);
         self::assertSame('board_linked_elsewhere', $this->itemsOf($plan)[0]->getErrorCode());
     }
 
@@ -273,14 +285,14 @@ final class ImportPlanRunnerTest extends ImportPlanTestCase
     {
         $plan = $this->started(['L1']);
         $this->provider->failOn('fetchTasks:L1', new ProviderException(ProviderErrorCode::Timeout));
-        $this->runner()->runSlice($plan->getId(), null, 60);
+        $this->runner()->runSlice($plan->getId(), 60);
         $item       = $this->itemsOf($plan)[0];
         $connection = $this->em->find(TaskBoardConnection::class, (string) $item->getConnectionId());
         self::assertNotNull($connection);
         $store = self::getContainer()->get(SyncStore::class);
         $store->acquireLock($connection, 'other-run', new DateTimeImmutable(), new DateTimeImmutable('-10 minutes'));
-        $this->plans()->resume($this->fresh($plan), $this->admin);
-        self::assertSame(ImportPlanStatus::Paused, $this->runner()->runSlice($plan->getId(), null, 60));
+        $this->plans()->resume($this->fresh($plan));
+        self::assertSame(ImportPlanStatus::Paused, $this->runner()->runSlice($plan->getId(), 60));
         self::assertSame('board_busy', $this->fresh($plan)->getErrorCode());
 
         // Cancel asks the board's run to stop too, and ends the waiting plan.
@@ -292,12 +304,12 @@ final class ImportPlanRunnerTest extends ImportPlanTestCase
     {
         $plan = $this->started(['L1', 'L2'], ['peopleFirst' => true]);
         $this->provider->failOn('fetchPeople:1', new ProviderException(ProviderErrorCode::Timeout));
-        self::assertSame(ImportPlanStatus::Paused, $this->runner()->runSlice($plan->getId(), null, 60));
+        self::assertSame(ImportPlanStatus::Paused, $this->runner()->runSlice($plan->getId(), 60));
         $plan = $this->fresh($plan);
         self::assertSame(['people_mapping_required', null, 1], [$plan->getErrorCode(), $plan->getResumeAt(), $plan->reportInt('people_waited')]);
-        self::assertNull($this->runner()->runSlice($plan->getId(), null, 60), 'waits for Resume');
-        $this->plans()->resume($plan, $this->admin);
-        self::assertSame(ImportPlanStatus::Succeeded, $this->runner()->runSlice($plan->getId(), null, 60));
+        self::assertNull($this->runner()->runSlice($plan->getId(), 60), 'waits for Resume');
+        $this->plans()->resume($plan);
+        self::assertSame(ImportPlanStatus::Succeeded, $this->runner()->runSlice($plan->getId(), 60));
     }
 
     public function testErasingAUserForgetsTheirPlansAndRetentionPrunes(): void
@@ -307,7 +319,7 @@ final class ImportPlanRunnerTest extends ImportPlanTestCase
         $plan = $this->fresh($plan);
         self::assertSame([null, null], [$plan->getCreatedById(), $plan->getStartedById()]);
 
-        $this->runner()->runSlice($plan->getId(), null, 60);
+        $this->runner()->runSlice($plan->getId(), 60);
         $draft = $this->plans()->draft(null, $this->admin, 'clickup');
         self::assertSame(0, $this->store()->prune(new DateTimeImmutable('-1 day')));
         self::assertSame(2, $this->store()->prune(new DateTimeImmutable('+1 day')));

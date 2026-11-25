@@ -21,6 +21,7 @@ final readonly class PlanPreview
     public const WARNING_WORKSPACE_BUSY    = 'workspace_busy';
     public const WARNING_ESTIMATED         = 'estimated';
     public const WARNING_PEOPLE_UNREVIEWED = 'people_unreviewed';
+    public const WARNING_TRUNCATED         = 'preview_truncated';
 
     /**
      * @param list<array{itemId: string, label: string, board: string, newBoard: bool, tasks: int, subtasks: int, closed: int, archived: int, attachments: int, attachmentBytes: int, columns: int, estimated: bool, error: string|null}> $items

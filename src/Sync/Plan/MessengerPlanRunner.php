@@ -21,7 +21,7 @@ final readonly class MessengerPlanRunner implements ImportPlanRunnerInterface
 
     public function dispatch(PlanRunRequest $request): void
     {
-        $this->bus->dispatch(new RunImportPlanSlice($request->planId, $request->actorId), $request->delaySeconds > 0 ? [new DelayStamp($request->delaySeconds * 1000)] : []);
+        $this->bus->dispatch(new RunImportPlanSlice($request->planId), $request->delaySeconds > 0 ? [new DelayStamp($request->delaySeconds * 1000)] : []);
     }
 
     public function advancesOnPoll(): bool

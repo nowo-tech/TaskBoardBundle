@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Sync\Plan;
 use DateInterval;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
+use Nowo\TaskBoardBundle\Doctrine\BundleEntityDetacher;
 use Nowo\TaskBoardBundle\Doctrine\TransactionRollback;
 use Nowo\TaskBoardBundle\Dto\TaskBoardFormData;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
@@ -53,6 +54,7 @@ use Throwable;
 
 use function array_filter;
 use function array_key_exists;
+use function array_keys;
 use function array_map;
 use function array_slice;
 use function array_unique;
@@ -160,15 +162,15 @@ final readonly class ImportPlanService
     /** Step 1: the connection (another one than before clears the workspace and what follows). */
     public function chooseConnection(TaskSyncImportPlan $plan, int $version, ConnectionChoice $choice): void
     {
-        $plan = $this->lockStep($plan, $version);
-        if ($choice->ref !== $plan->getConnectionRef()) {
-            $plan->useConnection($choice->ref, $choice->label);
-            // @igor-ignore - Request data: the plan / item row read by id for this call, or a database write through the store; not service state.
-            $this->store->removeItems($plan);
-            $plan->rewindTo(ImportPlanStep::Workspace);
-        }
-        $plan->reach(ImportPlanStep::Connect);
-        $this->entityManager->flush();
+        $this->step($plan, $version, function (TaskSyncImportPlan $plan) use ($choice): void {
+            if ($choice->ref !== $plan->getConnectionRef()) {
+                $plan->useConnection($choice->ref, $choice->label);
+                // @igor-ignore - Request data: the plan / item row read by id for this call, or a database write through the store; not service state.
+                $this->store->removeItems($plan);
+                $plan->rewindTo(ImportPlanStep::Workspace);
+            }
+            $plan->reach(ImportPlanStep::Connect);
+        });
     }
 
     /**
@@ -179,7 +181,12 @@ final readonly class ImportPlanService
     public function workspaces(TaskSyncImportPlan $plan, object $actor): array
     {
         $choice = $this->choice($plan, $actor);
-        $page   = $this->provider($plan)->listContainers($this->credential($plan));
+        try {
+            $page = $this->provider($plan)->listContainers($this->credential($plan));
+        } catch (ProviderException) {
+            // Audit ZBY-L4: a provider error is a message on the step, never a 500.
+            throw new ImportPlanException(ImportPlanException::PROVIDER);
+        }
 
         return array_values(array_filter($page->items, static fn (RemoteContainer $item): bool => $item->type === ContainerType::Workspace
             && ($choice->workspaceIds === [] || in_array(self::workspaceIdOf($item->id), $choice->workspaceIds, true))));
@@ -197,22 +204,22 @@ final readonly class ImportPlanService
         if (!$workspace instanceof RemoteContainer) {
             throw new ImportPlanException(ImportPlanException::INVALID);
         }
-        $plan        = $this->lockStep($plan, $version);
-        $workspaceId = self::workspaceIdOf($workspace->id);
-        if ($workspaceId !== $plan->getWorkspaceId()) {
-            // @igor-ignore - Request data: the plan / item row read by id for this call, or a database write through the store; not service state.
-            $plan->setWorkspace($workspaceId, $workspace->name);
-            // @igor-ignore - Request data: the plan / item row read by id for this call, or a database write through the store; not service state.
-            $this->store->removeItems($plan);
-            $plan->rewindTo(ImportPlanStep::Tree);
-            $provider = $this->provider($plan);
-            // @igor-ignore - Request data: the plan / item row read by id for this call, or a database write through the store; not service state.
-            $plan->setDirectory($this->people instanceof TaskSyncPeopleDirectoryService && $provider instanceof PeopleProviderInterface && $provider->capabilities()->people
-                ? $this->people->directoryForTenant($provider->id(), $plan->getTenantKey(), $workspaceId)
-                : null);
-        }
-        $plan->reach(ImportPlanStep::Workspace);
-        $this->entityManager->flush();
+        $this->step($plan, $version, function (TaskSyncImportPlan $plan) use ($workspace): void {
+            $workspaceId = self::workspaceIdOf($workspace->id);
+            if ($workspaceId !== $plan->getWorkspaceId()) {
+                // @igor-ignore - Request data: the plan / item row read by id for this call, or a database write through the store; not service state.
+                $plan->setWorkspace($workspaceId, $workspace->name);
+                // @igor-ignore - Request data: the plan / item row read by id for this call, or a database write through the store; not service state.
+                $this->store->removeItems($plan);
+                $plan->rewindTo(ImportPlanStep::Tree);
+                $provider = $this->provider($plan);
+                // @igor-ignore - Request data: the plan / item row read by id for this call, or a database write through the store; not service state.
+                $plan->setDirectory($this->people instanceof TaskSyncPeopleDirectoryService && $provider instanceof PeopleProviderInterface && $provider->capabilities()->people
+                    ? $this->people->directoryForTenant($provider->id(), $plan->getTenantKey(), $workspaceId)
+                    : null);
+            }
+            $plan->reach(ImportPlanStep::Workspace);
+        });
     }
 
     /**
@@ -252,7 +259,8 @@ final readonly class ImportPlanService
             throw new ImportPlanException(ImportPlanException::SINGLE_NEEDS_ONE);
         }
         $credential = $this->credential($plan);
-        $sources    = [];
+        $this->assertInWorkspace($plan, $credential, array_map(strval(...), array_keys($ids)));
+        $sources = [];
         foreach ($ids as $id => $unused) {
             foreach ($this->expand($plan, $credential, $id, $layout) as $source) {
                 $sources[$source->id] ??= $source;
@@ -261,22 +269,22 @@ final readonly class ImportPlanService
                 }
             }
         }
-        $plan = $this->lockStep($plan, $version);
-        // @igor-ignore - Request data: the plan / item row read by id for this call, or a database write through the store; not service state.
-        $this->store->removeItems($plan);
-        $position = 0;
-        foreach ($sources as $source) {
-            $location = RemoteLocation::fromContainerId($source->id);
-            $kind     = $location instanceof RemoteLocation ? $location->kind : RemoteLocationKind::List;
-            $this->entityManager->persist(new TaskSyncImportPlanItem($plan, $position++, $kind->value, $source->id, $source->name, $source->path, $source->name));
-        }
-        // @igor-ignore - Request data: the plan / item row read by id for this call, or a database write through the store; not service state.
-        $plan->setLayout($layout);
-        // @igor-ignore - Request data: the plan / item row read by id for this call, or a database write through the store; not service state.
-        $plan->setOptions($options);
-        $plan->rewindTo(ImportPlanStep::Boards);
-        $plan->reach(ImportPlanStep::Tree);
-        $this->entityManager->flush();
+        $this->step($plan, $version, function (TaskSyncImportPlan $plan) use ($sources, $layout, $options): void {
+            // @igor-ignore - Request data: the plan / item row read by id for this call, or a database write through the store; not service state.
+            $this->store->removeItems($plan);
+            $position = 0;
+            foreach ($sources as $source) {
+                $location = RemoteLocation::fromContainerId($source->id);
+                $kind     = $location instanceof RemoteLocation ? $location->kind : RemoteLocationKind::List;
+                $this->entityManager->persist(new TaskSyncImportPlanItem($plan, $position++, $kind->value, $source->id, $source->name, $source->path, $source->name));
+            }
+            // @igor-ignore - Request data: the plan / item row read by id for this call, or a database write through the store; not service state.
+            $plan->setLayout($layout);
+            // @igor-ignore - Request data: the plan / item row read by id for this call, or a database write through the store; not service state.
+            $plan->setOptions($options);
+            $plan->rewindTo(ImportPlanStep::Boards);
+            $plan->reach(ImportPlanStep::Tree);
+        });
     }
 
     /**
@@ -309,30 +317,30 @@ final readonly class ImportPlanService
         foreach ($this->targetBoards($plan, $actor) as $board) {
             $allowed[$board->getId()] = $board;
         }
-        $plan = $this->lockStep($plan, $version);
-        $used = [];
-        foreach ($this->store->items($plan) as $item) {
-            $choice = $choices[$item->getId()] ?? ['target' => 'new', 'name' => $item->getBoardName()];
-            $name   = Text::cut(trim((string) preg_replace('/[\x00-\x1F\x7F]+/u', ' ', $choice['name'])), 255);
-            if ($choice['target'] === 'new') {
-                if (!$item->isCreateBoard()) {
+        $this->step($plan, $version, function (TaskSyncImportPlan $plan) use ($choices, $allowed): void {
+            $used = [];
+            foreach ($this->store->items($plan) as $item) {
+                $choice = $choices[$item->getId()] ?? ['target' => 'new', 'name' => $item->getBoardName()];
+                $name   = Text::cut(trim((string) preg_replace('/[\x00-\x1F\x7F]+/u', ' ', $choice['name'])), 255);
+                if ($choice['target'] === 'new') {
+                    if (!$item->isCreateBoard()) {
+                        $item->setStatusMap([]);
+                    }
+                    $item->targetNewBoard($name !== '' ? $name : $item->getSourceLabel());
+                    continue;
+                }
+                $board = $allowed[$choice['target']] ?? null;
+                if (!$board instanceof TaskBoard || isset($used[$board->getId()])) {
+                    throw new ImportPlanException(ImportPlanException::BOARD_UNAVAILABLE);
+                }
+                $used[$board->getId()] = true;
+                if ($item->getBoardId() !== $board->getId()) {
                     $item->setStatusMap([]);
                 }
-                $item->targetNewBoard($name !== '' ? $name : $item->getSourceLabel());
-                continue;
+                $item->targetBoard($board->getId(), $board->getName());
             }
-            $board = $allowed[$choice['target']] ?? null;
-            if (!$board instanceof TaskBoard || isset($used[$board->getId()])) {
-                throw new ImportPlanException(ImportPlanException::BOARD_UNAVAILABLE);
-            }
-            $used[$board->getId()] = true;
-            if ($item->getBoardId() !== $board->getId()) {
-                $item->setStatusMap([]);
-            }
-            $item->targetBoard($board->getId(), $board->getName());
-        }
-        $plan->reach(ImportPlanStep::Boards);
-        $this->entityManager->flush();
+            $plan->reach(ImportPlanStep::Boards);
+        });
     }
 
     /**
@@ -391,24 +399,24 @@ final readonly class ImportPlanService
     public function mapStatuses(TaskSyncImportPlan $plan, int $version, array $choices): void
     {
         $groups = $this->statusGroups($plan);
-        $plan   = $this->lockStep($plan, $version);
-        foreach ($groups as $group) {
-            $posted = $choices[$group['key']] ?? [];
-            $map    = [];
-            foreach ($group['statuses'] as $index => $status) {
-                $column = $posted[$index] ?? self::defaultColumn($status->name, $group['columns']);
-                if (!in_array($column, [StatusColumns::CREATE, StatusColumns::SKIP], true) && !array_key_exists($column, $group['columns'])) {
-                    throw new ImportPlanException(ImportPlanException::INVALID);
+        $this->step($plan, $version, function (TaskSyncImportPlan $plan) use ($groups, $choices): void {
+            foreach ($groups as $group) {
+                $posted = $choices[$group['key']] ?? [];
+                $map    = [];
+                foreach ($group['statuses'] as $index => $status) {
+                    $column = $posted[$index] ?? self::defaultColumn($status->name, $group['columns']);
+                    if (!in_array($column, [StatusColumns::CREATE, StatusColumns::SKIP], true) && !array_key_exists($column, $group['columns'])) {
+                        throw new ImportPlanException(ImportPlanException::INVALID);
+                    }
+                    $map[] = ['status' => $status->name, 'column' => $column] + ($status->type !== null ? ['type' => $status->type->value] : []);
                 }
-                $map[] = ['status' => $status->name, 'column' => $column] + ($status->type !== null ? ['type' => $status->type->value] : []);
+                foreach ($group['items'] as $item) {
+                    $item = $this->entityManager->find(TaskSyncImportPlanItem::class, $item->getId()) ?? $item;
+                    $item->setStatusMap($map);
+                }
             }
-            foreach ($group['items'] as $item) {
-                $item = $this->entityManager->find(TaskSyncImportPlanItem::class, $item->getId()) ?? $item;
-                $item->setStatusMap($map);
-            }
-        }
-        $plan->reach(ImportPlanStep::Statuses);
-        $this->entityManager->flush();
+            $plan->reach(ImportPlanStep::Statuses);
+        });
     }
 
     /**
@@ -425,15 +433,17 @@ final readonly class ImportPlanService
         }
         $credential = $this->credential($plan);
         $fields     = [];
-        foreach ($this->store->items($plan) as $item) {
-            $source = $provider->findSource($credential, $item->getSourceId());
-            if (!$source instanceof RemoteSource) {
-                continue;
+        try {
+            foreach ($this->store->items($plan) as $item) {
+                $source = $provider->findSource($credential, $item->getSourceId());
+                foreach ($source instanceof RemoteSource ? $provider->listCustomFields($credential, $source) : [] as $field) {
+                    $fields[$field->id] ??= ['id' => $field->id, 'name' => $field->name, 'type' => $field->type->value, 'sources' => 0];
+                    ++$fields[$field->id]['sources'];
+                }
             }
-            foreach ($provider->listCustomFields($credential, $source) as $field) {
-                $fields[$field->id] ??= ['id' => $field->id, 'name' => $field->name, 'type' => $field->type->value, 'sources' => 0];
-                ++$fields[$field->id]['sources'];
-            }
+        } catch (ProviderException) {
+            // Audit ZBY-L4: a provider error is a message on the step, never a 500.
+            throw new ImportPlanException(ImportPlanException::PROVIDER);
         }
 
         return array_values($fields);
@@ -451,31 +461,31 @@ final readonly class ImportPlanService
                 throw new ImportPlanException(ImportPlanException::INVALID);
             }
         }
-        $plan = $this->lockStep($plan, $version);
-        // @igor-ignore - Request data: the plan / item row read by id for this call, or a database write through the store; not service state.
-        $plan->setExcludedFields(array_values(array_unique($excluded)));
-        $plan->reach(ImportPlanStep::Fields);
-        $this->entityManager->flush();
+        $this->step($plan, $version, static function (TaskSyncImportPlan $plan) use ($excluded): void {
+            // @igor-ignore - Request data: the plan / item row read by id for this call, or a database write through the store; not service state.
+            $plan->setExcludedFields(array_values(array_unique($excluded)));
+            $plan->reach(ImportPlanStep::Fields);
+        });
     }
 
     /** Step 7: whether the plan waits, after its first board is linked, until its people were mapped. */
     public function choosePeople(TaskSyncImportPlan $plan, int $version, bool $peopleFirst): void
     {
-        $plan = $this->lockStep($plan, $version);
-        // @igor-ignore - Request data: the plan / item row read by id for this call, or a database write through the store; not service state.
-        $plan->setOptions([TaskSyncImportPlan::OPTION_PEOPLE => $peopleFirst] + $plan->getOptions());
-        $plan->reach(ImportPlanStep::People);
-        $this->entityManager->flush();
+        $this->step($plan, $version, static function (TaskSyncImportPlan $plan) use ($peopleFirst): void {
+            // @igor-ignore - Request data: the plan / item row read by id for this call, or a database write through the store; not service state.
+            $plan->setOptions([TaskSyncImportPlan::OPTION_PEOPLE => $peopleFirst] + $plan->getOptions());
+            $plan->reach(ImportPlanStep::People);
+        });
     }
 
     /** Step 8 is the preview ({@see ImportPlanPreviewer}); saving it records the re-import mode. */
     public function confirmPreview(TaskSyncImportPlan $plan, int $version, ReimportMode $mode): void
     {
-        $plan = $this->lockStep($plan, $version);
-        // @igor-ignore - Request data: the plan / item row read by id for this call, or a database write through the store; not service state.
-        $plan->setReimportMode($mode);
-        $plan->reach(ImportPlanStep::Preview);
-        $this->entityManager->flush();
+        $this->step($plan, $version, static function (TaskSyncImportPlan $plan) use ($mode): void {
+            // @igor-ignore - Request data: the plan / item row read by id for this call, or a database write through the store; not service state.
+            $plan->setReimportMode($mode);
+            $plan->reach(ImportPlanStep::Preview);
+        });
     }
 
     /**
@@ -492,6 +502,9 @@ final readonly class ImportPlanService
         if (($status === ImportPlanStatus::Draft && $plan->getStep()->position() < ImportPlanStep::Run->position()) || $status->isActive()) {
             throw new ImportPlanException(ImportPlanException::NOT_EDITABLE);
         }
+        // Audit ZBY-I3: the connection must be one the host offers to this actor (another importer cannot run a plan
+        // with a connection offered only to its creator).
+        $this->choice($plan, $actor);
         $workspaceId = (string) $plan->getWorkspaceId();
         $items       = $this->store->items($plan);
         $newBoards   = count(array_filter($items, static fn (TaskSyncImportPlanItem $item): bool => $item->isCreateBoard()));
@@ -541,12 +554,12 @@ final readonly class ImportPlanService
         $plan->setReport(['people_waited' => $plan->reportInt('people_waited')]);
         $this->entityManager->flush();
         $this->eventDispatcher?->dispatch(new ImportPlanEvent($plan->getId(), $plan->getTenantKey(), $plan->getProvider(), $plan->getWorkspaceId(), ImportPlanStatus::Queued->value, $actorId, $this->boardIds($plan)), TaskBoardEvents::SYNC_IMPORT_PLAN_STARTED);
-        $this->runner->dispatch(new PlanRunRequest($plan->getId(), $actorId));
+        $this->runner->dispatch(new PlanRunRequest($plan->getId()));
     }
 
     /**
-     * Cancel (§14): a waiting plan ends now; a running one stops after its current page (the board's run is asked to
-     * stop too). Nothing imported is rolled back.
+     * Cancel (§14): a waiting plan ends now (a compare-and-set on its status, audit ZBY-L2); a running one stops before
+     * its next item, and the board's run is asked to stop after its current page. Nothing imported is rolled back.
      */
     public function cancel(TaskSyncImportPlan $plan): void
     {
@@ -554,30 +567,32 @@ final readonly class ImportPlanService
         if (!$plan->getStatus()->isActive()) {
             return;
         }
-        $plan->requestCancel();
+        $ended = $this->store->cancelWaiting($plan->getId(), $this->clock->now());
+        if (!$ended) {
+            $this->store->requestCancel($plan->getId());
+        }
         foreach ($this->store->items($plan) as $item) {
             $board = $item->getRunId() !== null && $item->getBoardId() !== null ? $this->boards->findById($item->getBoardId()) : null;
             if ($board instanceof TaskBoard) {
                 $this->sync?->requestCancel($board, (string) $item->getRunId());
             }
         }
-        if ($plan->getStatus() !== ImportPlanStatus::Running) {
-            $plan->finish(ImportPlanStatus::Cancelled, $this->clock->now());
+        $plan = $this->reload($plan);
+        if ($ended) {
             $this->eventDispatcher?->dispatch(new ImportPlanEvent($plan->getId(), $plan->getTenantKey(), $plan->getProvider(), $plan->getWorkspaceId(), ImportPlanStatus::Cancelled->value, $plan->getStartedById(), $this->boardIds($plan)), TaskBoardEvents::SYNC_IMPORT_PLAN_FINISHED);
         }
-        $this->entityManager->flush();
     }
 
-    /** Resumes a plan paused for its people (the People page was saved) or by a provider outage: due now. */
-    public function resume(TaskSyncImportPlan $plan, object $actor): void
+    /**
+     * Resumes a plan paused for its people (the People page was saved) or by a provider outage: due now (a
+     * compare-and-set on its status). The slices still run as the user who started the plan, never as the one who
+     * resumes it (audit ZBY-M1).
+     */
+    public function resume(TaskSyncImportPlan $plan): void
     {
-        $plan = $this->reload($plan);
-        if (!in_array($plan->getStatus(), [ImportPlanStatus::Paused, ImportPlanStatus::RateLimited], true)) {
-            return;
+        if ($this->store->makeDue($plan->getId(), $this->clock->now())) {
+            $this->runner->dispatch(new PlanRunRequest($plan->getId()));
         }
-        $plan->hold($plan->getStatus(), $this->clock->now());
-        $this->entityManager->flush();
-        $this->runner->dispatch(new PlanRunRequest($plan->getId(), ConnectionCreatorActorResolver::idOf($actor)));
     }
 
     /** Deletes a plan that is not running: its choices go, its boards and tasks stay. */
@@ -657,6 +672,15 @@ final readonly class ImportPlanService
 
             return;
         }
+        // Audit ZBY-L3: the host's quota is asked again for each board, right before it is created (two plans started
+        // at once both passed the check for all their boards).
+        $refusal = $this->quota->refusal(TaskBoardQuotaCheckEvent::ACTION_BOARD_CREATE, $plan->getTenantKey(), null, 1, $actor);
+        if ($refusal !== null) {
+            $item->advance(ImportPlanItemStatus::Failed, ImportPlanPhase::Done, 'quota');
+            $this->entityManager->flush();
+
+            return;
+        }
         $db    = $this->entityManager->getConnection();
         $level = $db->getTransactionNestingLevel();
         $db->beginTransaction();
@@ -675,11 +699,62 @@ final readonly class ImportPlanService
         }
     }
 
+    /**
+     * Audit ZBY-L1: every chosen container belongs to the plan's workspace, asked from the provider when it can tell
+     * (`PeopleProviderInterface::workspaceOf()`; ClickUp: the space of the list or folder, then its team). A container of
+     * another workspace would escape the workspace lock, the people directory and the host's workspace narrowing.
+     *
+     * @param list<string> $ids
+     */
+    private function assertInWorkspace(TaskSyncImportPlan $plan, ProviderCredential $credential, array $ids): void
+    {
+        $provider = $this->provider($plan);
+        if (!$provider instanceof PeopleProviderInterface) {
+            return;
+        }
+        try {
+            foreach ($ids as $id) {
+                if ($provider->workspaceOf($credential, $id) !== $plan->getWorkspaceId()) {
+                    throw new ImportPlanException(ImportPlanException::INVALID);
+                }
+            }
+        } catch (ProviderException) {
+            throw new ImportPlanException(ImportPlanException::PROVIDER);
+        }
+    }
+
     private function mayCreateBoards(object $actor, ?string $tenantKey): bool
     {
         return $this->areaAccess instanceof TenantAwareTaskBoardAccessCheckerInterface
             ? $this->areaAccess->canCreateBoard($actor, $tenantKey)
             : $this->areaAccess->canCreateBoard($actor);
+    }
+
+    /**
+     * A wizard step as one unit (audit ZBY-L2): the version compare-and-set, the change and its flush in one
+     * transaction; on any failure nothing of it stays (the private manager is cleared, so no half change is flushed
+     * later).
+     *
+     * @param callable(TaskSyncImportPlan): void $change
+     */
+    private function step(TaskSyncImportPlan $plan, int $version, callable $change): void
+    {
+        $db    = $this->entityManager->getConnection();
+        $level = $db->getTransactionNestingLevel();
+        $db->beginTransaction();
+        try {
+            $change($this->lockStep($plan, $version));
+            $this->entityManager->flush();
+            $db->commit();
+        } catch (Throwable $exception) {
+            TransactionRollback::toLevel($db, $level);
+            // The caller's copy shows the row as it is again (its version did not move); nothing half changed stays
+            // in the private manager.
+            $this->store->reload($plan->getId());
+            BundleEntityDetacher::detach($this->entityManager);
+
+            throw $exception;
+        }
     }
 
     /**

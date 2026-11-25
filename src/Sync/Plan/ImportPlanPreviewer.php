@@ -26,6 +26,8 @@ use Nowo\TaskBoardBundle\Sync\Provider\TaskProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\TimeAccessMode;
 use Nowo\TaskBoardBundle\Sync\Repository\ImportPlanStore;
 use Nowo\TaskBoardBundle\Sync\Status\StatusColumns;
+use Psr\Clock\ClockInterface;
+use Symfony\Component\Clock\NativeClock;
 
 use function array_filter;
 use function array_map;
@@ -59,6 +61,11 @@ final readonly class ImportPlanPreviewer
         private int $previewMaxPages = 3,
         /** @var list<array{name: string, color: ?string, icon?: ?string}> */
         private array $defaultColumns = TaskBoardCreator::DEFAULT_COLUMNS,
+        // Since the audit ZBY-L4: one preview page view reads at most this many provider requests, for this long; the
+        // boards past it are shown unread (`preview_truncated`).
+        private int $maxRequests = 60,
+        private int $maxSeconds = 15,
+        private ClockInterface $clock = new NativeClock(),
     ) {
     }
 
@@ -69,8 +76,17 @@ final readonly class ImportPlanPreviewer
         $items      = [];
         $requests   = 0;
         $warnings   = [];
+        $calls      = 0;
+        $deadline   = $this->clock->now()->getTimestamp() + $this->maxSeconds;
         foreach ($this->store->items($plan) as $item) {
-            $row     = $this->item($provider, $credential, $item);
+            if ($calls >= $this->maxRequests || $this->clock->now()->getTimestamp() >= $deadline) {
+                $items[] = ['estimated' => true, 'error' => 'preview_truncated'] + $this->row($item);
+                if (!in_array(PlanPreview::WARNING_TRUNCATED, $warnings, true)) {
+                    $warnings[] = PlanPreview::WARNING_TRUNCATED;
+                }
+                continue;
+            }
+            $row     = $this->item($provider, $credential, $item, $calls);
             $items[] = $row;
             $requests += $this->requests($plan, $row);
             if ($row['estimated'] && !in_array(PlanPreview::WARNING_ESTIMATED, $warnings, true)) {
@@ -108,18 +124,16 @@ final readonly class ImportPlanPreviewer
     /**
      * @return array{itemId: string, label: string, board: string, newBoard: bool, tasks: int, subtasks: int, closed: int, archived: int, attachments: int, attachmentBytes: int, columns: int, estimated: bool, error: string|null}
      */
-    private function item(TaskProviderInterface $provider, ProviderCredential $credential, TaskSyncImportPlanItem $item): array
+    private function item(TaskProviderInterface $provider, ProviderCredential $credential, TaskSyncImportPlanItem $item, int &$calls): array
     {
-        $row = [
-            'itemId'  => $item->getId(), 'label' => $item->getSourceLabel(), 'board' => $item->getBoardName(), 'newBoard' => $item->isCreateBoard(),
-            'tasks'   => 0, 'subtasks' => 0, 'closed' => 0, 'archived' => 0, 'attachments' => 0, 'attachmentBytes' => 0,
-            'columns' => $this->columnsToCreate($item), 'estimated' => false, 'error' => null,
-        ];
+        $row = $this->row($item);
         try {
+            ++$calls;
             $source = $provider instanceof SourceProviderInterface ? $provider->findSource($credential, $item->getSourceId()) : null;
             $cursor = null;
             $pages  = 0;
             do {
+                ++$calls;
                 $page = $this->page($provider, $credential, $item, $source, $cursor);
                 ++$pages;
                 foreach ($page->tasks as $task) {
@@ -131,7 +145,7 @@ final readonly class ImportPlanPreviewer
                     $row['attachmentBytes'] += array_sum(array_map(static fn (RemoteAttachment $file): int => $file->size ?? 0, $task->attachments));
                 }
                 $cursor = $page->lastPage ? null : $page->nextCursor;
-            } while ($cursor !== null && $pages < $this->previewMaxPages);
+            } while ($cursor !== null && $pages < $this->previewMaxPages && $calls < $this->maxRequests);
         } catch (ProviderException $exception) {
             return ['error' => $exception->errorCode->value] + $row;
         }
@@ -146,6 +160,20 @@ final readonly class ImportPlanPreviewer
         }
 
         return $row;
+    }
+
+    /**
+     * An item's row before anything is read.
+     *
+     * @return array{itemId: string, label: string, board: string, newBoard: bool, tasks: int, subtasks: int, closed: int, archived: int, attachments: int, attachmentBytes: int, columns: int, estimated: bool, error: string|null}
+     */
+    private function row(TaskSyncImportPlanItem $item): array
+    {
+        return [
+            'itemId'  => $item->getId(), 'label' => $item->getSourceLabel(), 'board' => $item->getBoardName(), 'newBoard' => $item->isCreateBoard(),
+            'tasks'   => 0, 'subtasks' => 0, 'closed' => 0, 'archived' => 0, 'attachments' => 0, 'attachmentBytes' => 0,
+            'columns' => $this->columnsToCreate($item), 'estimated' => false, 'error' => null,
+        ];
     }
 
     private function page(TaskProviderInterface $provider, ProviderCredential $credential, TaskSyncImportPlanItem $item, ?RemoteSource $source, ?string $cursor): RemoteTaskPage

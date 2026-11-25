@@ -29,13 +29,13 @@ final class RunnersTest extends TestCase
             }
         };
         $runner = new MessengerPlanRunner($bus);
-        $runner->dispatch(new PlanRunRequest('p1', 'u1'));
-        $runner->dispatch(new PlanRunRequest('p1', null, 30));
+        $runner->dispatch(new PlanRunRequest('p1'));
+        $runner->dispatch(new PlanRunRequest('p1', 30));
 
         self::assertFalse($runner->advancesOnPoll());
         $message = $bus->sent[0]->getMessage();
         self::assertInstanceOf(RunImportPlanSlice::class, $message);
-        self::assertSame(['p1', 'u1'], [$message->planId, $message->actorId]);
+        self::assertSame('p1', $message->planId);
         self::assertNull($bus->sent[0]->last(DelayStamp::class));
         self::assertSame(30_000, $bus->sent[1]->last(DelayStamp::class)?->getDelay());
     }

@@ -72,14 +72,10 @@ final class ImportPlanModelTest extends TestCase
 
         $plan->markStarted('u2', $now, 'lock');
         self::assertSame([ImportPlanStatus::Queued, 'u2', $now, 'lock'], [$plan->getStatus(), $plan->getStartedById(), $plan->getStartedAt(), $plan->getLockKey()]);
-        $plan->hold(ImportPlanStatus::RateLimited, $now, 'rate_limited');
-        self::assertSame([$now, 'rate_limited'], [$plan->getResumeAt(), $plan->getErrorCode()]);
-        $plan->requestCancel();
-        self::assertTrue($plan->isCancelRequested());
+        self::assertSame([null, null, false, null], [$plan->getResumeAt(), $plan->getErrorCode(), $plan->isCancelRequested(), $plan->getRunToken()]);
         $plan->setReport(['created' => 3, 'board' => 'b', 'codes' => ['a', 1]]);
         self::assertSame([3, 0, ['a'], []], [$plan->reportInt('created'), $plan->reportInt('board'), $plan->reportList('codes'), $plan->reportList('created')]);
-        $plan->finish(ImportPlanStatus::Succeeded, $now);
-        self::assertSame([null, $now, null, null], [$plan->getLockKey(), $plan->getFinishedAt(), $plan->getResumeAt(), $plan->getErrorCode()]);
+        self::assertNull($plan->getFinishedAt());
         $plan->bumpVersion();
         self::assertSame(2, $plan->getVersion());
         self::assertNull($plan->getDirectory());

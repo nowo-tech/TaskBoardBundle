@@ -28,7 +28,7 @@ final class ImportPlanPagesTest extends ImportPlanTestCase
 
     protected static function planConfig(): array
     {
-        return ['runner' => 'app.plan_runner'];
+        return ['runner' => 'app.plan_runner', 'preview_max_requests' => 2];
     }
 
     public function testTheRunPageOfAWaitingPlan(): void
@@ -47,7 +47,7 @@ final class ImportPlanPagesTest extends ImportPlanTestCase
         self::assertSame(['queued', false], [$json['status'], $json['terminal']]);
 
         // The People wait: the inline runner on the poll leaves it waiting; the page links the People page; Resume.
-        $this->runner()->runSlice($plan->getId(), null, 60);
+        $this->runner()->runSlice($plan->getId(), 60);
         RecordingPlanRunner::$onPoll = true;
         $this->client->request('GET', self::BASE . $plan->getId() . '/progress');
         self::assertSame(1, count(RecordingPlanRunner::$requests) - 1, 'the poll asked the runner');
@@ -95,10 +95,13 @@ final class ImportPlanPagesTest extends ImportPlanTestCase
         TestCredentialResolver::$available = true;
 
         // The preview's start refused by the host's quota: a message, the plan stays a draft.
-        $ready                                                = $this->preparedPlan(['L1']);
+        $ready                                                = $this->preparedPlan(['L1', 'L2']);
         self::getContainer()->get('app.quota_listener')->deny = ['board_create'];
         $crawler                                              = $this->client->request('GET', self::BASE . $ready->getId());
         self::assertSelectorExists('[data-testid="nowo-task-plan-refusal"]');
+        // Audit ZBY-L4: the preview reads at most `preview_max_requests`; the rest is shown unread.
+        self::assertSelectorExists('[data-testid="nowo-task-plan-warning-preview_truncated"]');
+        self::assertSelectorTextContains('[data-testid="nowo-task-plan-preview-error"]', 'Not read');
         $this->client->submit($crawler->filter('#nowo-task-plan-start-form')->form());
         $this->client->followRedirect();
         self::assertSelectorTextContains('body', 'Your plan is full.');

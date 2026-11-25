@@ -1255,3 +1255,6 @@ task_board.import_plan.error.quota: "A importação não pode começar: %detail%
 task_board.import_plan.error.not_editable: "Esta importação não pode ser alterada agora."
 task_board.import_plan.flash.cancelled: "A importação pára depois da página atual. Nada do que foi importado é desfeito."
 task_board.import_plan.flash.deleted: "A importação foi eliminada. Os seus quadros ficam."
+task_board.import_plan.code.quota: "O plano do site não permite mais um quadro."
+task_board.import_plan.code.preview_truncated: "Não lido: a pré-visualização parou para ser rápida."
+task_board.import_plan.preview.warning.preview_truncated: "A pré-visualização deixou de ler para ser rápida: os quadros marcados «não lidos» são contados durante a importação."

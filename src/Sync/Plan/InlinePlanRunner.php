@@ -19,7 +19,7 @@ final readonly class InlinePlanRunner implements ImportPlanRunnerInterface
 
     public function dispatch(PlanRunRequest $request): void
     {
-        $this->runner->runSlice($request->planId, $request->actorId, $this->sliceSeconds);
+        $this->runner->runSlice($request->planId, $this->sliceSeconds);
     }
 
     public function advancesOnPoll(): bool

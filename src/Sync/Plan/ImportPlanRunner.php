@@ -14,6 +14,7 @@ use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Port\Internal\ProviderCredentialResolverInterface;
 use Nowo\TaskBoardBundle\Port\Internal\SyncActorResolverInterface;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
+use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncOptions;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncReport;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncStatus;
@@ -55,11 +56,18 @@ use function min;
 use function random_int;
 
 /**
- * Since 3.2.0 (CU-2, design §9.2, §13, §14): one slice of a started import plan. The plan is claimed with a
- * compare-and-set (one worker per plan; a heartbeat older than ten minutes is taken over), then its items run one after
- * the other — the board was created at start; the runner links it to its source (with the plan's status map, options
- * and people directory) and runs its connection's slices through {@see TaskBoardSyncService::runLinked()}, so a plan item
- * is an ordinary board run (board lock, cursor, history).
+ * Since 3.2.0 (CU-2, design §9.2, §13, §14, §15, §19): one slice of a started import plan. The plan is claimed with a
+ * compare-and-set that hands the slice a token (one worker per plan; a heartbeat older than ten minutes is taken over);
+ * every later write of the slice — heartbeat, report, hold, end — is conditional on that token (audit ZBY-L2), so a
+ * slice that was taken over or a plan that was cancelled meanwhile is never overwritten and never frees the workspace
+ * lock. Then its items run one after the other — the board was created at start; the runner links it to its source
+ * (with the plan's status map, options and people directory) and runs its connection's slices through
+ * {@see TaskBoardSyncService::runLinked()}, so a plan item is an ordinary board run (board lock, cursor, history).
+ *
+ * The slice always acts as the user who started the plan (`started_by_id`), never as whoever polls or resumes it
+ * (audit ZBY-M1): at every item it checks again that this user still exists, is enabled, may import plans in the tenant
+ * (`import_plan`) and may connect and import into the board. If not — erased, disabled or demoted — the plan ends
+ * `failed` with code `actor`; it never falls back to another user.
  *
  * How a slice ends: the slice's time is used up or the board's run paused (`paused`, due now), the token's budget or
  * ClickUp's limit (`rate_limited`, due after the wait plus 0–20 % jitter), a provider outage (`paused`, due after 1, 2,
@@ -67,11 +75,12 @@ use function random_int;
  * an actor who may no longer act (`failed`), or every item done (`succeeded`; failed items are counted, the summary
  * offers to retry them). A per-item failure never stops the plan.
  *
- * Stateless: the plan and its items are read again at every slice; the private manager is cleared between items.
+ * Stateless: the plan and its items are read again at every slice; the private manager is cleared between items. The
+ * plan row is only written through the store's conditional updates.
  */
 final readonly class ImportPlanRunner
 {
-    /** A running plan whose heartbeat is older than this is taken over. */
+    /** A running plan whose heartbeat is older than this is taken over (a slice lasts at most 300 s). */
     private const STALE_AFTER = 'PT10M';
 
     /** Codes of a connection that no longer works: the whole plan fails (`failed:credential`). */
@@ -91,6 +100,7 @@ final readonly class ImportPlanRunner
         private ProviderCredentialResolverInterface $credentials,
         private TaskBoardRepositoryInterface $boards,
         private SyncActorResolverInterface $actors,
+        private TaskBoardResourceAccessChecker $access,
         private ?TaskSyncPeopleDirectoryService $people = null,
         private ?EventDispatcherInterface $eventDispatcher = null,
         private ClockInterface $clock = new NativeClock(),
@@ -101,48 +111,47 @@ final readonly class ImportPlanRunner
     }
 
     /**
-     * Runs one slice of at most `$sliceSeconds` and returns the plan's state after it; null when nothing ran (no such
-     * plan, a plan that ended or is not due yet, or one another worker holds), so a queued runner stops there.
+     * Runs one slice of at most `$sliceSeconds` as the plan's starter and returns the plan's state after it; null when
+     * nothing ran (no such plan, a plan that ended or is not due yet, or one another worker holds), so a queued runner
+     * stops there.
      */
-    public function runSlice(string $planId, ?string $actorId, int $sliceSeconds): ?ImportPlanStatus
+    public function runSlice(string $planId, int $sliceSeconds): ?ImportPlanStatus
     {
-        $plan = $this->store->find($planId);
+        // Read again: Resume, Cancel and other workers change the row behind this manager's back.
+        $plan = $this->store->reload($planId);
         if (!$plan instanceof TaskSyncImportPlan) {
             return null;
         }
-        $now = $this->clock->now();
-        if (!$plan->getStatus()->isActive() || ($plan->getStatus() !== ImportPlanStatus::Running && $plan->getResumeAt() instanceof DateTimeImmutable && $plan->getResumeAt() > $now)
+        $now   = $this->clock->now();
+        $token = !$plan->getStatus()->isActive() || ($plan->getStatus() !== ImportPlanStatus::Running && $plan->getResumeAt() instanceof DateTimeImmutable && $plan->getResumeAt() > $now)
             || ($plan->getStatus() === ImportPlanStatus::Paused && !$plan->getResumeAt() instanceof DateTimeImmutable)
-            || !$this->store->claim($plan, $now, $now->sub(new DateInterval(self::STALE_AFTER)))) {
+            ? null : $this->store->claim($plan, $now, $now->sub(new DateInterval(self::STALE_AFTER)));
+        if ($token === null) {
             return null;
         }
         $deadline = $now->getTimestamp() + max(0, $sliceSeconds);
         try {
-            $this->work($plan, $actorId ?? $plan->getStartedById(), $deadline);
+            $this->work($planId, $token, $deadline);
         } catch (Throwable $exception) {
-            // Anything unexpected (the database): the plan pauses and is resumed later; nothing is lost.
+            // Anything unexpected (the database, a host listener): the plan pauses and is resumed later; nothing is lost.
             $this->logger->error('TaskBoard import plan slice failed', ['bundle' => 'nowo_task_board', 'plan_id' => $planId, 'exception' => $exception::class, 'at' => basename($exception->getFile()) . ':' . $exception->getLine()]);
-            $plan = $this->store->find($planId);
-            if ($plan instanceof TaskSyncImportPlan && $plan->getStatus() === ImportPlanStatus::Running) {
-                $this->transient($plan, 'internal');
-                $this->entityManager->flush();
-            }
+            $this->transient($this->plan($planId), $token, 'internal');
         }
 
-        return $this->store->find($planId)?->getStatus();
+        return $this->store->reload($planId)?->getStatus();
     }
 
-    private function work(TaskSyncImportPlan $plan, ?string $actorId, int $deadline): void
+    private function work(string $planId, string $token, int $deadline): void
     {
-        $planId  = $plan->getId();
+        $plan    = $this->plan($planId);
         $itemIds = array_map(static fn (TaskSyncImportPlanItem $item): string => $item->getId(), $this->store->items($plan));
         foreach ($itemIds as $itemId) {
-            // Read again at each item: the board's run clears the private manager.
-            $plan = $this->store->find($planId) ?? $plan;
+            // Read again at each item: the board's run clears the private manager; the plan row may have changed.
+            $plan = $this->plan($planId);
             // An active plan's items are never removed (the wizard edits drafts only).
             $item = $this->entityManager->find(TaskSyncImportPlanItem::class, $itemId) ?? throw new LogicException('An item of the running plan was removed.');
             if ($plan->isCancelRequested()) {
-                $this->end($plan, ImportPlanStatus::Cancelled, null);
+                $this->end($plan, $token, ImportPlanStatus::Cancelled, null);
 
                 return;
             }
@@ -150,53 +159,55 @@ final readonly class ImportPlanRunner
                 continue;
             }
             if ($this->clock->now()->getTimestamp() >= $deadline) {
-                $plan->hold(ImportPlanStatus::Paused, $this->clock->now());
-                $this->entityManager->flush();
+                $this->store->hold($planId, $token, ImportPlanStatus::Paused, $this->clock->now(), null, $plan->getReport());
 
                 return;
             }
-            if (!$this->runItem($plan, $item, $actorId, $deadline)) {
+            // A heartbeat refused: another slice took the plan over meanwhile; this one writes nothing more.
+            if (!$this->runItem($plan, $token, $item, $deadline) || !$this->store->heartbeat($planId, $token, $this->clock->now())) {
                 return;
             }
-            $this->store->heartbeat($plan, $this->clock->now());
             BundleEntityDetacher::detach($this->entityManager);
         }
-        $plan  = $this->store->find($planId) ?? $plan;
-        $items = $this->store->items($plan);
-        $this->aggregate($plan, $items);
+        $plan   = $this->plan($planId);
+        $items  = $this->store->items($plan);
         $failed = count(array_filter($items, static fn (TaskSyncImportPlanItem $item): bool => $item->getStatus() === ImportPlanItemStatus::Failed));
-        $this->end($plan, $failed === count($items) && $items !== [] ? ImportPlanStatus::Failed : ImportPlanStatus::Succeeded, $failed === count($items) && $items !== [] ? 'items_failed' : null);
+        $this->end($plan, $token, $failed === count($items) && $items !== [] ? ImportPlanStatus::Failed : ImportPlanStatus::Succeeded, $failed === count($items) && $items !== [] ? 'items_failed' : null);
     }
 
     /**
-     * One item: link, then sync slices. False when the slice must end here (the plan was held or ended).
+     * One item: the actor is checked again, then link, then sync slices. False when the slice must end here (the plan
+     * was held or ended).
      */
-    private function runItem(TaskSyncImportPlan $plan, TaskSyncImportPlanItem $item, ?string $actorId, int $deadline): bool
+    private function runItem(TaskSyncImportPlan $plan, string $token, TaskSyncImportPlanItem $item, int $deadline): bool
     {
         $board = $item->getBoardId() !== null ? $this->boards->findById($item->getBoardId()) : null;
         if (!$board instanceof TaskBoard || $board->getTenantKey() !== $plan->getTenantKey()) {
             return $this->failItem($item, 'board_unavailable');
         }
-        $actor = $this->actors->actorFor($board, $actorId);
+        $actor = $this->actor($plan, $board);
         if ($actor === null) {
-            // Design §15: a disabled, erased or demoted user stops the plan; it never runs as someone else.
-            $this->end($plan, ImportPlanStatus::Failed, 'actor');
+            $this->end($plan, $token, ImportPlanStatus::Failed, 'actor');
 
             return false;
         }
         $provider = $this->providers->has($plan->getProvider()) ? $this->providers->get($plan->getProvider()) : null;
         if (!$provider instanceof TaskProviderInterface) {
-            $this->end($plan, ImportPlanStatus::Failed, 'provider_unavailable');
+            $this->end($plan, $token, ImportPlanStatus::Failed, 'provider_unavailable');
 
             return false;
         }
         $connection = $this->syncStore->findConnection($board);
+        if ($item->getPhase() !== ImportPlanPhase::Link && $connection instanceof TaskBoardConnection && $connection->getId() !== $item->getConnectionId()) {
+            // Audit ZBY-I1: the board was linked again to something else since the plan linked it.
+            return $this->failItem($item, 'board_linked_elsewhere');
+        }
         if ($item->getPhase() === ImportPlanPhase::Link || !$connection instanceof TaskBoardConnection) {
-            $linked = $this->link($plan, $item, $board, $provider, $actor, $connection);
+            $linked = $this->link($plan, $token, $item, $board, $provider, $actor, $connection);
             if (!$linked instanceof TaskBoardConnection) {
-                return $plan->getStatus() === ImportPlanStatus::Running;
+                return $this->plan($plan->getId())->getRunToken() === $token;
             }
-            if ($this->waitForPeople($plan, $item, $board, $provider)) {
+            if ($this->waitForPeople($plan, $token, $item, $board, $provider)) {
                 return false;
             }
         }
@@ -211,14 +222,32 @@ final readonly class ImportPlanRunner
             createOnly: $plan->getReimportMode() === ReimportMode::AddNewOnly,
         ));
 
-        return $this->afterRun($plan, $item, $report);
+        return $this->afterRun($plan->getId(), $token, $item, $report);
     }
 
-    /** Links the item's board to its source (or adopts the link the plan made before a crash). Null: not linked. */
-    private function link(TaskSyncImportPlan $plan, TaskSyncImportPlanItem $item, TaskBoard $board, TaskProviderInterface $provider, object $actor, ?TaskBoardConnection $connection): ?TaskBoardConnection
+    /**
+     * The plan's starter, when they may still run it on this board (audit ZBY-M1): resolved by id (an erased or
+     * disabled user is none), allowed `import_plan` in the plan's tenant, and allowed to connect and import into the
+     * board. Null otherwise — never another user.
+     */
+    private function actor(TaskSyncImportPlan $plan, TaskBoard $board): ?object
+    {
+        $starter = $plan->getStartedById();
+        $actor   = $starter === null ? null : $this->actors->actorFor($board, $starter);
+
+        return $actor !== null && $this->access->canImportPlan($actor, $plan->getTenantKey())
+            && $this->access->canManageBoardConnection($actor, $board) && $this->access->canImportTasks($actor, $board) ? $actor : null;
+    }
+
+    /**
+     * Links the item's board to its source, or adopts the link this plan made before a crash (same source, made since
+     * the plan started). Null: not linked.
+     */
+    private function link(TaskSyncImportPlan $plan, string $token, TaskSyncImportPlanItem $item, TaskBoard $board, TaskProviderInterface $provider, object $actor, ?TaskBoardConnection $connection): ?TaskBoardConnection
     {
         if ($connection instanceof TaskBoardConnection) {
-            if ($connection->getProvider() !== $plan->getProvider() || $connection->getContainerId() !== $item->getSourceId()) {
+            if ($connection->getProvider() !== $plan->getProvider() || $connection->getContainerId() !== $item->getSourceId()
+                || !$plan->getStartedAt() instanceof DateTimeImmutable || $connection->getCreatedAt() < $plan->getStartedAt()) {
                 $this->failItem($item, 'board_linked_elsewhere');
 
                 return null;
@@ -229,14 +258,14 @@ final readonly class ImportPlanRunner
         }
         $credential = $this->credentials->credentialFor($board, $plan->getConnectionRef());
         if (!$credential instanceof ProviderCredential) {
-            $this->end($plan, ImportPlanStatus::Failed, 'credential');
+            $this->end($plan, $token, ImportPlanStatus::Failed, 'credential');
 
             return null;
         }
         try {
             $container = $this->container($provider, $credential, $item->getSourceId());
         } catch (ProviderException $exception) {
-            $this->providerFailure($plan, $item, $exception->errorCode->value);
+            $this->providerFailure($plan, $token, $item, $exception->errorCode->value);
 
             return null;
         }
@@ -260,7 +289,7 @@ final readonly class ImportPlanRunner
         $connection = $this->sync->link($board, $provider, $credential, $container, $actor, $options, $item->getStatusMap());
         $directory  = $plan->getDirectory();
         if ($directory instanceof TaskSyncDirectory) {
-            // @igor-ignore - Request data: the plan / item row read by id for this call, or a database write through the store; not service state.
+            // @igor-ignore - Request data: the connection row this call created; not service state.
             $connection->setDirectory($this->entityManager->find(TaskSyncDirectory::class, $directory->getId()));
         }
         $item = $this->entityManager->find(TaskSyncImportPlanItem::class, $item->getId()) ?? $item;
@@ -276,7 +305,7 @@ final readonly class ImportPlanRunner
      * directory and the plan waits (`paused`, no due time) until *Resume* — the People page of that board maps them.
      * Asked once per plan run.
      */
-    private function waitForPeople(TaskSyncImportPlan $plan, TaskSyncImportPlanItem $item, TaskBoard $board, TaskProviderInterface $provider): bool
+    private function waitForPeople(TaskSyncImportPlan $plan, string $token, TaskSyncImportPlanItem $item, TaskBoard $board, TaskProviderInterface $provider): bool
     {
         $directory = $plan->getDirectory();
         if (!$plan->option(TaskSyncImportPlan::OPTION_PEOPLE, false) || $plan->reportInt('people_waited') > 0 || !$directory instanceof TaskSyncDirectory
@@ -292,65 +321,62 @@ final readonly class ImportPlanRunner
                 // The People page reads them again.
             }
         }
-        $plan = $this->store->find($plan->getId()) ?? $plan;
-        $plan->setReport(['people_waited' => 1, 'people_board' => (string) $item->getBoardId()] + $plan->getReport());
-        $plan->hold(ImportPlanStatus::Paused, null, 'people_mapping_required');
-        $this->entityManager->flush();
+        $plan = $this->plan($plan->getId());
+        $this->store->hold($plan->getId(), $token, ImportPlanStatus::Paused, null, 'people_mapping_required', ['people_waited' => 1, 'people_board' => (string) $item->getBoardId()] + $plan->getReport());
 
         return true;
     }
 
     /** What the board's run means for the item and the plan; false when the slice must end. */
-    private function afterRun(TaskSyncImportPlan $plan, TaskSyncImportPlanItem $item, SyncReport $report): bool
+    private function afterRun(string $planId, string $token, TaskSyncImportPlanItem $item, SyncReport $report): bool
     {
-        $plan = $this->store->find($plan->getId()) ?? $plan;
+        $plan = $this->plan($planId);
         $item = $this->entityManager->find(TaskSyncImportPlanItem::class, $item->getId()) ?? $item;
         if ($report->runId !== '') {
             $item->setRunId($report->runId);
         }
         $item->setReport($this->counts($report) + $item->getReport());
         $code = $report->errors[0]->code ?? $report->refusalCode;
-        switch ($report->status) {
-            case SyncStatus::Succeeded:
-                $item->advance(ImportPlanItemStatus::Succeeded, ImportPlanPhase::Done);
-                $plan->setReport(['transient_retries' => 0] + $plan->getReport());
-                $this->entityManager->flush();
+        if ($report->status === SyncStatus::Succeeded) {
+            $item->advance(ImportPlanItemStatus::Succeeded, ImportPlanPhase::Done);
+            $this->entityManager->flush();
 
-                return true;
+            return $this->store->saveReport($planId, $token, ['transient_retries' => 0] + $plan->getReport());
+        }
+        $this->entityManager->flush();
+        $now = $this->clock->now();
+        switch ($report->status) {
             case SyncStatus::Paused:
-                $plan->hold(ImportPlanStatus::Paused, $this->clock->now());
-                break;
+                $this->store->hold($planId, $token, ImportPlanStatus::Paused, $now, null, $plan->getReport());
+
+                return false;
             case SyncStatus::Busy:
                 // A manual refresh of the same board holds its lock: the item goes on later.
-                $plan->hold(ImportPlanStatus::Paused, $this->clock->now()->modify('+30 seconds'), 'board_busy');
-                break;
+                $this->store->hold($planId, $token, ImportPlanStatus::Paused, $now->modify('+30 seconds'), 'board_busy', $plan->getReport());
+
+                return false;
             case SyncStatus::RateLimited:
                 $wait = max(1, $report->retryAfterSeconds ?? 60);
-                $plan->hold(ImportPlanStatus::RateLimited, $this->clock->now()->modify('+' . ($wait + random_int(0, max(1, intdiv($wait, 5)))) . ' seconds'), 'rate_limited');
-                break;
+                $this->store->hold($planId, $token, ImportPlanStatus::RateLimited, $now->modify('+' . ($wait + random_int(0, max(1, intdiv($wait, 5)))) . ' seconds'), 'rate_limited', $plan->getReport());
+
+                return false;
             default:
                 // Failed, Refused or Cancelled: a connection failure stops the plan; an outage pauses it; anything else
                 // fails the item and the plan goes on (a cancelled plan then ends before its next item).
-                $this->entityManager->flush();
-
-                return $this->providerFailure($plan, $item, $code ?? $report->status->value);
+                return $this->providerFailure($plan, $token, $item, $code ?? $report->status->value);
         }
-        $this->entityManager->flush();
-
-        return false;
     }
 
     /** A provider error of an item: the connection fails the plan, an outage pauses it, anything else fails the item. */
-    private function providerFailure(TaskSyncImportPlan $plan, TaskSyncImportPlanItem $item, string $code): bool
+    private function providerFailure(TaskSyncImportPlan $plan, string $token, TaskSyncImportPlanItem $item, string $code): bool
     {
         if (in_array($code, self::CREDENTIAL_CODES, true)) {
-            $this->end($plan, ImportPlanStatus::Failed, 'credential');
+            $this->end($plan, $token, ImportPlanStatus::Failed, 'credential');
 
             return false;
         }
         if (in_array($code, self::TRANSIENT_CODES, true) && $plan->reportInt('transient_retries') < self::MAX_TRANSIENT_RETRIES) {
-            $this->transient($plan, $code);
-            $this->entityManager->flush();
+            $this->transient($plan, $token, $code);
 
             return false;
         }
@@ -359,11 +385,10 @@ final readonly class ImportPlanRunner
     }
 
     /** An outage: paused, due after 1, 2, 4, 8 then 15 minutes. */
-    private function transient(TaskSyncImportPlan $plan, string $code): void
+    private function transient(TaskSyncImportPlan $plan, string $token, string $code): void
     {
         $retries = $plan->reportInt('transient_retries');
-        $plan->setReport(['transient_retries' => $retries + 1] + $plan->getReport());
-        $plan->hold(ImportPlanStatus::Paused, $this->clock->now()->modify('+' . min(900, 60 << $retries) . ' seconds'), $code);
+        $this->store->hold($plan->getId(), $token, ImportPlanStatus::Paused, $this->clock->now()->modify('+' . min(900, 60 << $retries) . ' seconds'), $code, ['transient_retries' => $retries + 1] + $plan->getReport());
     }
 
     private function failItem(TaskSyncImportPlanItem $item, string $code): bool
@@ -375,14 +400,17 @@ final readonly class ImportPlanRunner
         return true;
     }
 
-    /** A final state: the workspace is free; the event says how it ended; old plans are pruned (Q-CU-13). */
-    private function end(TaskSyncImportPlan $plan, ImportPlanStatus $status, ?string $errorCode): void
+    /**
+     * A final state, when this slice still holds the plan: the workspace is free; the event says how it ended; old plans
+     * are pruned (Q-CU-13).
+     */
+    private function end(TaskSyncImportPlan $plan, string $token, ImportPlanStatus $status, ?string $errorCode): void
     {
-        $plan  = $this->store->find($plan->getId()) ?? $plan;
-        $items = $this->store->items($plan);
-        $this->aggregate($plan, $items);
-        $plan->finish($status, $this->clock->now(), $errorCode);
-        $this->entityManager->flush();
+        $items  = $this->store->items($plan);
+        $report = $this->aggregate($plan, $items);
+        if (!$this->store->finish($plan->getId(), $token, $status, $this->clock->now(), $errorCode, $report)) {
+            return;
+        }
         $boards = [];
         foreach ($items as $item) {
             if ($item->getBoardId() !== null) {
@@ -390,7 +418,7 @@ final readonly class ImportPlanRunner
             }
         }
         $counts = [];
-        foreach ($plan->getReport() as $key => $value) {
+        foreach ($report as $key => $value) {
             if (is_int($value)) {
                 $counts[$key] = $value;
             }
@@ -407,8 +435,10 @@ final readonly class ImportPlanRunner
      * The plan's report: the sum of its items' counts, the failed items, and its own flags.
      *
      * @param list<TaskSyncImportPlanItem> $items
+     *
+     * @return array<string, int|list<string>|string>
      */
-    private function aggregate(TaskSyncImportPlan $plan, array $items): void
+    private function aggregate(TaskSyncImportPlan $plan, array $items): array
     {
         $report = ['items' => count($items), 'items_failed' => 0, 'items_done' => 0];
         foreach ($items as $item) {
@@ -423,7 +453,8 @@ final readonly class ImportPlanRunner
                 $report[$flag] = $plan->getReport()[$flag];
             }
         }
-        $plan->setReport($report);
+
+        return $report;
     }
 
     /**
@@ -444,6 +475,12 @@ final readonly class ImportPlanRunner
             'processed' => $report->processed(),
             'total'     => $report->total ?? 0,
         ];
+    }
+
+    /** The plan row as the database holds it now (the store's conditional updates bypass the identity map). */
+    private function plan(string $planId): TaskSyncImportPlan
+    {
+        return $this->store->reload($planId) ?? throw new LogicException('The running plan was removed.');
     }
 
     private function container(TaskProviderInterface $provider, ProviderCredential $credential, string $sourceId): ?RemoteContainer

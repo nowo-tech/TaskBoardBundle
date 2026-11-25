@@ -31,11 +31,11 @@ final readonly class RunImportPlanSliceHandler
 
     public function __invoke(RunImportPlanSlice $message): void
     {
-        $status   = $this->runner->runSlice($message->planId, $message->actorId, $this->sliceSeconds);
+        $status   = $this->runner->runSlice($message->planId, $this->sliceSeconds);
         $resumeAt = $this->store->find($message->planId)?->getResumeAt();
         if (!in_array($status, [ImportPlanStatus::Paused, ImportPlanStatus::RateLimited], true) || !$resumeAt instanceof DateTimeImmutable) {
             return;
         }
-        $this->dispatcher->dispatch(new PlanRunRequest($message->planId, $message->actorId, max(0, $resumeAt->getTimestamp() - $this->clock->now()->getTimestamp())));
+        $this->dispatcher->dispatch(new PlanRunRequest($message->planId, max(0, $resumeAt->getTimestamp() - $this->clock->now()->getTimestamp())));
     }
 }

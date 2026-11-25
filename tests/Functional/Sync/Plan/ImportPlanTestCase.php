@@ -138,6 +138,16 @@ abstract class ImportPlanTestCase extends SyncFunctionalTestCase
         return $this->store()->items($this->fresh($plan));
     }
 
+    /**
+     * A write behind the services' back (what another process or a stale worker would do).
+     *
+     * @param list<mixed> $params
+     */
+    protected function sql(string $statement, array $params = []): int
+    {
+        return (int) $this->em->getConnection()->executeStatement($statement, $params);
+    }
+
     protected function boardNamed(string $name): TaskBoard
     {
         $board = $this->em->getRepository(TaskBoard::class)->findOneBy(['name' => $name]);

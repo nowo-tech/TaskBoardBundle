@@ -11,7 +11,6 @@
             <unique-constraint name="uniq_task_board_sync_import_plans_lock" columns="lock_key"/>
         </unique-constraints>
         <id name="id" type="string" length="36"/>
-        <field name="createdAt" type="datetime_immutable" column="created_at"/>
         <field name="workspaceId" type="string" column="workspace_id" length="64" nullable="true"/>
         <field name="workspaceName" type="string" column="workspace_name" length="255" nullable="true"/>
         <field name="status" type="string" length="16"/>
@@ -24,6 +23,7 @@
         <field name="startedAt" type="datetime_immutable" column="started_at" nullable="true"/>
         <field name="finishedAt" type="datetime_immutable" column="finished_at" nullable="true"/>
         <field name="heartbeatAt" type="datetime_immutable" column="heartbeat_at" nullable="true"/>
+        <field name="runToken" type="string" column="run_token" length="36" nullable="true"/>
         <field name="resumeAt" type="datetime_immutable" column="resume_at" nullable="true"/>
         <field name="report" type="json"/>
         <field name="lockKey" type="string" column="lock_key" length="64" nullable="true"/>
@@ -35,6 +35,7 @@
         <field name="connectionRef" type="string" column="connection_ref" length="191"/>
         <field name="connectionLabel" type="string" column="connection_label" length="255"/>
         <field name="createdById" type="string" column="created_by_id" length="191" nullable="true"/>
+        <field name="createdAt" type="datetime_immutable" column="created_at"/>
         <many-to-one field="directory" target-entity="Nowo\TaskBoardBundle\Sync\Entity\TaskSyncDirectory">
             <join-column name="directory_id" on-delete="SET NULL"/>
         </many-to-one>

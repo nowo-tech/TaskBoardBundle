@@ -953,7 +953,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             $container->getDefinition(ProviderHttpClient::class)->setArgument('$budget', new Reference(ProviderRateBudget::class));
             $container->getDefinition(ImportPlanPreviewer::class)->setArgument('$budget', new Reference(ProviderRateBudget::class));
         }
-        /** @var array{enabled: bool, runner: string|null, inline_slice_seconds: int, messenger: array{enabled: bool, slice_seconds: int}, keep_days: int, preview_max_pages: int, max_items: int} $plans */
+        /** @var array{enabled: bool, runner: string|null, inline_slice_seconds: int, messenger: array{enabled: bool, slice_seconds: int}, keep_days: int, preview_max_pages: int, preview_max_requests: int, preview_seconds: int, max_items: int} $plans */
         $plans    = $sync['plans'];
         $timeSink = is_string($sync['time_entries']['sink']) && $sync['time_entries']['sink'] !== '';
         $container->getDefinition(ImportPlanService::class)
@@ -964,7 +964,9 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             ->setArgument('$keepDays', $plans['keep_days']);
         $container->getDefinition(ImportPlanPreviewer::class)
             ->setArgument('$timeSink', $timeSink)
-            ->setArgument('$previewMaxPages', $plans['preview_max_pages']);
+            ->setArgument('$previewMaxPages', $plans['preview_max_pages'])
+            ->setArgument('$maxRequests', $plans['preview_max_requests'])
+            ->setArgument('$maxSeconds', $plans['preview_seconds']);
         $container->getDefinition(InlinePlanRunner::class)->setArgument('$sliceSeconds', $plans['inline_slice_seconds']);
         $runner = InlinePlanRunner::class;
         if ($plans['messenger']['enabled']) {

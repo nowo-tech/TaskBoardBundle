@@ -75,7 +75,7 @@ final class ImportPlanPlainProviderTest extends ImportPlanTestCase
 
         $plan = $this->fresh($plan);
         $plans->start($plan, $plan->getVersion(), $this->admin);
-        self::assertSame(ImportPlanStatus::Succeeded, $this->runner()->runSlice($plan->getId(), null, 60));
+        self::assertSame(ImportPlanStatus::Succeeded, $this->runner()->runSlice($plan->getId(), 60));
         self::assertSame(2, $this->fresh($plan)->reportInt('created'));
 
         // An existing target gone before a re-import: the item fails at the start, the others run.

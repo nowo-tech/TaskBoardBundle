@@ -15,7 +15,6 @@ use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncImportPlan;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncImportPlanItem;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPersonMapping;
 use Nowo\TaskBoardBundle\Sync\Hook\ConnectionChoice;
-use Nowo\TaskBoardBundle\Sync\Hook\ConnectionCreatorActorResolver;
 use Nowo\TaskBoardBundle\Sync\People\TaskSyncPersonRepository;
 use Nowo\TaskBoardBundle\Sync\Plan\ImportPlanException;
 use Nowo\TaskBoardBundle\Sync\Plan\ImportPlanItemStatus;
@@ -235,7 +234,8 @@ final class TaskSyncImportPlanController extends AbstractController
         [$user, $tenant] = $this->requireImporter();
         $plan            = $this->findPlan($planId, $tenant);
         if ($this->runner->advancesOnPoll() && $plan->getStatus()->isActive()) {
-            $this->runner->dispatch(new PlanRunRequest($planId, $this->actorId($user)));
+            // The slice runs as the plan's starter, never as the one polling (audit ZBY-M1).
+            $this->runner->dispatch(new PlanRunRequest($planId));
             $plan = $this->findPlan($planId, $tenant);
         }
         $view     = $this->progressView($plan);
@@ -269,10 +269,10 @@ final class TaskSyncImportPlanController extends AbstractController
     #[Route('/tools/task-board/import-plans/{planId}/resume', name: 'nowo_task_board_import_plan_resume', requirements: ['planId' => self::PLAN_ID], methods: ['POST'])]
     public function resume(string $planId, Request $request): RedirectResponse
     {
-        [$user, $tenant] = $this->requireImporter();
-        $plan            = $this->findPlan($planId, $tenant);
+        [, $tenant] = $this->requireImporter();
+        $plan       = $this->findPlan($planId, $tenant);
         $this->denyUnlessValidCsrf($request, 'task_board_import_plan_resume');
-        $this->plans->resume($plan, $user);
+        $this->plans->resume($plan);
         $this->logWrite('import_plan_resume', ['plan_id' => $planId]);
 
         return $this->toStep($plan, ImportPlanStep::Run);
@@ -601,8 +601,20 @@ final class TaskSyncImportPlanController extends AbstractController
     private function tree(TaskSyncImportPlan $plan, array $opened): array
     {
         $tree = ['' => $this->plans->level($plan, null)];
+        // Audit ZBY-L1: a level opens only when its space or folder was listed from the plan's workspace already (the
+        // posted list of opened levels is rebuilt in order; anything else is ignored).
+        $known = [];
+        foreach ($tree[''] as $node) {
+            $known[$node->id] = $node->type !== ContainerType::List;
+        }
         foreach ($opened as $parent) {
+            if (!($known[$parent] ?? false)) {
+                continue;
+            }
             $tree[$parent] = $this->plans->level($plan, $parent);
+            foreach ($tree[$parent] as $node) {
+                $known[$node->id] = $node->type !== ContainerType::List;
+            }
         }
 
         return $tree;
@@ -762,7 +774,8 @@ final class TaskSyncImportPlanController extends AbstractController
     /** A plan of the request's tenant (the key compared exactly); 404 otherwise. */
     private function findPlan(string $planId, ?TaskBoardTenant $tenant): TaskSyncImportPlan
     {
-        $plan = $this->store->find($planId);
+        // Read again: workers and the store's conditional updates change the row behind the manager's back.
+        $plan = $this->store->reload($planId);
         if (!$plan instanceof TaskSyncImportPlan || $plan->getTenantKey() !== $tenant?->key) {
             throw new NotFoundHttpException('Plan not found.');
         }
@@ -796,11 +809,6 @@ final class TaskSyncImportPlanController extends AbstractController
 
             throw $this->createAccessDeniedException('Invalid CSRF token.');
         }
-    }
-
-    private function actorId(UserInterface $user): ?string
-    {
-        return ConnectionCreatorActorResolver::idOf($user);
     }
 
     /**

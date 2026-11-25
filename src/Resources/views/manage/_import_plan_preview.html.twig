@@ -30,7 +30,7 @@
                     <th scope="row">
                         {{ row.board }}
                         <span class="{{ nowo_ui_class(row.newBoard ? 'badge_info' : 'badge_neutral', _b) }} nowo-task-badge">{{ (row.newBoard ? 'task_board.import_plan.preview.new_board' : 'task_board.import_plan.preview.existing_board')|trans({}, _b) }}</span>
-                        {% if row.error %}<span class="{{ nowo_ui_class('badge_warning', _b) }} nowo-task-badge">{{ ('task_board.sync.error.' ~ row.error)|trans({}, _b) }}</span>{% endif %}
+                        {% if row.error %}<span class="{{ nowo_ui_class('badge_warning', _b) }} nowo-task-badge" data-testid="nowo-task-plan-preview-error">{{ include('@NowoTaskBoardBundle/manage/_import_plan_code.html.twig', {code: row.error}) }}</span>{% endif %}
                     </th>
                     <td>{{ row.estimated ? '≈ ' }}{{ row.tasks }}</td>
                     <td>{{ row.subtasks }}</td>
