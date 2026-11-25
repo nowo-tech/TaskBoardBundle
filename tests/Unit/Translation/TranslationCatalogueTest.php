@@ -39,6 +39,7 @@ final class TranslationCatalogueTest extends TestCase
      */
     private const ALLOWED_IDENTICAL = [
         'de' => [
+            'task_board.sync.connect.kind_oauth',
             'nav.brand',
             'task_board.board.title',
             'task_board.copy.target',
@@ -77,6 +78,7 @@ final class TranslationCatalogueTest extends TestCase
             'task_board.task.workflow',
         ],
         'es' => [
+            'task_board.sync.connect.kind_oauth',
             'nav.brand',
             'task_board.form.board.slug',
             'task_board.form.column.color',
@@ -97,6 +99,7 @@ final class TranslationCatalogueTest extends TestCase
             'task_board.sync.trigger.manual',
         ],
         'fr' => [
+            'task_board.sync.connect.kind_oauth',
             'nav.brand',
             'task_board.custom_field.filter.operator',
             'task_board.dependency.form.type',
@@ -136,6 +139,7 @@ final class TranslationCatalogueTest extends TestCase
             'task_board.time.form.note',
         ],
         'it' => [
+            'task_board.sync.connect.kind_oauth',
             'nav.brand',
             'task_board.form.board.slug',
             'task_board.form.link.url',
@@ -163,6 +167,7 @@ final class TranslationCatalogueTest extends TestCase
             'task_board.sync.trigger.console',
         ],
         'nl' => [
+            'task_board.sync.connect.kind_oauth',
             'nav.brand',
             'task_board.calendar.mode_week',
             'task_board.custom_field.operator.eq',
@@ -212,6 +217,7 @@ final class TranslationCatalogueTest extends TestCase
             'task_board.task.workflow',
         ],
         'pt' => [
+            'task_board.sync.connect.kind_oauth',
             'nav.brand',
             'task_board.form.board.slug',
             'task_board.form.link.url',

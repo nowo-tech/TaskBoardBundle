@@ -11,6 +11,7 @@ use Nowo\TaskBoardBundle\Sync\Exception\ProviderErrorCode;
 use Nowo\TaskBoardBundle\Sync\Exception\ProviderException;
 use Nowo\TaskBoardBundle\Sync\Hook\ConnectionChoice;
 use Nowo\TaskBoardBundle\Sync\Provider\ContainerType;
+use Nowo\TaskBoardBundle\Sync\Provider\CredentialScheme;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteContainer;
 use Nowo\TaskBoardBundle\Sync\Testing\InMemoryTaskProvider;
 use Nowo\TaskBoardBundle\Tests\Functional\App\PredictableCsrfTokenManager;
@@ -236,6 +237,34 @@ final class ConnectionControllerTest extends SyncFunctionalTestCase
         // conn-2 has no credential: the page answers 404 (the credential is gone).
         $this->client->request('GET', self::BASE . $board->getId() . '/connection?connection=conn-2');
         self::assertResponseStatusCodeSame(404);
+    }
+
+    /** Since 3.1.0 (CU-1): the host's OAuth start route next to "Add a token", OAuth connections labelled. */
+    public function testOAuthConnectLinksWhenTheHostOffersThem(): void
+    {
+        $board = $this->board();
+        $this->login($this->owner);
+
+        TestCredentialResolver::$choices    = [];
+        TestCredentialResolver::$connectUrl = '/oauth/clickup/start?returnTo=x';
+        $this->client->request('GET', self::BASE . $board->getId() . '/connection');
+        self::assertSelectorExists('[data-testid="nowo-task-sync-no-connection"] a[data-testid="nowo-task-sync-connect-oauth"][href="/oauth/clickup/start?returnTo=x"]');
+        self::assertSelectorTextContains('[data-testid="nowo-task-sync-connect-oauth"]', 'Connect with ClickUp');
+        self::assertSame(self::BASE . $board->getId() . '/connection?provider=clickup', TestCredentialResolver::$returnTo);
+
+        TestCredentialResolver::$choices = [new ConnectionChoice('conn-1', 'Ada', 'aaaa', CredentialScheme::OAuth, ['9001'])];
+        $this->client->request('GET', self::BASE . $board->getId() . '/connection?connection=conn-1');
+        self::assertSelectorTextContains('a[aria-current="true"]', 'OAuth');
+        self::assertSelectorExists('nav a[data-testid="nowo-task-sync-connect-oauth"]');
+
+        $this->provider->failNext(new ProviderException(ProviderErrorCode::AuthFailed));
+        $this->client->request('GET', self::BASE . $board->getId() . '/connection?connection=conn-1');
+        self::assertSelectorTextContains('[data-testid="nowo-task-sync-tree-error"] a[href="/oauth/clickup/start?returnTo=x"]', 'Connect again');
+
+        // Same URL rule as the token form: anything but https:// or a same-origin path is not linked.
+        TestCredentialResolver::$connectUrl = 'javascript:alert(1)';
+        $this->client->request('GET', self::BASE . $board->getId() . '/connection?connection=conn-1');
+        self::assertSelectorNotExists('[data-testid="nowo-task-sync-connect-oauth"]');
     }
 
     public function testTheProgressOfAnotherBoardsRunIs404(): void

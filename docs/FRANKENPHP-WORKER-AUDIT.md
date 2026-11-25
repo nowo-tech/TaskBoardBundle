@@ -28,6 +28,7 @@
 - [AI Flow features (2.16.0)](#ai-flow-features-2160)
 - [Task templates (2.16.0)](#task-templates-2160)
 - [Host ports by id (2.29.0)](#host-ports-by-id-2290)
+- [ClickUp OAuth (3.1.0)](#clickup-oauth-310)
 - [Findings](#findings)
   - [W-01 — Unique-constraint violations close the EntityManager (Medium)](#w-01--unique-constraint-violations-close-the-entitymanager-medium)
   - [W-02 — Doctrine identity map is never cleared by the bundle (Medium)](#w-02--doctrine-identity-map-is-never-cleared-by-the-bundle-medium)
@@ -193,6 +194,13 @@ services resetter; each answer holds only its own tenant's templates.
 the application's transaction with `events.after_host_commit` on; each moves only their own task and is refused the
 other's, the event of a committed transaction runs once with that user's id, nothing of a rolled-back transaction
 reaches the next request, no private-manager row survives a boundary, and memory stays flat after a warm-up.
+
+## ClickUp OAuth (3.1.0)
+
+`Sync\OAuth\ClickUpOAuthClient` is a `final readonly` service holding only other stateless services (the provider
+HTTP client, the bundle's HTTP client, the sanitizer) and a boolean; `OAuthState`, `OAuthGrant`, `OAuthIdentity` are
+immutable values created per call. Nothing is memoised between requests, so the helper is safe in a worker with and
+without kernel reset. The OAuth token reaches the bundle only inside a `ProviderCredential` for one call or run slice.
 
 ## Findings
 

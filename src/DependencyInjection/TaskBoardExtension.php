@@ -172,6 +172,7 @@ use Nowo\TaskBoardBundle\Sync\Hook\NullSyncLimitChecker;
 use Nowo\TaskBoardBundle\Sync\Hook\NullTaskAttachmentStorage;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncActorProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncRunnerInterface;
+use Nowo\TaskBoardBundle\Sync\OAuth\ClickUpOAuthClient;
 use Nowo\TaskBoardBundle\Sync\People\PeopleMappingService;
 use Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleReassigner;
 use Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleScanner;
@@ -904,6 +905,12 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
                 ->setArgument('$includeMultiList', (bool) $sync['include_multi_list_tasks'])
                 ->setArgument('$excludedFieldTypes', $sync['custom_fields']['exclude_types'])
                 ->addTag('nowo_task_board.task_provider'));
+            // Since 3.1.0 (CU-1): the stateless OAuth helper a host autowires in its own start / callback routes; the
+            // code exchange uses the bundle's own client (never the profiler-traced `http_client`: it records bodies).
+            $container->setDefinition(ClickUpOAuthClient::class, (new Definition(ClickUpOAuthClient::class))
+                ->setAutowired(true)
+                ->setArgument('$client', new Reference('nowo_task_board.sync.api_client'))
+                ->setArgument('$allowLoopbackRedirect', '%kernel.debug%'));
         }
         $this->registerSyncPeople($container, $sync);
         $container->getDefinition(TaskBoardTwigExtension::class)

@@ -20,6 +20,7 @@ use Nowo\TaskBoardBundle\Sync\Hook\InlineSyncRunner;
 use Nowo\TaskBoardBundle\Sync\Hook\NullTaskAttachmentStorage;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncActorProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncRunnerInterface;
+use Nowo\TaskBoardBundle\Sync\OAuth\ClickUpOAuthClient;
 use Nowo\TaskBoardBundle\Sync\Provider\ClickUp\ClickUpTaskProvider;
 use Nowo\TaskBoardBundle\Twig\TaskBoardTwigExtension;
 use PHPUnit\Framework\TestCase;
@@ -100,6 +101,10 @@ final class SyncExtensionTest extends TestCase
         self::assertFalse($container->getParameter('nowo_task_board.sync.storage_enabled'));
         self::assertTrue($container->hasDefinition(ClickUpTaskProvider::class));
         self::assertTrue($container->getDefinition(ClickUpTaskProvider::class)->hasTag('nowo_task_board.task_provider'));
+        // Since 3.1.0 (CU-1): the stateless OAuth helper, on the bundle's own client; loopback redirects follow kernel.debug.
+        $oauth = $container->getDefinition(ClickUpOAuthClient::class);
+        self::assertSame('nowo_task_board.sync.api_client', (string) $oauth->getArgument('$client'));
+        self::assertSame('%kernel.debug%', $oauth->getArgument('$allowLoopbackRedirect'));
         // The bundle's own client: never the profiler-traced framework `http_client`.
         $base = $container->getDefinition('nowo_task_board.sync.base_http_client');
         self::assertSame([HttpClient::class, 'create'], $base->getFactory());
@@ -116,6 +121,7 @@ final class SyncExtensionTest extends TestCase
         self::assertSame('nowo_task_board.sync.http_client', (string) $defaults->getAlias('nowo_task_board.sync.api_client'));
         self::assertTrue($defaults->getParameter('nowo_task_board.sync.storage_enabled'));
         self::assertFalse($defaults->hasDefinition(ClickUpTaskProvider::class));
+        self::assertFalse($defaults->hasDefinition(ClickUpOAuthClient::class));
 
         $routes = $this->routes(['enabled' => true]);
         foreach (['board_connection', 'board_connection_containers', 'board_connection_link', 'board_connection_refresh', 'board_connection_progress', 'board_connection_cancel', 'board_connection_unlink'] as $key) {

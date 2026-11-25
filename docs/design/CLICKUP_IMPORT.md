@@ -1,6 +1,6 @@
 # ClickUp OAuth connection and guided import: design
 
-Status 2026-11-25: **design only, nothing built.** For symfony-beacon decision **D-20261124-07** ("Connect to ClickUp"
+Status 2026-11-25: owner accepted every Q-CU recommendation; **CU-1 (OAuth connection, 3.1.0) built**, CU-2 onwards not started. For symfony-beacon decision **D-20261124-07** ("Connect to ClickUp"
 by OAuth and a guided ClickUp import). Target: the 3.x line of TaskBoardBundle (3.0.0 is on `main`; the 2.x maintenance
 branch gets nothing of this). The owner answers the questions in [§24](#24-questions-for-the-owner-q-cu) before the
 first build task starts; until then every recommended answer is the working assumption.
@@ -168,8 +168,9 @@ test workspace in build task 1, with synthetic data only.
   `workspaceIds` (list, may be empty) so the wizard can filter connections by workspace without a call.
 - `ProviderCredentialSourceInterface::credentialFormUrl()` keeps its meaning; a new optional interface
   **`OAuthConnectionStartInterface::connectUrl(TaskBoardSnapshot|TenantRef $scope, string $provider, string $returnTo): ?string`**
-  lets the wizard show *Connect to ClickUp* (the host's start route) next to *Paste a token*. The bundle validates that
-  `returnTo` is a bundle route of the same tenant before handing it over (no open redirect).
+  lets the wizard show *Connect to ClickUp* (the host's start route) next to *Paste a token*. The bundle passes its own
+  connection page as `returnTo`; the host checks it is a same-origin path (`OAuthReturnPath::isSafe()`) and that
+  board's connection route before keeping it server side (no open redirect).
 - `docs/sync.md` gets a host recipe: start route (store `state` + actor + tenant + purpose + `returnTo` in the session,
   TTL 600 s, single use), callback route (check `error`, `state`, the actor still allowed; exchange; describe; encrypt;
   store one connection per (tenant, ClickUp user, app); redirect to `returnTo`).
@@ -502,7 +503,8 @@ House access pattern (REQ-UI-002: `security.access_roles`, `access_checker`, eve
 - Attachments: existing `RemoteFileFetcher` (allow-listed attachment hosts, private-address refusal after DNS, optional
   OutboundUrlGuard pinning, redirects re-checked, size and type caps).
 - The host's `redirectUri` is validated by the helper (https, no credentials, no fragment) and must equal the registered
-  one; the `returnTo` after connecting must be a bundle route of the same tenant (§5.2).
+  one; the `returnTo` after connecting must be a same-origin path, and the host recipe requires the board's own
+  connection route (§5.2, T4).
 - Phase 2 webhook receiver: no outbound call on receipt; signature verified in constant time before parsing; body cap
   1 MiB; events only enqueue an incremental slice.
 
@@ -556,7 +558,7 @@ Tests: two-process integration tests (under `tests/Integration`, like the existi
 | T1 | Token in a DB dump | Host-encrypted (Beacon Halite); bundle stores none | Dump grep of the bundle tables for the fixture token |
 | T2 | Token in logs, events, Messenger, cache, exceptions | `ProviderCredential` / `OAuthGrant` redacted + non-serializable; codes not bodies; rate key is an HMAC of the ref | Serialization throws; log / event / message scans in tests |
 | T3 | OAuth CSRF / login-CSRF (attacker's ClickUp account bound to a victim's tenant) | Single-use `state` (43 chars, TTL 600 s) bound to session + actor + tenant + purpose; callback re-checks the actor may manage connections; no PKCE available, so the code is useless without the server-held secret | Replay, other session, other tenant, expired state |
-| T4 | Open redirect through `returnTo` | Only bundle routes of the same tenant | Absolute / protocol-relative / other-tenant URLs refused |
+| T4 | Open redirect through `returnTo` | Same-origin path (`OAuthReturnPath::isSafe()`) kept server side; the host recipe also requires the board's own connection route (built CU-1: the helper cannot know the host's route prefix or tenant scheme) | Absolute / protocol-relative / other-tenant URLs refused |
 | T5 | SSRF | Constant hosts, id regex, attachment allow-list + private-address refusal | Existing fetcher suite + id fuzz |
 | T6 | Cross-tenant import (connection or board of another tenant) | Tenant checked at choose, start and every slice; `credentialFor()` tenant-scoped | Cross-tenant ids in every step |
 | T7 | Privilege escalation through people mapping | "A mapping never grants access" (existing) | Existing suite |

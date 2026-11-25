@@ -11,6 +11,11 @@ mapping of the sync tables and no header change.
 
 - [What the host provides](#what-the-host-provides)
 - [Configuration](#configuration)
+- [Connecting ClickUp with OAuth (since 3.1.0)](#connecting-clickup-with-oauth-since-310)
+  - [What the bundle ships](#what-the-bundle-ships)
+  - [Host recipe: start and callback routes](#host-recipe-start-and-callback-routes)
+  - [Storing the token and the app credentials](#storing-the-token-and-the-app-credentials)
+  - [Security notes and residual risk](#security-notes-and-residual-risk)
 - [How a run works](#how-a-run-works)
 - [Field rules and conflicts](#field-rules-and-conflicts)
 - [Deletions and the mass-archive guard](#deletions-and-the-mass-archive-guard)
@@ -44,6 +49,7 @@ The bundle **never stores a token**. The host keeps the credentials and gives on
 | Hook (service id in `sync.*`) | Required | Default |
 | --- | --- | --- |
 | `credential_resolver`: `Nowo\TaskBoardBundle\Sync\Hook\ProviderCredentialSourceInterface` | **yes** | — (the container build fails without it) |
+| the same service also implementing `Sync\Hook\OAuthConnectionStartInterface` (since 3.1.0) | no | no *Connect with ClickUp* link (tokens are pasted on the host's form) |
 | `attachment_storage`: `SyncedFileStorageInterface` | no | files are counted as refused (`storage_disabled`) |
 | `inline_image_rewriter`: `SyncedImageRewriterInterface` | no | `MapInlineImageRewriter` (stored copy, else the text "[image not copied]") |
 | `limit_checker`: `SyncQuotaPolicyInterface` | no | no host limit |
@@ -99,6 +105,193 @@ nowo_task_board:
 
 Every key and its default is in [CONFIGURATION.md](CONFIGURATION.md#provider-sync-since-123). The schema change is in
 [UPGRADING.md](UPGRADING.md).
+
+## Connecting ClickUp with OAuth (since 3.1.0)
+
+A host can offer **Connect with ClickUp** (OAuth 2, authorization code) next to *Add a token*. The connection is the
+host's: its routes, its session, its encrypted token store. The bundle has **no callback route and stores no token and
+no client secret** (the 1.23 rule holds); it ships a stateless helper and a credential scheme. Design and decisions:
+[design/CLICKUP_IMPORT.md](design/CLICKUP_IMPORT.md) §5 – §7 (Q-CU-1 … Q-CU-4, Q-CU-16).
+
+### What the bundle ships
+
+| Piece | What it does |
+| --- | --- |
+| `ProviderCredential` option `scheme` (`Sync\Provider\CredentialScheme`) | `personal` (default when missing): the ClickUp adapter sends `Authorization: <token>` as since 1.23. `oauth`: it sends `Authorization: Bearer <token>`. Any other value is refused before a request (`unsupported_credential`). Personal tokens keep working unchanged |
+| `Sync\OAuth\ClickUpOAuthClient` (service, autowirable, only with `sync.providers.clickup.enabled`) | `authorizationUrl($clientId, $redirectUri, OAuthState $state)`: ClickUp's consent URL (constant base `https://app.clickup.com/api`). `exchange($clientId, $clientSecret, $code)`: `POST https://api.clickup.com/api/v2/oauth/token` with the parameters in the JSON body, no redirects, 10 s, 16 KiB answer cap, returns an `OAuthGrant`. `describe(ProviderCredential)`: `GET /user` + `GET /team`, returns an `OAuthIdentity` (user id, user name, authorised workspaces; never the e-mail) |
+| `Sync\OAuth\OAuthState` | the single-use `state`: `create()` (32 random bytes, 43 base64url characters), `fromString()`, `isValid()` (`/D` regex), `matches()` (constant time) |
+| `Sync\OAuth\OAuthGrant` | the access token for the host to encrypt; redacted in dumps, serialization throws; `expiresAt` / `refreshToken()` exist and are always null (ClickUp tokens do not expire today, Q-CU-16); `toCredential($ref)` builds the `oauth` credential |
+| `Sync\OAuth\OAuthException` + `OAuthErrorCode` | `oauth_denied`, `oauth_state_invalid` (for the host's callback), `oauth_exchange_failed`, `oauth_token_rejected`; the HTTP status, never the response body; translation keys `task_board.sync.oauth.error.<code>` |
+| `Sync\OAuth\OAuthReturnPath::isSafe()` | the check of the `returnTo` the host's start route receives (a same-origin path only) |
+| `Sync\Hook\OAuthConnectionStartInterface` (optional) | `connectUrl(TaskBoardSnapshot $board, string $provider, string $returnTo): ?string` on the `credential_resolver` service: the connection page links it as *Connect with ClickUp* (and *Connect again* after `auth_failed` / `forbidden`). `returnTo` is the board's connection page |
+| `ConnectionChoice` `kind` / `workspaceIds` | optional: `CredentialScheme::OAuth` labels the connection "OAuth" in the picker; `workspaceIds` lists the authorised workspaces (used by the guided import, CU-2) |
+
+Every ClickUp call of the adapter is a `GET` (tested): an OAuth token has no scopes, so read-only is the adapter's rule.
+
+### Host recipe: start and callback routes
+
+The authorization below is code, not a comment: copy it with the routes (audit ZBT-L1). Both routes refuse with the
+same 404 the bundle's own connection pages answer to someone who may not manage the board's connection.
+
+```php
+use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
+use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
+use Nowo\TaskBoardBundle\Sync\Exception\ProviderException;
+use Nowo\TaskBoardBundle\Sync\Hook\OAuthConnectionStartInterface;
+use Nowo\TaskBoardBundle\Sync\OAuth\ClickUpOAuthClient;
+use Nowo\TaskBoardBundle\Sync\OAuth\OAuthErrorCode;
+use Nowo\TaskBoardBundle\Sync\OAuth\OAuthException;
+use Nowo\TaskBoardBundle\Sync\OAuth\OAuthReturnPath;
+use Nowo\TaskBoardBundle\Sync\OAuth\OAuthState;
+
+// 1. The credential source links the start route (same service as sync.credential_resolver).
+final class ProjectConnections implements ProviderCredentialSourceInterface, OAuthConnectionStartInterface
+{
+    public function connectUrl(TaskBoardSnapshot $board, string $provider, string $returnTo): ?string
+    {
+        return $provider === 'clickup' ? $this->urls->generate('app_clickup_oauth_start', ['board' => $board->id, 'returnTo' => $returnTo]) : null;
+    }
+    // connectionsFor() returns OAuth rows as new ConnectionChoice($ref, $label, $lastFour, CredentialScheme::OAuth, $workspaceIds);
+    // credentialFor() returns new ProviderCredential($token, $ref, ['scheme' => 'oauth']) for them.
+}
+
+final class ClickUpOAuthController extends AbstractController
+{
+    private const PURPOSE = 'task_board_connection';
+
+    public function __construct(
+        private readonly ClickUpOAuthClient $oauth,
+        private readonly TaskBoardRepositoryInterface $boards,
+        private readonly TaskBoardResourceAccessChecker $access,
+    ) {
+    }
+
+    // 2. Start route: only a user who may manage this board's connection.
+    #[Route('/settings/clickup/oauth/start', name: 'app_clickup_oauth_start', methods: ['GET'])]
+    public function start(Request $request): Response
+    {
+        $board    = $this->managedBoard((string) $request->query->get('board'));   // deny path: 404
+        $returnTo = (string) $request->query->get('returnTo');
+        // Same-origin path AND this board's connection page (the only page the bundle sends here).
+        $page = $this->generateUrl('nowo_task_board_board_connection', ['boardId' => $board->getId()]);
+        if (!OAuthReturnPath::isSafe($returnTo) || ($returnTo !== $page && !str_starts_with($returnTo, $page . '?'))) {
+            throw new BadRequestHttpException();
+        }
+        $state = OAuthState::create();
+        $request->getSession()->set('clickup_oauth', [
+            'state' => $state->value, 'actor' => $this->getUser()->getUserIdentifier(), 'tenant' => $board->getTenantKey(),
+            'board' => $board->getId(), 'purpose' => self::PURPOSE, 'returnTo' => $returnTo, 'expires' => time() + 600,
+        ]);
+
+        // ABSOLUTE_URL uses the request host: set framework.trusted_hosts (or a fixed base URL) in production.
+        return $this->redirect($this->oauth->authorizationUrl($this->clientId(), $this->generateUrl('app_clickup_oauth_callback', [], UrlGeneratorInterface::ABSOLUTE_URL), $state));
+    }
+
+    // 3. Callback route: the exact URL registered with the ClickUp app.
+    #[Route('/settings/clickup/oauth/callback', name: 'app_clickup_oauth_callback', methods: ['GET'])]
+    public function callback(Request $request): Response
+    {
+        $session = $request->getSession();
+        $pending = $session->get('clickup_oauth');
+        $session->remove('clickup_oauth');                                  // single use, whatever happens next
+        if (!is_array($pending) || !is_string($pending['state'] ?? null) || !OAuthState::isValid($pending['state'])
+            || ($pending['purpose'] ?? null) !== self::PURPOSE || ($pending['expires'] ?? 0) < time()
+            || !OAuthState::fromString($pending['state'])->matches($request->query->get('state'))
+            || ($pending['actor'] ?? null) !== $this->getUser()?->getUserIdentifier()) {
+            return $this->failed(OAuthErrorCode::StateInvalid);
+        }
+        // Authorization again, in code: the user may have lost the right (or the board its tenant) since the start.
+        $board = $this->managedBoard((string) $pending['board']);           // deny path: 404, nothing exchanged
+        if ($board->getTenantKey() !== $pending['tenant']) {
+            throw $this->createNotFoundException();
+        }
+        $code = $request->query->get('code');
+        if ($request->query->has('error') || !is_string($code) || $code === '') {
+            return $this->failed(OAuthErrorCode::Denied);
+        }
+        try {
+            $grant    = $this->oauth->exchange($this->clientId(), $this->clientSecret(), $code);
+            $identity = $this->oauth->describe($grant->toCredential('pending'));   // ≤ 10 s, no retry; 429 = oauth_rate_limited
+        } catch (OAuthException $exception) {
+            return $this->failed($exception->errorCode);
+        } catch (ProviderException) {
+            return $this->failed(OAuthErrorCode::ExchangeFailed);
+        }
+        // One connection per (tenant, ClickUp user, app): replace the token of an existing row (same ref, boards keep
+        // working), else create one. Encrypt $grant->accessToken(); keep $identity->userId, ->userName,
+        // ->workspaceIds() and $grant->lastFour().
+        $this->connections->storeOAuth($board->getTenantKey(), $identity, $grant);
+
+        return $this->redirect($pending['returnTo']);
+    }
+
+    private function managedBoard(string $boardId): TaskBoard
+    {
+        $user  = $this->getUser();
+        $board = $boardId === '' ? null : $this->boards->findById($boardId);
+        if (!$user instanceof UserInterface || !$board instanceof TaskBoard || $board->getTenantKey() !== $this->currentTenant()
+            || !$this->access->canManageBoardConnection($user, $board)) {
+            throw $this->createNotFoundException();   // deny: same answer as the bundle's connection pages
+        }
+
+        return $board;
+    }
+
+    private function failed(OAuthErrorCode $code): Response
+    {
+        $this->addFlash('error', 'task_board.sync.oauth.error.' . $code->value);   // NowoTaskBoardBundle domain
+
+        return $this->redirectToRoute('app_settings_connections');
+    }
+}
+```
+
+ClickUp has no documented revoke endpoint: *Disconnect* deletes the stored token and tells the user to remove the app
+under ClickUp's *Settings → Apps*.
+
+### Storing the token and the app credentials
+
+- **Token**: encrypted at rest with the host's mechanism (for example DoctrineEncrypt / Halite), shown as its last four
+  characters only, erased with the user or tenant like a pasted token. It reaches the bundle only through
+  `credentialFor()`, for one run slice.
+- **App** (Q-CU-2): one ClickUp OAuth app per instance, registered by a workspace owner or admin with the exact callback
+  URL. Keep its client id and client secret as instance runtime settings (InstanceSettings: env by default, DB
+  switchable, the secret **encrypted** with InstanceSettings' sealer) and pass them to the helper on each call. Never
+  put a real client id or secret in the repository, a fixture or CI.
+- The code exchange goes through the bundle's own HTTP client. If you set `sync.http.client`, point it at an
+  **untraced** client: the profiler-traced `http_client` records request bodies, i.e. the client secret and the code
+  (audit ZBT-I2).
+- The bundle has no configuration key for OAuth: everything above lives in the host. `http://localhost` /
+  `127.0.0.1` redirect URIs are accepted only when `kernel.debug` is on (a separate dev app).
+
+### Security notes and residual risk
+
+- **No PKCE, no scopes** (Q-CU-4): ClickUp supports neither. The protection is the confidential client (the secret
+  never leaves the server; the code is useless without it) plus the single-use `state` bound to session, actor, tenant
+  and purpose (TTL 600 s). The token can do whatever its user can do in the authorised workspaces, **including
+  writes**; TaskBoard only ever sends `GET`. Residual risk: a stolen token could write in ClickUp. Mitigations: host
+  encryption at rest, no token in the bundle's tables, logs, events, messages, caches or exceptions, and the GET-only
+  adapter.
+- **Open redirect**: the bundle passes its own connection page as `returnTo`; the host re-checks it with
+  `OAuthReturnPath::isSafe()` (same-origin path) and, as in the recipe, compares it with that board's connection
+  route before keeping it server side. The helper stays same-origin only because only the host knows its route
+  prefix and tenant scheme; the recipe adds the bundle-route check (audit ZBT-I4). The links the bundle shows (`connectUrl()`,
+  `credentialFormUrl()`) must be `https://` or same-origin paths, else they are not shown.
+- **Token exchange parameters**: ClickUp's reference documents `client_id`, `client_secret` and `code` as the
+  request body (`application/json` or form-encoded, checked 2026-11-25); the helper sends JSON, never the query
+  string, so the secret stays out of access logs. Check the first exchange against your instance app before
+  enabling the button (audit ZBT-I6).
+- **Callback URL**: without PKCE the code is protected by ClickUp matching the registered redirect URL. Build it from
+  a trusted host (`framework.trusted_hosts`, or a configured base URL) and keep no open redirect on that origin.
+- **Interactive budget**: `exchange()` (10 s) and `describe()` (two GETs of 5 s, no retry, no inline wait; a 429 is
+  `oauth_rate_limited` at once) never use the sync client's retry policy, so a slow or throttled ClickUp cannot hold
+  the callback request or a FrankenPHP worker for minutes (audit ZBT-L2).
+- **Exceptions** carry a code and an HTTP status, never the body (ClickUp could echo the code or the secret) and never
+  a chained HTTP client exception.
+- **Worker mode**: the helper and the value objects keep no state between requests (FrankenPHP worker with and
+  without kernel reset); no write happens in the bundle, so CU-1 adds no lock or race (REQ-RUNTIME-003).
+- Shared per-token rate budget (100 requests / minute on most plans) comes with the guided import (CU-2).
 
 ## How a run works
 

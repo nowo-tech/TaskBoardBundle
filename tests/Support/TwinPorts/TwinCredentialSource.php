@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Tests\Support\TwinPorts;
 
+use Nowo\TaskBoardBundle\Port\Internal\OAuthConnectionStarterInterface;
 use Nowo\TaskBoardBundle\Port\Internal\ProviderCredentialResolverInterface;
+use Nowo\TaskBoardBundle\Sync\Hook\OAuthConnectionStartInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\ProviderCredentialSourceInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\ProviderCredential;
 use Nowo\TaskBoardBundle\ValueObject\TaskBoardSnapshot;
 
-final readonly class TwinCredentialSource implements ProviderCredentialSourceInterface
+final readonly class TwinCredentialSource implements ProviderCredentialSourceInterface, OAuthConnectionStartInterface
 {
     public function __construct(private ProviderCredentialResolverInterface $legacy, private TwinLookup $lookup)
     {
@@ -28,5 +30,10 @@ final readonly class TwinCredentialSource implements ProviderCredentialSourceInt
     public function credentialFormUrl(TaskBoardSnapshot $board, string $provider): ?string
     {
         return $this->legacy->credentialFormUrl($this->lookup->board($board->id), $provider);
+    }
+
+    public function connectUrl(TaskBoardSnapshot $board, string $provider, string $returnTo): ?string
+    {
+        return $this->legacy instanceof OAuthConnectionStarterInterface ? $this->legacy->connectUrl($this->lookup->board($board->id), $provider, $returnTo) : null;
     }
 }

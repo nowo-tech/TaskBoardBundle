@@ -16,6 +16,7 @@ and which tests prove it on which databases. Worker mode (kernel not reset) is c
 - [Host ports by id (2.29)](#host-ports-by-id-229)
 - [Lock conflicts and replays](#lock-conflicts-and-replays)
 - [Remote sync, imports and the number backfill](#remote-sync-imports-and-the-number-backfill)
+- [ClickUp OAuth helper (3.1)](#clickup-oauth-helper-31)
 - [The application's entity manager](#the-applications-entity-manager)
 - [Residual risks](#residual-risks)
 - [Tests](#tests)
@@ -153,6 +154,16 @@ committed (SU2-I1).
 No provider HTTP call, file download or mail runs inside a sync page's transaction or under a row lock: the page is
 fetched before the transaction, and files, comments and details are read after the commit. Events are dispatched after
 the commit (`TaskEventDeferral`).
+
+## ClickUp OAuth helper (3.1)
+
+CU-1 adds no write: `ClickUpOAuthClient` and the OAuth value objects are stateless, and the token, the `state` and the
+connection row live in the host. The races of the flow are the host's: the `state` is single use (removed from the
+session before it is checked, so a replayed or doubled callback fails **with a locking session handler** such as
+native files or PDO with locking; with a non-locking handler (Redis, Memcached) two parallel callbacks can both read
+it, and then ClickUp's single-use code makes the second exchange fail), and reconnecting replaces the token of the same
+connection row (one per tenant, ClickUp user and app), so a concurrent run slice either uses the old token or resolves
+the new one through `credentialFor()`; nothing is cached in the bundle.
 
 ## The application's entity manager
 

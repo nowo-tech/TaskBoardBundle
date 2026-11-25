@@ -23,6 +23,9 @@ enum ProviderErrorCode: string
     case UnsafeUrl        = 'unsafe_url';
     case Transport        = 'transport';
 
+    /** Since 3.1.0: the credential's `scheme` option is not one the adapter knows. */
+    case UnsupportedCredential = 'unsupported_credential';
+
     /** Since 1.27.0: it may work on the next try; any other error will answer the same. */
     public function isPassing(): bool
     {
@@ -32,16 +35,17 @@ enum ProviderErrorCode: string
     public function message(): string
     {
         return match ($this) {
-            self::AuthFailed       => 'The provider refused the credential.',
-            self::Forbidden        => 'The credential may not read this resource.',
-            self::NotFound         => 'The provider did not find this resource.',
-            self::RateLimited      => 'The provider asked to slow down.',
-            self::Timeout          => 'The provider did not answer in time.',
-            self::ResponseTooLarge => 'The provider answer is too large.',
-            self::InvalidResponse  => 'The provider answer could not be read.',
-            self::ServerError      => 'The provider failed.',
-            self::UnsafeUrl        => 'The address is not allowed.',
-            self::Transport        => 'The provider could not be reached.',
+            self::AuthFailed            => 'The provider refused the credential.',
+            self::Forbidden             => 'The credential may not read this resource.',
+            self::NotFound              => 'The provider did not find this resource.',
+            self::RateLimited           => 'The provider asked to slow down.',
+            self::Timeout               => 'The provider did not answer in time.',
+            self::ResponseTooLarge      => 'The provider answer is too large.',
+            self::InvalidResponse       => 'The provider answer could not be read.',
+            self::ServerError           => 'The provider failed.',
+            self::UnsafeUrl             => 'The address is not allowed.',
+            self::Transport             => 'The provider could not be reached.',
+            self::UnsupportedCredential => 'The provider does not accept this kind of credential.',
         };
     }
 }
