@@ -1,6 +1,6 @@
 # ClickUp OAuth connection and guided import: design
 
-Status 2026-11-25: owner accepted every Q-CU recommendation; **CU-1 (OAuth connection, 3.1.0) released, CU-2 (import plans and wizard, 3.2.0) built** (see the deviations in §23), CU-3 onwards not started. For symfony-beacon decision **D-20261124-07** ("Connect to ClickUp"
+Status 2026-11-25: owner accepted every Q-CU recommendation; **CU-1 (OAuth connection, 3.1.0) and CU-2 (import plans and wizard, 3.2.0) released, CU-3 (native fields, 3.3.0) built** (see the deviations in §23), phase 2 not started. For symfony-beacon decision **D-20261124-07** ("Connect to ClickUp"
 by OAuth and a guided ClickUp import). Target: the 3.x line of TaskBoardBundle (3.0.0 is on `main`; the 2.x maintenance
 branch gets nothing of this). The owner answers the questions in [§24](#24-questions-for-the-owner-q-cu) before the
 first build task starts; until then every recommended answer is the working assumption.
@@ -627,6 +627,23 @@ Tests: two-process integration tests (under `tests/Integration`, like the existi
   import rights; else `failed: actor`); a `run_token` fences every write of a slice; cancel / resume are
   compare-and-sets; steps are transactions; sources are bound to the plan's workspace; the board quota is asked per
   board; the preview is bounded (`preview_max_requests`, `preview_seconds`).
+
+**CU-3 as built (3.3.0), deviations from the text above**
+
+- The provenance marker is a column (`task_board_custom_fields.source_ref`, unique with `board_id`), not an entry of the
+  options JSON: the options column is the list of options and stays so. The provider's option ids live in a second
+  column (`source_options`: provider option id → native option id), so an option deleted here is told apart from a new
+  ClickUp option (the former is a conflict, the latter is added).
+- Existing native fields offered as targets: the tenant's fields, and the board's own only when every item of the plan
+  fills the same existing board (a plan that creates boards, or fills several, cannot name one board's field for all).
+- A value set here before the provider had one (no baseline yet) counts as a local edit: it is kept and the provider's
+  value is noted, consistent with "no overwrite mode" (Q-CU-8).
+- The fields step and the preview read no more than before: the preview shows the choices saved on the plan (native,
+  synced, not imported, and the other-typed fields that stay synced) without another provider call.
+- REQ-RUNTIME-003: definitions got a `version` column (compare-and-set under the row lock) for the new *Custom fields*
+  page and the import's option merge; values reuse the 2.31 `setFieldUnlessChanged()` path.
+- Personal data: native values are reached by a new `TaskCustomFieldPersonalData` (export, erase by value); search on
+  native text values is opt-in (`search_kit.custom_fields`); the multi-board export gained a *Custom fields* column.
 
 Each slice closes every REQ gap of the bundle before its tag (owner rule "touched bundle = 100 % REQs"); one batched audit
 before the tags, immediate audit for CU-1 (auth).

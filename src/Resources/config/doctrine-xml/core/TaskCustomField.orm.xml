@@ -7,10 +7,20 @@
         <indexes>
             <index name="idx_task_board_custom_fields_tenant" columns="tenant_key"/>
         </indexes>
+        <unique-constraints>
+            <unique-constraint name="uniq_task_board_custom_fields_source" columns="board_id,source_ref"/>
+        </unique-constraints>
         <id name="id" type="string" length="36"/>
         <field name="createdAt" type="datetime_immutable" column="created_at"/>
         <field name="name" type="string" length="128"/>
         <field name="options" type="json"/>
+        <field name="sourceRef" type="string" column="source_ref" length="191" nullable="true"/>
+        <field name="sourceOptions" type="json" column="source_options" nullable="true"/>
+        <field name="version" type="integer">
+            <options>
+                <option name="default">1</option>
+            </options>
+        </field>
         <field name="type" type="string" column="field_type" length="16" enum-type="Nowo\TaskBoardBundle\Enum\CustomFieldType"/>
         <field name="tenantKey" type="string" column="tenant_key" length="191" nullable="true"/>
         <field name="position" type="integer"/>

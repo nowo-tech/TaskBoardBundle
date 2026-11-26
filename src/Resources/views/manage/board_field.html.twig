@@ -1,0 +1,42 @@
+{% extends '@NowoUiKitBundle/page/form.html.twig' %}
+{#
+    Since 3.3.0: add or edit a board's custom field (web_ui.templates.board_field). The type is chosen once; a dropdown
+    lists its options as rows (name, colour, remove) and takes new ones one per line. Vars: page (FormPage), board, field
+    (null when new), fieldForm.
+#}
+
+{% block nowo_ui_styles %}
+    {{ parent() }}
+    <link rel="stylesheet" href="{{ asset('css/task-board.css', 'nowo_task_board') }}">
+{% endblock %}
+
+{% block nowo_ui_page_header %}{% if nowo_task_board_ui.page_header %}{{ parent() }}{% endif %}{% endblock %}
+
+{% block nowo_ui_form_body %}
+    {% set _b = 'NowoTaskBoardBundle' %}
+    {{ form_errors(fieldForm) }}
+    {{ form_row(fieldForm.name) }}
+    {% if fieldForm.type is defined %}
+        {{ form_row(fieldForm.type) }}
+    {% else %}
+        <p class="{{ nowo_ui_class('muted', _b) }}" data-testid="nowo-task-field-type">{{ 'task_board.custom_field.form.type'|trans({}, _b) }}: {{ ('task_board.custom_field.type.' ~ field.type.value)|trans({}, _b) }}</p>
+        {% if field.sourceRef %}<p class="{{ nowo_ui_class('muted', _b) }} nowo-task-small">{{ 'task_board.custom_field.imported_help'|trans({}, _b) }}</p>{% endif %}
+    {% endif %}
+    {% if field and field.options is not empty %}
+        <fieldset class="nowo-task-mb-3" data-testid="nowo-task-field-options">
+            <legend>{{ 'task_board.custom_field.options'|trans({}, _b) }}</legend>
+            {% for option in field.options %}
+                <div class="nowo-task-field-option-row" data-testid="nowo-task-field-option-row">
+                    {{ form_row(fieldForm['o_' ~ loop.index0]) }}
+                    {{ form_row(fieldForm['c_' ~ loop.index0]) }}
+                    {{ form_row(fieldForm['r_' ~ loop.index0]) }}
+                </div>
+            {% endfor %}
+        </fieldset>
+    {% endif %}
+    {% for child in fieldForm %}
+        {% if not child.rendered %}
+            {{ form_row(child) }}
+        {% endif %}
+    {% endfor %}
+{% endblock %}

@@ -27,6 +27,9 @@ final readonly class PlanPreview
      * @param list<array{itemId: string, label: string, board: string, newBoard: bool, tasks: int, subtasks: int, closed: int, archived: int, attachments: int, attachmentBytes: int, columns: int, estimated: bool, error: string|null}> $items
      * @param list<string> $warnings
      * @param array{mapped: int, unreviewed: int, total: int} $people
+     * @param array{native: int, synced: int, excluded: int, skipped: list<array{name: string, type: string}>} $fields since
+     *                                                                                                                 3.3.0 (CU-3): the Fields step's choices; `skipped` = the imported fields of a type no native field takes (they
+     *                                                                                                                 stay synced, read-only)
      */
     public function __construct(
         public array $items,
@@ -35,6 +38,7 @@ final readonly class PlanPreview
         public array $warnings = [],
         public ?string $refusal = null,
         public array $people = ['mapped' => 0, 'unreviewed' => 0, 'total' => 0],
+        public array $fields = ['native' => 0, 'synced' => 0, 'excluded' => 0, 'skipped' => []],
     ) {
     }
 

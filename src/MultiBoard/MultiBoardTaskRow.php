@@ -15,6 +15,8 @@ final readonly class MultiBoardTaskRow
     /**
      * @param list<string> $labels the task's tags
      * @param list<MultiBoardPerson> $assignees
+     * @param list<array{name: string, value: string}> $customFields since 3.3.0: the task's native custom field values, in
+     *                                                               the board's field order
      */
     public function __construct(
         public string $taskId,
@@ -32,6 +34,7 @@ final readonly class MultiBoardTaskRow
         public array $assignees,
         public ?string $parentId,
         public bool $overdue,
+        public array $customFields = [],
     ) {
     }
 

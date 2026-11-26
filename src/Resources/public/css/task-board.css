@@ -4579,3 +4579,36 @@ html[data-nowo-ui-sortable-active] .nowo-task-cal__chip {
 .nowo-task-board__column.is-collapsed > :not(.nowo-task-board__column-header) {
     display: none;
 }
+
+/* Since 3.3.0: the board's Custom fields page — option chips with their colour, an inline delete disclosure, option rows. */
+.nowo-task-field-option[style]::before {
+    content: '';
+    display: inline-block;
+    inline-size: 0.6em;
+    block-size: 0.6em;
+    border-radius: 50%;
+    background: var(--nowo-task-option-color);
+    margin-inline-end: 0.35em;
+    vertical-align: 0.05em;
+}
+.nowo-task-field-delete > summary {
+    cursor: pointer;
+    list-style: none;
+}
+.nowo-task-field-delete > summary::-webkit-details-marker {
+    display: none;
+}
+.nowo-task-field-delete[open] .nowo-task-field-delete__form {
+    margin-block-start: 0.5rem;
+}
+.nowo-task-field-option-row {
+    display: grid;
+    gap: 0 1rem;
+    grid-template-columns: minmax(10rem, 2fr) minmax(6rem, 1fr) auto;
+    align-items: end;
+}
+@media (max-width: 40rem) {
+    .nowo-task-field-option-row {
+        grid-template-columns: 1fr;
+    }
+}

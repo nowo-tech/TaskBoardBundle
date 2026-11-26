@@ -5,6 +5,11 @@ This document describes how to upgrade between versions of TaskBoard Bundle.
 ## Table of contents
 
 - [Unreleased](#unreleased)
+- [To 3.3.0](#to-330)
+  - [Schema change: custom field provenance and version](#schema-change-custom-field-provenance-and-version)
+  - [Native fields from the ClickUp import](#native-fields-from-the-clickup-import)
+  - [Custom fields page](#custom-fields-page)
+  - [Personal data, search and export](#personal-data-search-and-export)
 - [To 3.2.0](#to-320)
   - [Schema change for hosts with sync: import plans](#schema-change-for-hosts-with-sync-import-plans)
   - [Import plans: what a host does (opt-in)](#import-plans-what-a-host-does-opt-in)
@@ -227,6 +232,86 @@ This document describes how to upgrade between versions of TaskBoard Bundle.
   - [FormKitBundle (admin forms)](#formkitbundle-admin-forms)
 
 ## Unreleased
+
+## To 3.3.0
+
+```bash
+composer require nowo-tech/task-board-bundle:^3.3
+```
+
+UiKit `^2.74.1` and FormKit `^2.25.1` are required (their latest minors).
+
+### Schema change: custom field provenance and version
+
+`task_board_custom_fields` gets three columns — `source_ref` (where an import created the field, a key column: binary
+on MySQL / MariaDB), `source_options` (the provider's option ids) and `version` (REQ-RUNTIME-003) — and a unique index
+on (`board_id`, `source_ref`). Generate a migration (`doctrine:migrations:diff`) or apply the SQL of your platform
+(table prefix `task_board_`; change it if you set `table_prefix`). Existing fields get version 1 and no marker.
+
+MySQL 8 / 9:
+
+```sql
+ALTER TABLE task_board_custom_fields ADD source_ref VARCHAR(191) COLLATE `utf8mb4_0900_bin` DEFAULT NULL, ADD source_options JSON DEFAULT NULL, ADD version INT DEFAULT 1 NOT NULL;
+CREATE UNIQUE INDEX uniq_task_board_custom_fields_source ON task_board_custom_fields (board_id, source_ref);
+```
+
+MariaDB:
+
+```sql
+ALTER TABLE task_board_custom_fields ADD source_ref VARCHAR(191) COLLATE `utf8mb4_nopad_bin` DEFAULT NULL, ADD source_options JSON DEFAULT NULL, ADD version INT DEFAULT 1 NOT NULL;
+CREATE UNIQUE INDEX uniq_task_board_custom_fields_source ON task_board_custom_fields (board_id, source_ref);
+```
+
+PostgreSQL:
+
+```sql
+ALTER TABLE task_board_custom_fields ADD source_ref VARCHAR(191) DEFAULT NULL;
+ALTER TABLE task_board_custom_fields ADD source_options JSON DEFAULT NULL;
+ALTER TABLE task_board_custom_fields ADD version INT DEFAULT 1 NOT NULL;
+CREATE UNIQUE INDEX uniq_task_board_custom_fields_source ON task_board_custom_fields (board_id, source_ref);
+```
+
+SQLite:
+
+```sql
+ALTER TABLE task_board_custom_fields ADD COLUMN source_ref VARCHAR(191) DEFAULT NULL;
+ALTER TABLE task_board_custom_fields ADD COLUMN source_options CLOB DEFAULT NULL;
+ALTER TABLE task_board_custom_fields ADD COLUMN version INTEGER DEFAULT 1 NOT NULL;
+CREATE UNIQUE INDEX uniq_task_board_custom_fields_source ON task_board_custom_fields (board_id, source_ref);
+```
+
+Several fields with no marker (or tenant fields, `board_id` NULL) are allowed on all four engines (NULLs are distinct).
+Without this schema every custom field read fails, so apply it before deploying 3.3.
+
+### Native fields from the ClickUp import
+
+Nothing to do for existing connections: a field lands on a native field only when an import plan chose it (Fields
+step). The run's actor (the plan's starter) needs the board's restructure right to **create** a field (the restructure
+policy: `restructure.policy`, by default the board's manage right); without it the run warns `native_field_refused` and
+those values are not imported — grant it, or create the field first and choose it in the plan. A drop-down field's
+options follow the provider's option ids; an option deleted here is not recreated. There is no overwrite mode: a value
+changed here is kept and the provider's value is noted in a comment.
+
+`TaskCustomFieldManager::update()` and `delete()` take an optional `$expectedVersion`. A host form that edits
+definitions should send the version it showed (`TaskCustomField::getVersion()`) and handle
+`TaskCustomFieldRefusedException::CHANGED`; without it the edit still locks the row and raises the version (last
+writer wins, as before). A definition refused for its name or options is refused before any transaction now.
+
+### Custom fields page
+
+A board's *Custom fields* page (routes `board_fields`, `board_field_new`, `board_field_edit`, `board_field_delete`;
+templates `board_fields`, `board_field`) is on by default for users the restructure policy allows; the board and list
+views show its action to them. A host with its own field screens sets `web_ui.custom_fields_page: false` (no routes, no
+action). Check your firewall / access rules if you list TaskBoard paths explicitly (`/tools/task-board/board/{id}/fields…`).
+
+### Personal data, search and export
+
+- Native text values may name a person. Add `Field\TaskCustomFieldPersonalData::exportByValue()` /
+  `exportBoard()` to your access request and `eraseByValue()` to your erasure chain (the host authorises the caller),
+  next to `SyncFieldValueEraser`. The task history keeps earlier values as text (see SECURITY.md).
+- `search_kit.custom_fields: true` lets the header search match native text values (off by default).
+- The multi-board export has a new last column, *Custom fields*. A consumer that reads columns by position is not
+  affected (it is appended).
 
 ## To 3.2.0
 

@@ -50,6 +50,7 @@ use Nowo\TaskBoardBundle\Calendar\CalendarEventSourceInterface;
 use Nowo\TaskBoardBundle\Comment\DefaultTaskMentionCandidatesResolver;
 use Nowo\TaskBoardBundle\Controller\TaskBoardManageController;
 use Nowo\TaskBoardBundle\Controller\TaskCopyController;
+use Nowo\TaskBoardBundle\Controller\TaskCustomFieldController;
 use Nowo\TaskBoardBundle\Controller\TaskSyncImportPlanController;
 use Nowo\TaskBoardBundle\Copy\TaskCopier;
 use Nowo\TaskBoardBundle\DependencyInjection\Compiler\PrivateEntityManagerPass;
@@ -388,6 +389,13 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
 
         $loader = new YamlFileLoader($container, new FileLocator(__DIR__ . '/../Resources/config'));
         $loader->load('services.yaml');
+        // Since 3.3.0: the board's Custom fields page and its header action.
+        $fieldsPage = (bool) $config['web_ui']['custom_fields_page'];
+        $container->getDefinition(TaskBoardRouteLoader::class)->setArgument('$customFieldsEnabled', $fieldsPage);
+        $container->getDefinition(TaskBoardManageController::class)->setArgument('$customFieldsPage', $fieldsPage);
+        if (!$fieldsPage) {
+            $container->removeDefinition(TaskCustomFieldController::class);
+        }
         $this->registerTimeTrackIntegration($container, $loader);
         $this->registerTenantUrlGenerator($container, $config['tenancy']['enabled']);
         $this->registerAssigneeProvider($container, $config['assignee_provider']);
@@ -1122,7 +1130,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
      * on the bundle's manager, and, when SearchKit >= 1.9 is installed and `search_kit.enabled`, the SearchKit groups `tasks`
      * and `boards` ({@see TaskSearchDefinition}, {@see BoardSearchDefinition}, tagged for SearchKit's provider pass).
      *
-     * @param array{enabled: bool, tasks: array{enabled: bool, sensitive: bool}, boards: array{enabled: bool}, priority: int, max_boards: int, max_scanned_boards: int, max_candidates: int, description_min_length: int} $searchKit
+     * @param array{enabled: bool, tasks: array{enabled: bool, sensitive: bool}, boards: array{enabled: bool}, priority: int, max_boards: int, max_scanned_boards: int, max_candidates: int, description_min_length: int, custom_fields: bool} $searchKit
      * @param array{provider: string|null, fulltext: bool, comments: bool, min_token_length: int, max_matches: int} $search
      */
     private function registerHeaderSearch(ContainerBuilder $container, array $searchKit, string $emName, array $search): void
@@ -1132,7 +1140,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->setDefinition(TaskTextMatch::class, (new Definition(TaskTextMatch::class))
             ->setArgument('$descriptionMinLength', $searchKit['description_min_length'])
             ->setArgument('$fulltext', $search['fulltext'])
-            ->setArgument('$minTokenLength', $search['min_token_length']));
+            ->setArgument('$minTokenLength', $search['min_token_length'])
+            ->setArgument('$customFields', $searchKit['custom_fields']));
         $container->setDefinition(TaskSearchExtras::class, (new Definition(TaskSearchExtras::class))
             ->setArgument('$entityManager', $em)
             ->setArgument('$users', new Reference(TaskBoardUsers::class)));

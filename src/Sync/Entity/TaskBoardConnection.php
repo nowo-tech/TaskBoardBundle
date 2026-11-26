@@ -16,6 +16,7 @@ use Nowo\TaskBoardBundle\Sync\Repository\SyncStore;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 
 use function array_values;
+use function count;
 use function explode;
 use function is_array;
 use function is_bool;
@@ -50,6 +51,16 @@ class TaskBoardConnection
 
     /** Since 3.2.0 (CU-2): the provider custom fields the import plan's Fields step left out (ids, one per line). */
     public const OPTION_EXCLUDED_FIELDS = 'excludedFields';
+
+    /**
+     * Since 3.3.0 (CU-3): the provider custom fields the import plan's Fields step lands on native fields, one
+     * `<remote field id>=<target>` per line; the target is {@see self::NATIVE_CREATE} (the board's own field of that
+     * provenance, created on first use) or a native field id.
+     */
+    public const OPTION_NATIVE_FIELDS = 'nativeFields';
+
+    /** Since 3.3.0 (CU-3): the native target "a board field created for the provider field". */
+    public const NATIVE_CREATE = 'create';
 
     #[ORM\Id]
     #[ORM\Column(type: 'string', length: 36)]
@@ -277,6 +288,26 @@ class TaskBoardConnection
         $value = $this->options[self::OPTION_EXCLUDED_FIELDS] ?? null;
 
         return is_string($value) && $value !== '' ? explode("\n", $value) : [];
+    }
+
+    /**
+     * Since 3.3.0 (CU-3): the provider custom fields landed on native fields, remote field id => target
+     * ({@see self::NATIVE_CREATE} or a native field id). Malformed lines are ignored.
+     *
+     * @return array<string, string>
+     */
+    public function nativeFields(): array
+    {
+        $value = $this->options[self::OPTION_NATIVE_FIELDS] ?? null;
+        $map   = [];
+        foreach (is_string($value) && $value !== '' ? explode("\n", $value) : [] as $line) {
+            $parts = explode('=', $line, 2);
+            if (count($parts) === 2 && $parts[0] !== '' && $parts[1] !== '') {
+                $map[$parts[0]] = $parts[1];
+            }
+        }
+
+        return $map;
     }
 
     /** Since 1.28.0: `keep` (default, and for anything else) or `delete`: what the first import does with unmatched columns. */

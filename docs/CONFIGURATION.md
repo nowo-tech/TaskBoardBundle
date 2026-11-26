@@ -340,6 +340,7 @@ Override via `templates/bundles/NowoTaskBoardBundle/` or config:
 nowo_task_board:
     web_ui:
         layout_template: null        # see Layout integration below
+        custom_fields_page: true     # since 3.3.0: a board's Custom fields page (false = no routes, no header action)
     templates:
         index: '@NowoTaskBoardBundle/manage/index.html.twig'
         board: '@NowoTaskBoardBundle/manage/board.html.twig'
@@ -997,6 +998,7 @@ nowo_task_board:
         max_scanned_boards: 1000  # 1-10000: the most boards one search reads, in batches, to find them (at least max_boards)
         max_candidates: 100    # 1-1000: the most matching rows one search reads and checks (TASK_ACCESS_CHECK)
         description_min_length: 3  # 1-32 (2.26): shorter words match task titles only, never descriptions
+        custom_fields: false   # since 3.3.0: words also match the tasks' native text field values (off: personal data, no index)
 ```
 
 The header search services (`Search\Header\*`) are always registered. The SearchKit groups `tasks` and `boards` are

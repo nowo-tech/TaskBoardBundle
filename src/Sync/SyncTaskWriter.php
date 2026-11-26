@@ -53,6 +53,7 @@ use Nowo\TaskBoardBundle\Sync\Exception\ProviderException;
 use Nowo\TaskBoardBundle\Sync\Exception\UnsafeRemoteFileException;
 use Nowo\TaskBoardBundle\Sync\Field\SyncCustomFieldWriter;
 use Nowo\TaskBoardBundle\Sync\Field\SyncFieldSuppression;
+use Nowo\TaskBoardBundle\Sync\Field\SyncNativeFieldWriter;
 use Nowo\TaskBoardBundle\Sync\File\RemoteFileFetcher;
 use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
 use Nowo\TaskBoardBundle\Sync\Hook\StoredAttachment;
@@ -186,6 +187,8 @@ final readonly class SyncTaskWriter
         private ?TaskReparenterInterface $reparenter = null,
         // Since 2.21.1 (REQ-DI-001): the time a task was archived remotely.
         private ClockInterface $clock = new NativeClock(),
+        // Since 3.3.0 (CU-3): provider fields an import plan landed on native fields.
+        private ?SyncNativeFieldWriter $nativeFieldWriter = null,
     ) {
     }
 
@@ -715,12 +718,14 @@ final readonly class SyncTaskWriter
      *
      * @param array<string, string> $conflicts field => preview of the remote value
      */
-    private function noteConflicts(SyncRunContext $ctx, Task $task, string $externalId, array $conflicts): void
+    private function noteConflicts(SyncRunContext $ctx, Task $task, string $externalId, array $conflicts, bool $named = false): void
     {
         $lines = [];
         foreach ($conflicts as $field => $preview) {
             $ctx->conflicts[] = new SyncConflict($task->getId(), $this->sanitizer->line($task->getTitle(), 120), $externalId, $field, $preview);
-            $lines[]          = sprintf('- **%s**: %s', $this->trans('task_board.sync.field.' . $field, $field), $preview === '' ? '—' : $preview);
+            // Since 3.3.0 (CU-3): a native field's conflict is labelled with the field's own name (escaped below).
+            $label   = $named ? $this->sanitizer->line($field, 128) : $this->trans('task_board.sync.field.' . $field, $field);
+            $lines[] = sprintf('- **%s**: %s', $label, $preview === '' ? '—' : $preview);
         }
         $header = $this->trans('task_board.sync.conflict_note', 'Changed here and in %provider%: these values from %provider% were not applied.', ['%provider%' => $this->providerName($ctx)]);
         $body   = $this->sanitizer->markdown($header . "\n\n" . implode("\n", $lines), TaskComment::MAX_LENGTH);
@@ -766,6 +771,12 @@ final readonly class SyncTaskWriter
         }
         if ($this->fieldsMode !== 'text' && $this->fieldWriter instanceof SyncCustomFieldWriter) {
             $this->fieldWriter->write($ctx, $task, $remote->customFields, $session);
+        }
+        if ($this->nativeFieldWriter instanceof SyncNativeFieldWriter && $ctx->connection->nativeFields() !== []) {
+            $conflicts = $this->nativeFieldWriter->write($ctx, $item, $task, $remote->customFields);
+            if ($conflicts !== []) {
+                $this->noteConflicts($ctx, $task, $item->getExternalId(), $conflicts, true);
+            }
         }
     }
 

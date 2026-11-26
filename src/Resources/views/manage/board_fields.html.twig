@@ -1,0 +1,73 @@
+{% extends '@NowoUiKitBundle/page/show.html.twig' %}
+{#
+    Since 3.3.0: a board's Custom fields page (web_ui.templates.board_fields). The tenant's fields (every board, read-only
+    here) and the board's own (edit, delete). A field an import created shows its provenance. Delete is a disclosure with
+    its own CSRF form and the definition's version (works without JavaScript). Vars: page (ShowPage), board, fields
+    (TaskCustomField, the board's order), deleteForms (field id => form view, the board's own fields only).
+#}
+
+{% block nowo_ui_styles %}
+    {{ parent() }}
+    <link rel="stylesheet" href="{{ asset('css/task-board.css', 'nowo_task_board') }}">
+{% endblock %}
+
+{% block nowo_ui_show_sections %}
+    {% set _b = 'NowoTaskBoardBundle' %}
+    <section class="{{ nowo_ui_class('card', _b) }}" aria-labelledby="nowo-task-fields-title" data-testid="nowo-task-fields">
+        <div class="{{ nowo_ui_class('card_header', _b) }}">
+            <h2 class="{{ nowo_ui_class('card_title', _b) }}" id="nowo-task-fields-title">{{ 'task_board.custom_field.heading'|trans({}, _b) }}</h2>
+        </div>
+        <div class="{{ nowo_ui_class('card_body', _b) }}">
+            <p class="nowo-task-mb-3">{{ 'task_board.custom_field.intro'|trans({}, _b) }}</p>
+            {% if fields is empty %}
+                <p class="{{ nowo_ui_class('muted', _b) }}" data-testid="nowo-task-fields-empty">{{ 'task_board.custom_field.empty'|trans({}, _b) }}</p>
+            {% else %}
+                <div class="{{ nowo_ui_class('table_wrap', _b) }}">
+                    <table class="{{ nowo_ui_class('table', _b) }}">
+                        <caption class="visually-hidden">{{ 'task_board.custom_field.heading'|trans({}, _b) }}</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col">{{ 'task_board.custom_field.form.name'|trans({}, _b) }}</th>
+                                <th scope="col">{{ 'task_board.custom_field.form.type'|trans({}, _b) }}</th>
+                                <th scope="col">{{ 'task_board.custom_field.options'|trans({}, _b) }}</th>
+                                <th scope="col"><span class="visually-hidden">{{ 'task_board.custom_field.actions'|trans({}, _b) }}</span></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for field in fields %}
+                                <tr data-testid="nowo-task-field-row">
+                                    <th scope="row">
+                                        {{ field.name }}
+                                        {% if field.boardId is null %}<span class="{{ nowo_ui_class('badge_neutral', _b) }} nowo-task-badge" data-testid="nowo-task-field-tenant">{{ 'task_board.custom_field.scope.tenant'|trans({}, _b) }}</span>{% endif %}
+                                        {% if field.sourceRef %}<span class="{{ nowo_ui_class('badge_info', _b) }} nowo-task-badge" data-testid="nowo-task-field-source">{{ 'task_board.custom_field.imported'|trans({'%provider%': ('task_board.sync.provider.' ~ field.sourceRef|split(':')|first)|trans({}, _b)}, _b) }}</span>{% endif %}
+                                    </th>
+                                    <td>{{ ('task_board.custom_field.type.' ~ field.type.value)|trans({}, _b) }}</td>
+                                    <td>
+                                        {% for option in field.options %}
+                                            <span class="{{ nowo_ui_class('badge_neutral', _b) }} nowo-task-badge nowo-task-field-option"{% if option.color %} style="--nowo-task-option-color: {{ option.color }}"{% endif %}>{{ option.name }}</span>
+                                        {% else %}<span class="{{ nowo_ui_class('muted', _b) }}">—</span>{% endfor %}
+                                    </td>
+                                    <td>
+                                        {% if deleteForms[field.id] is defined %}
+                                            <div class="nowo-task-flex nowo-task-wrap nowo-task-gap">
+                                                <a class="{{ nowo_ui_class('btn_secondary', _b) }} {{ nowo_ui_class('btn_sm', _b) }}" href="{{ path(nowo_task_board_route('board_field_edit'), {boardId: board.id, fieldId: field.id}) }}" data-testid="nowo-task-field-edit">{{ 'task_board.custom_field.edit'|trans({}, _b) }}<span class="visually-hidden"> {{ field.name }}</span></a>
+                                                <details class="nowo-task-field-delete" data-testid="nowo-task-field-delete">
+                                                    <summary class="{{ nowo_ui_class('btn_secondary', _b) }} {{ nowo_ui_class('btn_sm', _b) }}">{{ 'task_board.custom_field.delete'|trans({}, _b) }}<span class="visually-hidden"> {{ field.name }}</span></summary>
+                                                    {{ form_start(deleteForms[field.id], {attr: {class: 'nowo-task-field-delete__form'}}) }}
+                                                        <p>{{ 'task_board.custom_field.delete_text'|trans({'%name%': field.name}, _b) }}</p>
+                                                        {% for child in deleteForms[field.id] %}{% if not child.rendered %}{{ form_widget(child) }}{% endif %}{% endfor %}
+                                                        <button type="submit" class="{{ nowo_ui_class('btn_danger_solid', _b) }} {{ nowo_ui_class('btn_sm', _b) }}" data-testid="nowo-task-field-delete-confirm">{{ 'task_board.custom_field.delete_confirm'|trans({}, _b) }}</button>
+                                                    {{ form_end(deleteForms[field.id]) }}
+                                                </details>
+                                            </div>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endif %}
+        </div>
+    </section>
+{% endblock %}

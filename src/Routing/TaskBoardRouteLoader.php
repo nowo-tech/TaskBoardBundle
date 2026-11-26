@@ -16,6 +16,7 @@ use Nowo\TaskBoardBundle\Controller\TaskBoardConnectionController;
 use Nowo\TaskBoardBundle\Controller\TaskBoardManageController;
 use Nowo\TaskBoardBundle\Controller\TaskBoardMultiBoardController;
 use Nowo\TaskBoardBundle\Controller\TaskCopyController;
+use Nowo\TaskBoardBundle\Controller\TaskCustomFieldController;
 use Nowo\TaskBoardBundle\Controller\TaskMenuController;
 use Nowo\TaskBoardBundle\Controller\TaskQuestionController;
 use Nowo\TaskBoardBundle\Controller\TaskRecurrenceController;
@@ -74,6 +75,8 @@ final class TaskBoardRouteLoader extends Loader
         TaskApiQuestionController::class,
         // Since 3.2.0 (CU-2).
         TaskSyncImportPlanController::class,
+        // Since 3.3.0.
+        TaskCustomFieldController::class,
     ];
 
     /**
@@ -191,6 +194,8 @@ final class TaskBoardRouteLoader extends Loader
         private readonly bool $questionsEnabled = false,
         // Since 3.2.0 (CU-2): the import plan routes exist only with `sync.enabled` and `sync.plans.enabled`.
         private readonly bool $importPlansEnabled = false,
+        // Since 3.3.0: the board's Custom fields page exists only with `web_ui.custom_fields_page`.
+        private readonly bool $customFieldsEnabled = false,
     ) {
         parent::__construct();
         $this->attributeLoader = new ControllerAttributeRouteLoader();
@@ -243,6 +248,12 @@ final class TaskBoardRouteLoader extends Loader
         $this->addRoute($collection, $attributes, 'task_restore', TaskBoardManageController::class . '::restoreTask');
         // Since 2.22.0.
         $this->addRoute($collection, $attributes, 'task_menu', TaskMenuController::class . '::act');
+        if ($this->customFieldsEnabled) {
+            // Since 3.3.0: the board's Custom fields page.
+            foreach (['board_fields' => 'fields', 'board_field_new' => 'create', 'board_field_edit' => 'edit', 'board_field_delete' => 'delete'] as $key => $action) {
+                $this->addRoute($collection, $attributes, $key, TaskCustomFieldController::class . '::' . $action);
+            }
+        }
         if ($this->taskNumbersEnabled) {
             $this->addRoute($collection, $attributes, 'task_by_number', TaskBoardManageController::class . '::taskByNumber');
         }

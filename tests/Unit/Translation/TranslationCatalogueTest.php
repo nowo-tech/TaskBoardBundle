@@ -39,6 +39,9 @@ final class TranslationCatalogueTest extends TestCase
      */
     private const ALLOWED_IDENTICAL = [
         'de' => [
+            'task_board.custom_field.type.text',
+            'task_board.custom_field.form.name',
+            'task_board.custom_field.form.option_name',
             'task_board.import_plan.subtitle_workspace',
             'task_board.import_plan.list.workspace',
             'task_board.import_plan.list.status',
@@ -114,6 +117,11 @@ final class TranslationCatalogueTest extends TestCase
             'task_board.sync.trigger.manual',
         ],
         'fr' => [
+            'task_board.custom_field.options',
+            'task_board.custom_field.actions',
+            'task_board.custom_field.form.type',
+            'task_board.custom_field.form.option_name',
+            'task_board.custom_field.form.options',
             'task_board.import_plan.connect.kind.oauth',
             'task_board.sync.connect.kind_oauth',
             'nav.brand',
@@ -188,6 +196,7 @@ final class TranslationCatalogueTest extends TestCase
             'task_board.sync.trigger.console',
         ],
         'nl' => [
+            'task_board.custom_field.form.type',
             'task_board.import_plan.list.heading',
             'task_board.import_plan.list.status',
             'task_board.import_plan.step.run',
@@ -276,11 +285,24 @@ final class TranslationCatalogueTest extends TestCase
      * @var array<string, list<string>>
      */
     private const ALLOWED_SAME_AS_SPANISH = [
+        'fr' => [
+            'task_board.custom_field.imported',
+        ],
         'it' => [
+            'task_board.import_plan.fields.native_existing',
             'task_board.copy.copy_title',
             'task_board.import.help.col_priority',
         ],
         'pt' => [
+            'task_board.import_plan.fields.import_as',
+            'task_board.import_plan.fields.native_existing',
+            'task_board.multi.export.custom_fields',
+            'task_board.custom_field.title',
+            'task_board.custom_field.delete_confirm',
+            'task_board.custom_field.imported',
+            'task_board.custom_field.edit_title',
+            'task_board.custom_field.flash.saved',
+            'task_board.custom_field.flash.deleted',
             'task_board.import_plan.fields.title',
             'task_board.import_plan.statuses.type.custom',
             'task_board.board.show_less',

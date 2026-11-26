@@ -136,6 +136,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Native custom fields from the ClickUp import, phase CU-3 of [design/CLICKUP_IMPORT.md](design/CLICKUP_IMPORT.md)
+(Beacon D-20261124-07; owner decisions Q-CU-1 … Q-CU-16 of 2026-11-25: text, number and drop-down only, no overwrite
+mode), and a *Custom fields* page per board. **Schema change** (three columns and a unique index on
+`task_board_custom_fields`): see UPGRADING "To 3.3.0".
+
+### Added
+
+- Import plans, Fields step: one choice per ClickUp field — *Synced, read-only* (default), *Do not import* and, for
+  `text` / `short_text`, `number` and `drop_down` fields, *Native field: create “name”* or an existing native field of
+  the same type (the tenant's fields, and the board's own when every item fills the same existing board;
+  `ImportPlanService::nativeTargets()`). Other types show *synced only*. The plan keeps the choices
+  (`TaskSyncImportPlan::getNativeFields()` / `getFieldChoices()`; the 3.2 `field_map` list is still read) and the
+  runner hands them to the board connection (option `nativeFields`, `TaskBoardConnection::nativeFields()`).
+- Preview: the fields line (native / synced / not imported) and the fields of other types, listed as imported synced.
+- `Sync\Field\SyncNativeFieldWriter`: the values of those fields land on the native fields. A created field carries the
+  provenance marker `clickup:<field id>` (`TaskCustomField::getSourceRef()`, unique per board) and is found again by it on
+  every re-import, whatever its name; drop-down options are followed by the provider's option id
+  (`TaskCustomField::getSourceOptions()`), so renamed options stay the same option, new ones are added, and an option
+  deleted here is never recreated (the value becomes a conflict note). **Re-import rule:** the provider's value is
+  written only while nobody changed the task's value here since the last import; a value changed here — or one that
+  existed before the provider had one — is kept and the provider's value is noted once in a comment (as the other
+  fields' conflicts); an empty provider value never clears one. Run stats `fields.native_fields`,
+  `fields.native_values`, `fields.native_conflicts`, `fields.native_misfit`, `fields.native_invalid`; warnings
+  `native_field_refused` (the run's actor may not change the board's fields) and `native_field_unavailable`.
+- `TaskCustomFieldManager::defineFromSource()`, `adoptSourceOptions()`, `sourceField()`; `TaskCustomField::markSource()`,
+  `mapSourceOption()`, `getVersion()`.
+- A board's *Custom fields* page (`TaskCustomFieldController`, templates `board_fields` / `board_field`, FormKit
+  `TaskCustomFieldDefinitionFormType`, routes `board_fields`, `board_field_new`, `board_field_edit`,
+  `board_field_delete`): the tenant's fields (read-only there) and the board's own — add (text, number, drop-down with
+  options, one per line, colour optional), edit (options as rows: rename, recolour, remove; new ones added), delete
+  (inline disclosure, no JavaScript needed). For users the restructure policy lets restructure the board (the board's
+  manage right by default); the board and list views show the action to them. `web_ui.custom_fields_page: false` removes
+  the routes and the action.
+- `Field\TaskCustomFieldPersonalData` (public service): `exportByValue()`, `exportBoard()` and `eraseByValue()` for native
+  values (RGPD Art. 15, 17, 20), next to the synced fields' `SyncFieldValueEraser`.
+- `search_kit.custom_fields` (default `false`): the header search and the SearchKit `tasks` group also match the
+  tasks' native text values.
+- Multi-board export (CSV / XLSX): a last column *Custom fields* (`Name: value; …`), guarded against formula injection
+  like the other cells.
+
+### Changed
+
+- REQ-RUNTIME-003: a field definition has a `version`. `TaskCustomFieldManager::update()` and `delete()` lock the
+  field's row, read it again and raise the version; with the new `$expectedVersion` argument an edit or a delete made
+  from an older version is refused (`TaskCustomFieldRefusedException::CHANGED`, nothing written). The page's forms send
+  it. A refused definition (bad name or options) is now refused before the transaction starts.
+- `TaskCustomFieldManager::trimDecimal()` is public (static).
+- Requires UiKit `^2.74.1` and FormKit `^2.25.1` (their latest minors).
+
 ## [3.2.0] - 2026-11-26
 
 Import plans and the guided import from ClickUp, phase CU-2 of [design/CLICKUP_IMPORT.md](design/CLICKUP_IMPORT.md)

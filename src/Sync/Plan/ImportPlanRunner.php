@@ -283,6 +283,14 @@ final readonly class ImportPlanRunner
         if ($plan->getExcludedFields() !== []) {
             $options[TaskBoardConnection::OPTION_EXCLUDED_FIELDS] = implode("\n", $plan->getExcludedFields());
         }
+        // Since 3.3.0 (CU-3): the fields landed on native fields (`<remote id>=<create or native field id>` lines).
+        $native = [];
+        foreach ($plan->getNativeFields() as $remoteId => $target) {
+            $native[] = $remoteId . '=' . $target;
+        }
+        if ($native !== []) {
+            $options[TaskBoardConnection::OPTION_NATIVE_FIELDS] = implode("\n", $native);
+        }
         if ($plan->option(TaskSyncImportPlan::OPTION_UNMATCHED, false)) {
             $options['unmatchedColumns'] = TaskBoardConnection::UNMATCHED_DELETE;
         }

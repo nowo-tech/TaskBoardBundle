@@ -20,14 +20,17 @@
 {% block nowo_ui_document_title %}{{ board.name }} — {{ 'task_board.board.title'|trans({}, 'NowoTaskBoardBundle') }}{% endblock %}
 
 {% block nowo_ui_page_header %}
+    {#- Since 3.3.0: fieldsUrl adds the board's Custom fields page to the actions (users who may restructure the board). -#}
     {% if nowo_task_board_ui.page_header %}{% block nowo_task_board_toolbar %}
     {{ nowo_ui_page_header(nowo_task_board_header({
         title: nowo_task_board_label(board),
         intro: board.descriptionFormat == 'markdown' ? null : board.description,
         crumb: {href: path(nowo_task_board_route('index'), {}), label: 'task_board.index.title'|trans({}, 'NowoTaskBoardBundle')},
-        actions: (canEditBoard ?? true) ? [
+        actions: ((canEditBoard ?? true) ? [
             {href: path(nowo_task_board_route('board_import'), {boardId: board.id}), icon: 'upload', label: 'task_board.import.action'|trans({}, 'NowoTaskBoardBundle')},
-        ] : [],
+        ] : [])|merge(fieldsUrl|default(null) ? [
+                {href: fieldsUrl, icon: 'forms', label: 'task_board.custom_field.title'|trans({}, 'NowoTaskBoardBundle')},
+        ] : []),
         tabs: [
             {href: path(nowo_task_board_route('board'), {boardId: board.id, view: 'board'}), icon: 'layout-kanban', label: 'task_board.view.board'|trans({}, 'NowoTaskBoardBundle'), active: true},
             {href: path(nowo_task_board_route('list'), {boardId: board.id}), icon: 'list', label: 'task_board.view.list'|trans({}, 'NowoTaskBoardBundle')},

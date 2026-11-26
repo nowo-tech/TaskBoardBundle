@@ -12,11 +12,14 @@ use Doctrine\Persistence\ObjectManager;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Entity\TaskCustomField;
+use Nowo\TaskBoardBundle\Entity\TaskCustomFieldValue;
 use Nowo\TaskBoardBundle\Entity\TaskDependency;
 use Nowo\TaskBoardBundle\Entity\TaskDocument;
 use Nowo\TaskBoardBundle\Entity\TaskLink;
 use Nowo\TaskBoardBundle\Entity\TaskMember;
 use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
+use Nowo\TaskBoardBundle\Enum\CustomFieldType;
 use Nowo\TaskBoardBundle\Enum\TaskDependencyType;
 use Nowo\TaskBoardBundle\Enum\TaskLinkType;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
@@ -417,5 +420,16 @@ final class TaskBoardDemoFixtures extends Fixture implements DependentFixtureInt
             loggedAt: new DateTimeImmutable('-5 hours'),
             description: 'Stimulus controller refactor',
         ));
+
+        // Since 3.3.0: native custom fields of the board (its Custom fields page), with values on two tasks.
+        $effort = new TaskCustomField('Effort (points)', CustomFieldType::Number, null, $board, 0);
+        $area   = (new TaskCustomField('Area', CustomFieldType::Dropdown, null, $board, 1))->setOptions([['name' => 'Frontend', 'color' => '#3b82f6'], ['name' => 'Backend', 'color' => '#a855f7'], ['name' => 'Docs', 'color' => null]]);
+        $owner  = new TaskCustomField('Product owner', CustomFieldType::Text, null, $board, 2);
+        foreach ([$effort, $area, $owner] as $field) {
+            $manager->persist($field);
+        }
+        $manager->persist((new TaskCustomFieldValue($taskDnD, $effort))->change(null, '5'));
+        $manager->persist((new TaskCustomFieldValue($taskDnD, $area))->change($area->optionNamed('Frontend')['id'] ?? null, null));
+        $manager->persist((new TaskCustomFieldValue($taskGrooming, $owner))->change('Demo user', null));
     }
 }

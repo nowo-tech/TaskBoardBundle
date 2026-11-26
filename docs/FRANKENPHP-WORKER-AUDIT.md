@@ -270,6 +270,14 @@ No other findings. The bundle holds no per-user state in services, so there is n
 
 Re-run this audit when a change adds: mutable properties to any service or repository, a cache of boards, tasks or memberships, an event listener or subscriber that buffers data, a new unique constraint without a matching validation, a new HTTP client or external call in importers, or any use of `$_SERVER` / `$_ENV` at runtime.
 
+## Native custom fields from the import (3.3.0)
+
+`SyncNativeFieldWriter`, `TaskCustomFieldPersonalData` and `TaskCustomFieldController` are stateless (`final
+readonly` services; the controller holds only services and configuration). What a run learns about native fields (their
+ids and the drop-down option map) lives in the run's `SyncRunContext`, never in a service; rows are read again by id on
+every page. Entity setters are on per-request rows (`@igor-ignore` notes). Safe in a worker with and without kernel
+reset.
+
 ## ClickUp import plans (3.2.0)
 
 `ImportPlanService`, `ImportPlanPreviewer`, `ImportPlanRunner`, `ImportPlanStore`, the plan runners and

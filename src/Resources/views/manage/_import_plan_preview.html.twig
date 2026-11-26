@@ -52,6 +52,16 @@
         </tfoot>
     </table>
 </div>
+{#- Since 3.3.0 (CU-3): the Fields step's choices; fields of a type no native field takes stay synced (read-only). -#}
+<p data-testid="nowo-task-plan-fields">{{ 'task_board.import_plan.preview.fields'|trans({'%native%': preview.fields.native, '%synced%': preview.fields.synced, '%excluded%': preview.fields.excluded}, _b) }}</p>
+{% if preview.fields.skipped is not empty %}
+    <details class="nowo-task-mb-3" data-testid="nowo-task-plan-fields-skipped">
+        <summary>{{ 'task_board.import_plan.preview.fields_skipped'|trans({'%count%': preview.fields.skipped|length}, _b) }}</summary>
+        <ul>
+            {% for field in preview.fields.skipped %}<li>{{ field.name }} <code>{{ field.type }}</code></li>{% endfor %}
+        </ul>
+    </details>
+{% endif %}
 <p data-testid="nowo-task-plan-people">{{ 'task_board.import_plan.people.counts'|trans({'%total%': preview.people.total, '%mapped%': preview.people.mapped, '%unreviewed%': preview.people.unreviewed}, _b) }}</p>
 {% if form %}
     {{ form_start(form, {attr: {id: 'nowo-task-plan-start-form', class: 'nowo-task-plan__form'}}) }}

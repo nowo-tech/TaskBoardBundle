@@ -30,6 +30,7 @@
 - [Dependencies](#dependencies)
 - [Reporting](#reporting)
 - [Release security checklist](#release-security-checklist)
+- [Native custom fields and the Custom fields page (since 3.3.0)](#native-custom-fields-and-the-custom-fields-page-since-330)
 
 ## Attack surface
 
@@ -526,3 +527,24 @@ See [.github/SECURITY.md](../.github/SECURITY.md) for coordinated disclosure.
 - Personal data: the people directory of the tenant and workspace holds ClickUp names and e-mails, as before;
   `TaskSyncPeopleReassigner::detachUser()` also clears the user's id from plans (string ids: no database cascade);
   `ImportPlanStore::exportFor()` lists a user's plans for an access request; plans are pruned after `keep_days`.
+
+## Native custom fields and the Custom fields page (since 3.3.0)
+
+- **Who may change definitions.** The page and every write answer 404 for a board the user cannot see (or another
+  tenant's) and 403 unless `TaskBoardRestructurePolicyInterface::mayRestructureBoard()` allows (default: the board's
+  manage right). Only the board's own fields are edited there; tenant fields are read-only on a board. Every write has
+  its CSRF token (`task_board_custom_field`, `task_board_custom_field_delete`) and the definition's version; option
+  names and colours are validated (unique names, `#rrggbb`), rendered escaped; a colour reaches only a CSS custom
+  property of the escaped `style` attribute after the same check.
+- **Imported fields.** An import creates a field only with the run actor's restructure right (else
+  `native_field_refused`); names and option names come from ClickUp, sanitised and cut by the adapter, escaped where
+  shown. The provenance marker is `<provider>:<id>` (checked pattern); a re-import never overwrites a value changed here.
+- **Personal data.** A native text value may name a person, typed here or imported. `TaskCustomFieldPersonalData`
+  answers access requests (`exportByValue()`, `exportBoard()`) and erases by value (`eraseByValue()`); the host
+  authorises the caller and passes the board on a multi-tenant installation (null crosses tenants). An erased imported
+  value is not written again by a re-import while ClickUp keeps the same value (the erasure counts as a change here);
+  clear it at the source too. **Not reached:** the task history keeps earlier values as text (`custom_field` changes)
+  and the comment a conflict note wrote; the host's history retention or account erasure covers them.
+- **Search** of native text values is opt-in (`search_kit.custom_fields`), on the boards the viewer may open only, with
+  escaped `LIKE` patterns and bound parameters.
+- **Export.** The multi-board export's *Custom fields* cell is guarded against formula injection like the others.

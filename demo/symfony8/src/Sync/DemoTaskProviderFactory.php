@@ -48,17 +48,27 @@ final class DemoTaskProviderFactory
             ->withStatuses('L-backlog', [new RemoteStatus('To do', RemoteStatusType::Open, '#94a3b8'), new RemoteStatus('Doing', RemoteStatusType::Custom, '#3b82f6'), new RemoteStatus('Review', RemoteStatusType::Custom, '#a855f7'), new RemoteStatus('Done', RemoteStatusType::Closed, '#22c55e')])
             ->withStatuses('L-bugs', [new RemoteStatus('Open', RemoteStatusType::Open), new RemoteStatus('Fixed', RemoteStatusType::Closed)])
             ->withStatuses('L-support', [new RemoteStatus('Open', RemoteStatusType::Open), new RemoteStatus('Fixed', RemoteStatusType::Closed)])
-            ->withFieldDefinitions('L-backlog', [new RemoteCustomField('cf-size', 'T-shirt size', SyncFieldType::Dropdown, 'drop_down'), new RemoteCustomField('cf-team', 'Team', SyncFieldType::Text, 'short_text')])
+            // Since 3.3.0 (CU-3): a date field too, which cannot be a native field (the Fields step says "synced only").
+            ->withFieldDefinitions('L-backlog', [new RemoteCustomField('cf-size', 'T-shirt size', SyncFieldType::Dropdown, 'drop_down'), new RemoteCustomField('cf-team', 'Team', SyncFieldType::Text, 'short_text'), new RemoteCustomField('cf-points', 'Story points', SyncFieldType::Number, 'number'), new RemoteCustomField('cf-launch', 'Launch date', SyncFieldType::Date, 'date')])
             ->withFieldDefinitions('L-support', [new RemoteCustomField('cf-customer', 'Customer', SyncFieldType::Text, 'short_text')]);
 
-        $at   = static fn (int $minutes): DateTimeImmutable => new DateTimeImmutable('2026-11-01 09:00:00 +' . $minutes . ' minutes');
-        $task = static fn (string $id, string $title, string $status, int $updated, array $extra = []): RemoteTask => new RemoteTask(
+        $at    = static fn (int $minutes): DateTimeImmutable => new DateTimeImmutable('2026-11-01 09:00:00 +' . $minutes . ' minutes');
+        $sizes = [['id' => 'opt-s', 'name' => 'S', 'color' => '#22c55e'], ['id' => 'opt-m', 'name' => 'M', 'color' => '#f59e0b'], ['id' => 'opt-l', 'name' => 'L', 'color' => '#ef4444']];
+        // Since 3.3.0 (CU-3): the backlog tasks carry custom field values (the guided import can land them on native fields).
+        $fields = static fn (string $size, string $team, string $points): array => [
+            new RemoteCustomField('cf-size', 'T-shirt size', SyncFieldType::Dropdown, 'drop_down', $sizes, [], $size, $size),
+            new RemoteCustomField('cf-team', 'Team', SyncFieldType::Text, 'short_text', [], [], $team, $team),
+            new RemoteCustomField('cf-points', 'Story points', SyncFieldType::Number, 'number', [], [], $points, $points),
+            new RemoteCustomField('cf-launch', 'Launch date', SyncFieldType::Date, 'date', [], [], '2026-12-01', '2026-12-01'),
+        ];
+        $task = static fn (string $id, string $title, string $status, int $updated, array $extra = [], array $custom = []): RemoteTask => new RemoteTask(
             new ImportedTaskDto(...['title' => $title, 'externalId' => $id, 'status' => $status, 'priority' => TaskPriority::Normal, 'hasPriority' => false, 'sourceUrl' => 'https://app.clickup.com/t/' . $id] + $extra),
             $at($updated),
+            customFields: $custom,
         );
         foreach ([
-            $task('cu-1', 'Design the onboarding', 'To do', 1, ['description' => "Screens for the **first run**.\n\nSee [the brief](https://example.com/brief).", 'tags' => ['ux']]),
-            $task('cu-2', 'Build the signup API', 'Doing', 2, ['dependsOn' => [['cu-1', TaskDependencyType::BlockedBy]], 'priority' => TaskPriority::High, 'hasPriority' => true]),
+            $task('cu-1', 'Design the onboarding', 'To do', 1, ['description' => "Screens for the **first run**.\n\nSee [the brief](https://example.com/brief).", 'tags' => ['ux']], $fields('opt-m', 'Design', '3')),
+            $task('cu-2', 'Build the signup API', 'Doing', 2, ['dependsOn' => [['cu-1', TaskDependencyType::BlockedBy]], 'priority' => TaskPriority::High, 'hasPriority' => true], $fields('opt-l', 'Platform', '8')),
             $task('cu-3', 'Write the API tests', 'To do', 3, ['parentExternalId' => 'cu-2']),
             $task('cu-4', 'Release notes', 'Done', 4),
         ] as $remote) {

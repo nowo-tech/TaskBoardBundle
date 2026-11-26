@@ -131,6 +131,14 @@ final class SyncRunContext
     public array $fields = [];
 
     /**
+     * Since 3.3.0 (CU-3): the native fields of this run's provider fields (remote id => the native field's id, null when
+     * it cannot be used, and its dropdown option map); ids only, kept for the whole run.
+     *
+     * @var array<string, array{id: string|null, options: array<string, string|null>}>
+     */
+    public array $nativeFields = [];
+
+    /**
      * Since 1.28.0: the workspace's task types of this slice; null until asked.
      *
      * @var array<string, string>|null

@@ -31,6 +31,7 @@ final class IconNames
         'device-floppy'    => 'floppy',
         'external-link'    => 'box-arrow-up-right',
         'flame'            => 'fire',
+        'forms'            => 'input-cursor-text',
         'git-branch'       => 'git',
         'git-merge'        => 'git',
         'git-pull-request' => 'git',

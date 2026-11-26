@@ -352,7 +352,7 @@ nowo_task_board:
 | Tree | Ticks spaces, folders or lists; picks the layout and options | A ticked space or folder means "its lists now". A level opens by a POST (no provider call on a GET). At most `max_items` ticks; each must lie in the plan's workspace (ClickUp: the workspace's spaces once, then one request per ticked list or folder, from the token's budget) |
 | Boards | Per item: *New board* (name) or an existing board of the tenant | A board linked to another source is not offered; a board is used once |
 | Statuses | One table per status set: each status → a column, *Create a column*, *Do not import* | Same-named columns preselected (case, accents, spaces ignored) |
-| Fields | Untick the fields not to import | The others are synced read-only fields; native fields come with CU-3 |
+| Fields | Per field: *Synced, read-only*, *Do not import* or (text, number, drop-down) a *native field* — create one or pick one of the type | Since 3.3.0 (CU-3), see [Native fields](#native-fields-from-the-import-since-330). Other types say *synced only* |
 | People | Counts of the tenant's directory; *Stop after the first board is linked* | One directory per tenant and workspace (scope `tenant:<hash>`) |
 | Preview | Counts from ClickUp, requests and minutes, warnings, the host's quota, the re-import mode | *Start import* behind a confirm dialog |
 | Run / summary | Progress (polled every 5 s), Cancel, Resume; then counts, failed lists, *Re-import now*, *Retry the failed lists*, *Download report (JSON)*, Delete | The page can be left: the plan goes on |
@@ -366,6 +366,30 @@ first import. Recurrence stays read-only text (Q-CU-11).
 
 Re-import modes (Q-CU-8): **Update changed tasks** (the field-hash rule: a local edit wins) and **Only add new
 tasks** (`SyncOptions::$createOnly`: imported tasks untouched, deletions not archived). There is no overwrite mode.
+
+### Native fields from the import (since 3.3.0)
+
+Phase CU-3 (owner Q-CU-7). On the Fields step a ClickUp field of type `text` / `short_text`, `number` or `drop_down`
+can land on a **native** field: editable on every task of the board, in the list columns and filters, the Task API and
+the board's *Custom fields* page. The choice is *Create “name”* (a board field created on first use) or an existing
+native field of the same type: the tenant's fields, and the board's own when every item of the plan fills the same
+existing board. Every other ClickUp type stays a synced, read-only field (the step says *synced only*; the preview
+lists them).
+
+- **Found again by id.** A field the import creates carries the marker `clickup:<field id>`
+  (`TaskCustomField::getSourceRef()`, unique per board). A re-import finds it by the marker, whatever it is called
+  now. Drop-down options are matched by ClickUp's option id (`getSourceOptions()`): renamed options (there or here)
+  stay the same option, new ClickUp options are added, an option deleted here is **not** recreated.
+- **No overwrite mode.** The provider's value is written only while nobody changed the task's value here since the last
+  import (a per-field hash on the sync item, key `native:<field id>`). A value changed here — or one set before the
+  provider had any — is kept, and the provider's value is noted once in a comment, as the other fields' conflicts. An
+  empty provider value never clears a value. A value written here and in ClickUp to the same thing is not a conflict.
+- **Not written twice.** A field landed on a native field is left out of the synced fields (`task_board_sync_field_*`).
+- **Rights.** Creating the field needs the run actor's restructure right on the board (the restructure policy, by
+  default the board's manage right); without it the run warns `native_field_refused` and skips those values. A chosen
+  field that was deleted or retyped warns `native_field_unavailable`.
+- **Counts** in the run report: `fields.native_fields`, `fields.native_values`, `fields.native_conflicts`,
+  `fields.native_misfit` (a value that did not fit the provider's own type), `fields.native_invalid`.
 
 ### How a plan runs
 
