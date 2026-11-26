@@ -84,6 +84,8 @@ final class ImportPlanPagesTest extends ImportPlanTestCase
         $this->client->request('GET', self::BASE . $plan->getId());
         self::assertSelectorExists('[data-testid="nowo-task-plan-oauth"]');
         self::assertSame(self::BASE . $plan->getId() . '?step=connect', TestCredentialResolver::$returnTo);
+        // Since 3.4.0: the token page's way back is the same Connect step.
+        self::assertSame(self::BASE . $plan->getId() . '?step=connect', TestCredentialResolver::$formReturnTo);
 
         // The workspace step without a usable connection: the error in the page; its POST: a message.
         $this->plans()->chooseConnection($plan, 1, $this->plans()->connections($plan, $this->admin)[0]);

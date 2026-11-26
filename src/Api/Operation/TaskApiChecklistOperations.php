@@ -93,6 +93,86 @@ final readonly class TaskApiChecklistOperations
         $title         = trim((string) $input->string('name', true));
         $this->validate($title, 'name', TaskConstraints::taskTitle());
         $assignee = $this->assignee($principal, $task, $input);
+        $this->addItem($principal, $task, $name, $title, $assignee);
+
+        return [$task, $name];
+    }
+
+    /**
+     * Since 3.4.0 (client API v1, `POST tasks/{id}/checklist-items`): an item of the task's checklist `$name` (a name of
+     * at most 100 characters; a new name starts a checklist), the item returned. The same checks as
+     * {@see self::createItem()}: the task's reach and the person's right on it, the title's form rule, the quota, the
+     * audit.
+     *
+     * @throws TaskApiRefusal
+     */
+    public function createItemTask(TaskApiPrincipal $principal, string $taskId, string $name, string $title): Task
+    {
+        $this->audit->requireListener();
+        $task = $this->guard->task($principal, $taskId, TaskApiCapability::WorkOnTask);
+        $this->validate($title, 'name', TaskConstraints::taskTitle());
+
+        return $this->addItem($principal, $task, $name, $title, null);
+    }
+
+    /**
+     * Since 3.4.0 (client API v1): an item of one of the task's checklists (a subtask tagged `checklist:<name>`), else
+     * 404 `ACCESS_001`.
+     *
+     * @throws TaskApiRefusal
+     */
+    public function itemOf(TaskApiPrincipal $principal, Task $task, string $itemId): Task
+    {
+        foreach ($this->queries->subtasksOf([$task->getId()]) as $item) {
+            if ($item->getId() === $itemId && self::checklistNameOf($item) !== null) {
+                return $item;
+            }
+        }
+
+        throw TaskApiRefusal::notFound();
+    }
+
+    /**
+     * Since 3.4.0 (client API v1): `name` and `resolved` of an item already found with {@see self::itemOf()}, as
+     * {@see self::updateItem()} changes them (the caller holds the transaction and compared the item's revision).
+     *
+     * @param array{name?: string, resolved?: bool|null} $input
+     *
+     * @throws TaskApiRefusal
+     */
+    public function updateItemTask(TaskApiPrincipal $principal, Task $task, Task $item, array $input): void
+    {
+        $this->audit->requireListener();
+        $data = TaskFormData::fromTask($item);
+        if (isset($input['name'])) {
+            $data->title = trim($input['name']);
+            $this->validate($data->title, 'name', TaskConstraints::taskTitle());
+        }
+        $this->resolve($principal, $item, $input['resolved'] ?? null);
+        $data->columnId = $item->getColumn()?->getId();
+        if ($data->title !== $item->getTitle()) {
+            $this->withinPlan(fn () => $this->tasks->update($item, $data, $principal->user, TaskApiTaskOperations::via($principal, ColumnTransitionVia::OP_CHECKLIST)), $item);
+        }
+        $this->audit->written($principal, 'checklist_item.update', $task->getBoard(), $task->getId(), ['item' => $item->getId()]);
+    }
+
+    /** Since 3.4.0: the checklist name of an item (its `checklist:<name>` tag), else null. */
+    public static function checklistNameOf(Task $item): ?string
+    {
+        foreach ($item->getTags() as $tag) {
+            if (str_starts_with($tag, self::TAG_PREFIX) && $tag !== self::TAG_PREFIX) {
+                return substr($tag, strlen(self::TAG_PREFIX));
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @throws TaskApiRefusal
+     */
+    private function addItem(TaskApiPrincipal $principal, Task $task, string $name, string $title, ?object $assignee): Task
+    {
         $this->audit->requireTaskQuota($task->getBoard(), 1, $principal->user);
 
         $item = $this->withinPlan(fn (): Task => $this->tasks->create($task->getBoard(), new TaskFormData(title: $title, tags: [self::TAG_PREFIX . $name]), $principal->user, $task, null, TaskApiTaskOperations::via($principal, ColumnTransitionVia::OP_CHECKLIST)));
@@ -101,7 +181,24 @@ final readonly class TaskApiChecklistOperations
         }
         $this->audit->written($principal, 'checklist_item.create', $task->getBoard(), $task->getId(), ['item' => $item->getId()]);
 
-        return [$task, $name];
+        return $item;
+    }
+
+    /**
+     * `resolved`: true moves the item to the done column, false back to the first column.
+     *
+     * @throws TaskApiRefusal
+     */
+    private function resolve(TaskApiPrincipal $principal, Task $item, ?bool $resolved): void
+    {
+        if ($resolved === true && !$item->isCompleted()) {
+            $this->withinPlan(fn (): bool => $this->tasks->moveToDone($item, $principal->user, TaskApiTaskOperations::via($principal, ColumnTransitionVia::OP_CHECKLIST)), $item);
+        } elseif ($resolved === false && $item->isCompleted()) {
+            $first = $item->getBoard()->getColumns()->first();
+            if ($first instanceof BoardColumn) {
+                $this->withinPlan(fn (): bool => $this->tasks->moveToColumn($item, $first->getId(), $principal->user, TaskApiTaskOperations::via($principal, ColumnTransitionVia::OP_CHECKLIST)), $item);
+            }
+        }
     }
 
     /**
@@ -171,14 +268,7 @@ final readonly class TaskApiChecklistOperations
         $resolved = $input->bool('resolved');
         $assignee = $input->has('assignee') ? $this->assignee($principal, $task, $input) : null;
 
-        if ($resolved === true && !$item->isCompleted()) {
-            $this->withinPlan(fn (): bool => $this->tasks->moveToDone($item, $principal->user, TaskApiTaskOperations::via($principal, ColumnTransitionVia::OP_CHECKLIST)), $item);
-        } elseif ($resolved === false && $item->isCompleted()) {
-            $first = $item->getBoard()->getColumns()->first();
-            if ($first instanceof BoardColumn) {
-                $this->withinPlan(fn (): bool => $this->tasks->moveToColumn($item, $first->getId(), $principal->user, TaskApiTaskOperations::via($principal, ColumnTransitionVia::OP_CHECKLIST)), $item);
-            }
-        }
+        $this->resolve($principal, $item, $resolved);
         $data->columnId = $item->getColumn()?->getId();
         if ($data->title !== $item->getTitle()) {
             $this->withinPlan(fn () => $this->tasks->update($item, $data, $principal->user, TaskApiTaskOperations::via($principal, ColumnTransitionVia::OP_CHECKLIST)), $item);

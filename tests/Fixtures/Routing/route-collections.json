@@ -1088,6 +1088,24 @@
                 "condition": ""
             },
             {
+                "name": "nowo_task_board_board_connection_people_forget",
+                "path": "/tools/task-board/board/{boardId}/connection/people/{personId}/forget",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardConnectionController::peopleForget"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
                 "name": "nowo_task_board_tasks",
                 "path": "/tools/task-board/tasks",
                 "host": "",

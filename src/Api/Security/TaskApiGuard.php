@@ -160,6 +160,15 @@ final readonly class TaskApiGuard
     }
 
     /**
+     * Since 3.4.0 (client API v1): whether the token may list this board, without a word when it may not — the reach of
+     * {@see self::board()} (where, the tenant, the host's space, the person's view right) and the plan's tasks module.
+     */
+    public function canSeeBoard(TaskApiPrincipal $principal, TaskBoard $board): bool
+    {
+        return $this->reachesBoard($principal, $board) && $this->planGate->allowsTasks($principal->user, $board->getTenantKey());
+    }
+
+    /**
      * "My tasks" (spec): assigned to the person or created by them. Watching, reviewing or being a stakeholder does not count.
      */
     public function isOwn(object $user, Task $task): bool

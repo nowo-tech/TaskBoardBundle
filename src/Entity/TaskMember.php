@@ -13,6 +13,8 @@ use Nowo\TaskBoardBundle\ValueObject\Uuid;
 #[ORM\Entity]
 #[ORM\Table(name: 'task_board_task_members')]
 #[ORM\UniqueConstraint(name: 'task_board_member_unique', columns: ['task_id', 'user_id', 'member_role'])]
+// Since 3.4.0 (client API v1, `GET my-tasks`): a person's assignments and reviews.
+#[ORM\Index(name: 'task_board_member_user_role_idx', columns: ['user_id', 'member_role'])]
 class TaskMember
 {
     #[ORM\Id]

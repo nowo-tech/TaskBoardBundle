@@ -17,6 +17,7 @@ use Nowo\TaskBoardBundle\Event\TaskBoardQuotaCheckEvent;
 use Nowo\TaskBoardBundle\Field\TaskCustomFieldManager;
 use Nowo\TaskBoardBundle\Port\Internal\ProviderCredentialResolverInterface;
 use Nowo\TaskBoardBundle\Port\Internal\TenantCredentialResolverInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TenantCredentialReturnResolverInterface;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
@@ -32,6 +33,7 @@ use Nowo\TaskBoardBundle\Sync\Exception\ProviderException;
 use Nowo\TaskBoardBundle\Sync\Field\SyncNativeFieldWriter;
 use Nowo\TaskBoardBundle\Sync\Hook\ConnectionChoice;
 use Nowo\TaskBoardBundle\Sync\Hook\ConnectionCreatorActorResolver;
+use Nowo\TaskBoardBundle\Sync\OAuth\OAuthReturnPath;
 use Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleDirectoryService;
 use Nowo\TaskBoardBundle\Sync\Provider\ContainerType;
 use Nowo\TaskBoardBundle\Sync\Provider\CustomFieldListProviderInterface;
@@ -155,10 +157,21 @@ final readonly class ImportPlanService
         return $this->tenantCredentials()?->tenantConnectionsFor($this->tenant($plan), $actor, $plan->getProvider()) ?? [];
     }
 
-    /** The host's page to paste a token, and its OAuth start (`$returnTo` = the plan's Connect step). */
-    public function credentialFormUrl(TaskSyncImportPlan $plan): ?string
+    /**
+     * The host's page to paste a token, and its OAuth start (`$returnTo` = the plan's Connect step).
+     *
+     * Since 3.4.0: with `$returnTo` (a same-origin path, {@see OAuthReturnPath::isSafe()}; anything else is dropped) and a
+     * host service that implements `TenantCredentialReturnAwareSourceInterface`, the page that sends the person back
+     * there; otherwise the plain page, as before.
+     */
+    public function credentialFormUrl(TaskSyncImportPlan $plan, ?string $returnTo = null): ?string
     {
-        return $this->tenantCredentials()?->tenantCredentialFormUrl($this->tenant($plan), $plan->getProvider());
+        $credentials = $this->tenantCredentials();
+        if ($returnTo !== null && OAuthReturnPath::isSafe($returnTo) && $credentials instanceof TenantCredentialReturnResolverInterface) {
+            return $credentials->tenantCredentialFormUrlWithReturn($this->tenant($plan), $plan->getProvider(), $returnTo);
+        }
+
+        return $credentials?->tenantCredentialFormUrl($this->tenant($plan), $plan->getProvider());
     }
 
     public function connectUrl(TaskSyncImportPlan $plan, string $returnTo): ?string

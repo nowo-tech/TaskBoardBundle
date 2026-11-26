@@ -33,6 +33,8 @@ use function strtolower;
 #[ORM\Index(name: 'task_board_tasks_board_open_due_idx', columns: ['board_id', 'completed_at', 'due_at'])]
 // Since 2.1.0 (spec 214): the tasks a backfill still has to number.
 #[ORM\Index(name: 'task_board_tasks_number_idx', columns: ['number'])]
+// Since 3.4.0 (client API v1, `GET changes`): a board's tasks by last change.
+#[ORM\Index(name: 'task_board_tasks_board_updated_idx', columns: ['board_id', 'updated_at'])]
 #[ORM\HasLifecycleCallbacks]
 class Task
 {

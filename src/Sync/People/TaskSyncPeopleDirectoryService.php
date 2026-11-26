@@ -5,8 +5,12 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Sync\People;
 
 use DateTimeImmutable;
+use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\Persistence\ManagerRegistry;
+use Nowo\TaskBoardBundle\Doctrine\RecoveringFlusher;
 use Nowo\TaskBoardBundle\Doctrine\TaskBoardEntityManager;
+use Nowo\TaskBoardBundle\Doctrine\TransactionRollback;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Port\Internal\AttributionOnlyResolverInterface;
@@ -56,6 +60,8 @@ final readonly class TaskSyncPeopleDirectoryService
         // Since 3.0.0 (audit ZAS-W1): TaskBoard rows the application's manager holds are read again by id at each write
         // entry (none: a service built by hand works on the rows it is given, as in 2.x).
         private ?TaskBoardEntityManager $rows = null,
+        // Since 3.4.0: resets the manager a failed anonymise() closed (worker mode); none: left to the caller.
+        private ?ManagerRegistry $managerRegistry = null,
     ) {
     }
 
@@ -294,13 +300,45 @@ final readonly class TaskSyncPeopleDirectoryService
         }
     }
 
-    /** "Forget this person": name and e-mail cleared; references and the mapping stay. */
+    /**
+     * "Forget this person": name and e-mail cleared; references and the mapping stay.
+     *
+     * Since 3.4.0 (REQ-RUNTIME-003, the People page action of Beacon spec 208 E): one short transaction of its own (a
+     * savepoint inside the caller's) that locks the directory's row, then the person's (fixed order: the directory's
+     * counter numbers the former people), reads both as committed and anonymises the person only when no concurrent
+     * call did it first. No I/O under the locks; the audit event (ids only) is dispatched after the commit, once. A
+     * failure rolls back to the entry level (the connection is closed when that rollback fails: a deadlock that ended
+     * the transaction), resets a closed manager and rethrows the original exception. Idempotent: a forgotten person
+     * changes nothing and dispatches nothing.
+     */
     public function anonymise(TaskSyncPerson $person, object $actor): void
     {
         $person = $this->own($person);
         $this->assertCanManage($person->getDirectory(), $actor, null);
-        $this->forget($person, SyncUser::id($actor));
-        $this->entityManager->flush();
+        if ($person->isAnonymised()) {
+            return;
+        }
+        $connection = $this->entityManager->getConnection();
+        $level      = $connection->getTransactionNestingLevel();
+        $connection->beginTransaction();
+        try {
+            $this->entityManager->refresh($person->getDirectory(), LockMode::PESSIMISTIC_WRITE);
+            $this->entityManager->refresh($person, LockMode::PESSIMISTIC_WRITE);
+            $changed = !$person->isAnonymised();
+            if ($changed) {
+                $person->anonymise($this->clock->now());
+                $this->entityManager->flush();
+            }
+            $connection->commit();
+        } catch (Throwable $failure) {
+            TransactionRollback::toLevel($connection, $level);
+            RecoveringFlusher::resetIfClosed($this->entityManager, $this->managerRegistry);
+
+            throw $failure;
+        }
+        if ($changed) {
+            $this->eventDispatcher?->dispatch(new SyncPersonAnonymisedEvent($person->getDirectory()->getId(), $person->getId(), SyncUser::id($actor)), TaskBoardEvents::SYNC_PERSON_ANONYMISED);
+        }
     }
 
     /**

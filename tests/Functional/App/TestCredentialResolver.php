@@ -8,6 +8,7 @@ use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Port\Internal\OAuthConnectionStarterInterface;
 use Nowo\TaskBoardBundle\Port\Internal\ProviderCredentialResolverInterface;
 use Nowo\TaskBoardBundle\Port\Internal\TenantCredentialResolverInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TenantCredentialReturnResolverInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\ConnectionChoice;
 use Nowo\TaskBoardBundle\Sync\Provider\ProviderCredential;
 use Nowo\TaskBoardBundle\ValueObject\TenantRef;
@@ -17,8 +18,14 @@ use Nowo\TaskBoardBundle\ValueObject\TenantRef;
  * change (the canary token test). Since 3.1.0 it offers an OAuth start route when {@see self::$connectUrl} is set.
  * Since 3.2.0 it answers per tenant too (import plans) while {@see self::$tenants} is true.
  */
-final class TestCredentialResolver implements ProviderCredentialResolverInterface, OAuthConnectionStarterInterface, TenantCredentialResolverInterface
+final class TestCredentialResolver implements ProviderCredentialResolverInterface, OAuthConnectionStarterInterface, TenantCredentialResolverInterface, TenantCredentialReturnResolverInterface
 {
+    /** Since 3.4.0: whether the token page takes a way back (else the plain page, as a host without the interface). */
+    public static bool $formReturns = false;
+
+    /** Since 3.4.0: the `returnTo` of the last {@see self::tenantCredentialFormUrlWithReturn()} call. */
+    public static ?string $formReturnTo = null;
+
     public static string $secret = 'pk_test_token';
 
     public static bool $available = true;
@@ -82,6 +89,13 @@ final class TestCredentialResolver implements ProviderCredentialResolverInterfac
         return self::$formUrl;
     }
 
+    public function tenantCredentialFormUrlWithReturn(TenantRef $tenant, string $provider, ?string $returnTo): string
+    {
+        self::$formReturnTo = $returnTo;
+
+        return self::$formReturns && $returnTo !== null ? self::$formUrl . '?returnTo=' . rawurlencode($returnTo) : self::$formUrl;
+    }
+
     public function tenantConnectUrl(TenantRef $tenant, string $provider, string $returnTo): ?string
     {
         self::$returnTo = $returnTo;
@@ -91,13 +105,15 @@ final class TestCredentialResolver implements ProviderCredentialResolverInterfac
 
     public static function reset(): void
     {
-        self::$tenants    = true;
-        self::$tenant     = null;
-        self::$connectUrl = null;
-        self::$returnTo   = null;
-        self::$secret     = 'pk_test_token';
-        self::$available  = true;
-        self::$formUrl    = '/settings/connections/clickup';
-        self::$choices    = null;
+        self::$tenants      = true;
+        self::$formReturns  = false;
+        self::$formReturnTo = null;
+        self::$tenant       = null;
+        self::$connectUrl   = null;
+        self::$returnTo     = null;
+        self::$secret       = 'pk_test_token';
+        self::$available    = true;
+        self::$formUrl      = '/settings/connections/clickup';
+        self::$choices      = null;
     }
 }

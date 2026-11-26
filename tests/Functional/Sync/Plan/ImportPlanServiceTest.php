@@ -66,7 +66,17 @@ final class ImportPlanServiceTest extends ImportPlanTestCase
         $plan  = $plans->draft(null, $this->admin, 'clickup');
         self::assertTrue($plans->isAvailable());
         self::assertSame('/settings/connections/clickup', $plans->credentialFormUrl($plan));
-        TestCredentialResolver::$connectUrl = '/connect';
+        // Since 3.4.0: the way back to the Connect step, only a same-origin path, only when the host takes one.
+        self::assertSame('/settings/connections/clickup', $plans->credentialFormUrl($plan, '/plans/1/connect'));
+        self::assertSame('/plans/1/connect', TestCredentialResolver::$formReturnTo);
+        TestCredentialResolver::$formReturns = true;
+        self::assertSame('/settings/connections/clickup?returnTo=%2Fplans%2F1%2Fconnect', $plans->credentialFormUrl($plan, '/plans/1/connect'));
+        TestCredentialResolver::$formReturnTo = null;
+        self::assertSame('/settings/connections/clickup', $plans->credentialFormUrl($plan, 'https://evil.example/'));
+        self::assertSame('/settings/connections/clickup', $plans->credentialFormUrl($plan, '//evil.example/'));
+        self::assertNull(TestCredentialResolver::$formReturnTo, 'an unsafe way back is never passed on');
+        TestCredentialResolver::$formReturns = false;
+        TestCredentialResolver::$connectUrl  = '/connect';
         self::assertSame('/connect', $plans->connectUrl($plan, '/back'));
         $this->refused(ImportPlanException::CREDENTIAL, static fn (): ProviderCredential => $plans->credential($plan));
         $this->refused(ImportPlanException::CREDENTIAL, fn (): ConnectionChoice => $plans->choice($plan, $this->admin));

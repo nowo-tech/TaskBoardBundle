@@ -27,6 +27,7 @@ use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\MultiBoard\DoctrineMultiBoardTaskQuery;
 use Nowo\TaskBoardBundle\MultiBoard\MultiBoardTaskFilter;
+use Nowo\TaskBoardBundle\PersonalData\TaskBoardPersonalDataExporterInterface;
 use Nowo\TaskBoardBundle\Port\Internal\TaskApiTimeEntriesInterface;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Service\TaskBoardCreatorInterface;
@@ -124,6 +125,13 @@ final class DddHostLookAlikeTest extends KernelTestCase
         self::assertInstanceOf(DoctrineMultiBoardTaskQuery::class, $multi);
         self::assertSame([], $multi->workload([$board->getId()], new MultiBoardTaskFilter(assigneeId: 'U-BRUNO'), new DateTimeImmutable()));
         self::assertCount(1, $multi->workload([$board->getId()], new MultiBoardTaskFilter(assigneeId: 'u-bruno'), new DateTimeImmutable()));
+
+        // Since 3.4.0: the personal-data export of exactly this id.
+        $exporter = $container->get(TaskBoardPersonalDataExporterInterface::class);
+        self::assertInstanceOf(TaskBoardPersonalDataExporterInterface::class, $exporter);
+        self::assertSame([], $exporter->export($upper)['tasks_created']);
+        self::assertSame([], $exporter->export($upper)['time_entries']);
+        self::assertCount(1, $exporter->export($bruno)['tasks_created']);
 
         $people = $container->get(TaskSyncPersonRepository::class);
         self::assertInstanceOf(TaskSyncPersonRepository::class, $people);

@@ -13,6 +13,7 @@ use Nowo\TaskBoardBundle\Sync\Event\SyncPageDoneEvent;
 use Nowo\TaskBoardBundle\Sync\Event\SyncPeopleReprojectedEvent;
 use Nowo\TaskBoardBundle\Sync\Event\SyncPeopleReviewedEvent;
 use Nowo\TaskBoardBundle\Sync\Event\SyncPersonAnonymisedEvent;
+use Nowo\TaskBoardBundle\Sync\Event\SyncPersonForgetCheckEvent;
 use Nowo\TaskBoardBundle\Sync\Event\SyncPersonMappedEvent;
 use Nowo\TaskBoardBundle\Sync\Event\SyncPersonReassignedEvent;
 use Nowo\TaskBoardBundle\Sync\Event\SyncStartedEvent;
@@ -108,6 +109,12 @@ final class TaskBoardEvents
 
     /** Since 1.25: {@see SyncPersonAnonymisedEvent}. */
     public const SYNC_PERSON_ANONYMISED = 'nowo_task_board.sync_person_anonymised';
+
+    /**
+     * Since 3.4.0 (Beacon spec 208 E): {@see SyncPersonForgetCheckEvent}, before "Forget this person" shows or runs.
+     * Denied by default: a listener must allow it.
+     */
+    public const SYNC_PERSON_FORGET_CHECK = 'nowo_task_board.sync_person_forget_check';
 
     /** Since 1.25: {@see SyncPeopleReviewedEvent} — the People step was saved. */
     public const SYNC_PEOPLE_REVIEWED = 'nowo_task_board.sync_people_reviewed';
@@ -231,4 +238,10 @@ final class TaskBoardEvents
 
     /** Since 3.2.0 (CU-2): {@see ImportPlanEvent} when an import plan fails (a connection or actor failure). */
     public const SYNC_IMPORT_PLAN_FAILED = 'nowo_task_board.sync_import_plan_failed';
+
+    /**
+     * Since 3.4.0 (client API v1): {@see TaskClientApiDeniedEvent}, every refusal of `/task-board/v1` from authentication
+     * on (ids and codes only).
+     */
+    public const CLIENT_API_DENIED = 'nowo_task_board.client_api_denied';
 }

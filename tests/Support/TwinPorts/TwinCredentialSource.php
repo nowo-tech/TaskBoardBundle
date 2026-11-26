@@ -7,14 +7,16 @@ namespace Nowo\TaskBoardBundle\Tests\Support\TwinPorts;
 use Nowo\TaskBoardBundle\Port\Internal\OAuthConnectionStarterInterface;
 use Nowo\TaskBoardBundle\Port\Internal\ProviderCredentialResolverInterface;
 use Nowo\TaskBoardBundle\Port\Internal\TenantCredentialResolverInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TenantCredentialReturnResolverInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\OAuthConnectionStartInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\ProviderCredentialSourceInterface;
+use Nowo\TaskBoardBundle\Sync\Hook\TenantCredentialReturnAwareSourceInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\TenantCredentialSourceInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\ProviderCredential;
 use Nowo\TaskBoardBundle\ValueObject\TaskBoardSnapshot;
 use Nowo\TaskBoardBundle\ValueObject\TenantRef;
 
-final readonly class TwinCredentialSource implements ProviderCredentialSourceInterface, OAuthConnectionStartInterface, TenantCredentialSourceInterface
+final readonly class TwinCredentialSource implements ProviderCredentialSourceInterface, OAuthConnectionStartInterface, TenantCredentialSourceInterface, TenantCredentialReturnAwareSourceInterface
 {
     public function __construct(private ProviderCredentialResolverInterface $legacy, private TwinLookup $lookup)
     {
@@ -53,6 +55,11 @@ final readonly class TwinCredentialSource implements ProviderCredentialSourceInt
     public function tenantCredentialFormUrl(TenantRef $tenant, string $provider): ?string
     {
         return $this->legacy instanceof TenantCredentialResolverInterface ? $this->legacy->tenantCredentialFormUrl($tenant, $provider) : null;
+    }
+
+    public function tenantCredentialFormUrlWithReturn(TenantRef $tenant, string $provider, ?string $returnTo): ?string
+    {
+        return $this->legacy instanceof TenantCredentialReturnResolverInterface ? $this->legacy->tenantCredentialFormUrlWithReturn($tenant, $provider, $returnTo) : $this->tenantCredentialFormUrl($tenant, $provider);
     }
 
     public function tenantConnectUrl(TenantRef $tenant, string $provider, string $returnTo): ?string

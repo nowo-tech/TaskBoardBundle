@@ -1,0 +1,25 @@
+{#
+    Since 3.4.0 (sync.people_forget, Beacon spec 208 E): the confirm dialog of "Forget this person" — UiKit's dialog,
+    Cancel first and focused on open (Chrome Modern Web Guidance, dialog: the safe action of a destructive
+    confirmation), the CSRF-only form in the body and the destructive action in the footer (form="…"). personId, forgetForm.
+#}
+{% set _dialog_id = 'nowo-task-sync-person-forget-' ~ personId %}
+{% set _body %}
+    {{ form_start(forgetForm, {method: 'POST', attr: {id: _dialog_id ~ '-form', class: 'nowo-task-dialog__body'}}) }}
+        <p>{{ 'task_board.sync.people.forget.text'|trans({}, 'NowoTaskBoardBundle') }}</p>
+    {{ form_end(forgetForm) }}
+{% endset %}
+{% set _footer %}
+    <button type="button" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-nowo-ui-dialog-close autofocus>{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
+    <button type="submit" form="{{ _dialog_id }}-form" class="{{ nowo_ui_class('btn_danger_solid', 'NowoTaskBoardBundle') }}" data-testid="nowo-task-sync-person-forget-confirm">{{ 'task_board.sync.people.forget.confirm'|trans({}, 'NowoTaskBoardBundle') }}</button>
+{% endset %}
+{{ include(nowo_ui_partial('dialog', 'NowoTaskBoardBundle'), {
+    id: _dialog_id,
+    title: 'task_board.sync.people.forget.title'|trans({}, 'NowoTaskBoardBundle'),
+    bundle: 'NowoTaskBoardBundle',
+    root_class: 'nowo-task-dialog nowo-task-dialog--native',
+    attr: {'data-dialog': 'person-forget'},
+    body: _body,
+    footer: _footer,
+    footer_attr: {class: 'nowo-task-dialog__footer nowo-task-dialog__actions'},
+}, false) }}

@@ -22,6 +22,12 @@ final readonly class ColumnTransitionVia
 
     public const MCP = 'mcp';
 
+    /**
+     * Since 3.4.0 (Beacon Desktop, Q-BD-24): the client API of a first-party app (`/task-board/v1`), a device-flow token
+     * of a person. Not a machine channel: *humans only* columns let it in (`HumansOnlyColumnTransitionPolicy::MACHINE_CHANNELS`).
+     */
+    public const APP = 'app';
+
     public const IMPORT = 'import';
 
     /** A task created in the column. */

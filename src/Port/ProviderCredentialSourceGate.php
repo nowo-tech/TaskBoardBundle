@@ -9,8 +9,10 @@ use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Port\Internal\OAuthConnectionStarterInterface;
 use Nowo\TaskBoardBundle\Port\Internal\ProviderCredentialResolverInterface;
 use Nowo\TaskBoardBundle\Port\Internal\TenantCredentialResolverInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TenantCredentialReturnResolverInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\OAuthConnectionStartInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\ProviderCredentialSourceInterface;
+use Nowo\TaskBoardBundle\Sync\Hook\TenantCredentialReturnAwareSourceInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\TenantCredentialSourceInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\ProviderCredential;
 use Nowo\TaskBoardBundle\ValueObject\TenantRef;
@@ -20,11 +22,12 @@ use Nowo\TaskBoardBundle\ValueObject\TenantRef;
  * {@see ProviderCredentialResolverInterface}. Since 3.1.0 it also answers {@see OAuthConnectionStarterInterface} when
  * the host's service implements {@see OAuthConnectionStartInterface} (else no OAuth start), and since 3.2.0
  * {@see TenantCredentialResolverInterface} when it implements {@see TenantCredentialSourceInterface} (else no import
- * plans). Exceptions propagate. Stateless.
+ * plans), and since 3.4.0 {@see TenantCredentialReturnResolverInterface} (the token page with a way back when the
+ * service implements {@see TenantCredentialReturnAwareSourceInterface}). Exceptions propagate. Stateless.
  *
  * @internal built by {@see Ports} / {@see TaskBoardPortsPass}
  */
-final readonly class ProviderCredentialSourceGate implements ProviderCredentialResolverInterface, OAuthConnectionStarterInterface, TenantCredentialResolverInterface
+final readonly class ProviderCredentialSourceGate implements ProviderCredentialResolverInterface, OAuthConnectionStarterInterface, TenantCredentialResolverInterface, TenantCredentialReturnResolverInterface
 {
     public function __construct(private ProviderCredentialSourceInterface $source)
     {
@@ -68,6 +71,19 @@ final readonly class ProviderCredentialSourceGate implements ProviderCredentialR
     public function tenantCredentialFormUrl(TenantRef $tenant, string $provider): ?string
     {
         return $this->source instanceof TenantCredentialSourceInterface ? $this->source->tenantCredentialFormUrl($tenant, $provider) : null;
+    }
+
+    /**
+     * Since 3.4.0: the host's page with a way back when its service implements
+     * {@see TenantCredentialReturnAwareSourceInterface}, else the plain page (as before).
+     */
+    public function tenantCredentialFormUrlWithReturn(TenantRef $tenant, string $provider, ?string $returnTo): ?string
+    {
+        if ($this->source instanceof TenantCredentialReturnAwareSourceInterface && $this->source instanceof TenantCredentialSourceInterface) {
+            return $this->source->tenantCredentialFormUrlWithReturn($tenant, $provider, $returnTo);
+        }
+
+        return $this->tenantCredentialFormUrl($tenant, $provider);
     }
 
     public function tenantConnectUrl(TenantRef $tenant, string $provider, string $returnTo): ?string

@@ -105,6 +105,7 @@ final class Configuration implements ConfigurationInterface
             ->end();
         $this->addUserDirectoryToFirewallSections($root);
         $this->addApiSection($root);
+        $this->addClientApiAndPersonalDataSections($root);
         $this->addSecuritySection($root);
         $this->addRoutesSection($root);
         $this->addWebUiSection($root);
@@ -232,6 +233,58 @@ final class Configuration implements ConfigurationInterface
                                 ->scalarNode('idempotency_store')->defaultNull()->info('Api\\Hook\\TaskApiIdempotencyStoreInterface.')->end()
                             ->end()
                         ->end()
+                    ->end()
+                ->end()
+            ->end();
+    }
+
+    /**
+     * Since 3.4.0: the `client_api` section (Beacon Desktop's tasks module, `/task-board/v1`) and `personal_data` (the
+     * UserKit export section `task_board`).
+     */
+    private function addClientApiAndPersonalDataSections(ArrayNodeDefinition $rootNode): void
+    {
+        $rootNode
+            ->children()
+                ->arrayNode('client_api')
+                    ->info('Since 3.4.0: the versioned client API for a first-party app (Beacon Desktop), <prefix>/v1, over the Task API\'s operations. Off: no route, service or listener. Needs api.enabled. See docs/CLIENT-API.md.')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('principal_resolver')->defaultNull()->info('Service id of a ClientApi\Contract\TaskClientPrincipalResolverInterface. null: the client API is off (no route).')->end()
+                        ->scalarNode('context_policy')->defaultNull()->info('Service id of a ClientApi\Contract\TaskClientContextPolicyInterface. Required with principal_resolver.')->end()
+                        ->scalarNode('reference_resolver')->defaultNull()->info('Service id of a ClientApi\Contract\TaskClientReferenceResolverInterface (tokens/1 references). null: every reference reads visible: false.')->end()
+                        ->scalarNode('link_visibility')->defaultNull()->info('Service id of a Link\TaskObjectLinkVisibilityInterface. null: every host-object link reads visible: false in the client API.')->end()
+                        ->scalarNode('file_resolver')->defaultNull()->info('Service id of a ClientApi\Contract\TaskClientFileResolverInterface (tokens/1 images). null: every image reads visible: false.')->end()
+                        ->scalarNode('source_link')->defaultNull()->info('Service id of a ClientApi\Contract\TaskClientSourceLinkInterface (POST tasks with source). null: source is 400 invalid_field.')->end()
+                        ->scalarNode('file_scheme')->defaultNull()->info('The URL scheme of the host\'s files in Markdown images (Beacon: beacon-file). null: no image is a host file.')
+                            ->validate()
+                                ->ifTrue(static fn (mixed $scheme): bool => $scheme !== null && (!is_string($scheme) || preg_match('/^[a-z][a-z0-9+.-]{0,31}$/D', $scheme) !== 1))
+                                ->thenInvalid('client_api.file_scheme must be a URL scheme such as beacon-file.')
+                            ->end()
+                        ->end()
+                        ->scalarNode('prefix')
+                            ->defaultValue('/api/task-board')
+                            ->info('Base path; the routes are under <prefix>/v1 (house rule /<segment>/v<N>).')
+                            ->validate()
+                                ->ifTrue(static fn (mixed $prefix): bool => !is_string($prefix) || preg_match('#^(/[A-Za-z0-9._-]+)+$#D', $prefix) !== 1)
+                                ->thenInvalid('client_api.prefix must be a path such as /api/task-board, without a trailing slash.')
+                            ->end()
+                        ->end()
+                        ->scalarNode('context_header')
+                            ->defaultValue('X-Beacon-Context')
+                            ->info('The request header naming the context (personal, org:<uuid>).')
+                            ->validate()
+                                ->ifTrue(static fn (mixed $header): bool => !is_string($header) || preg_match('/^[A-Za-z][A-Za-z0-9-]{0,63}$/D', $header) !== 1)
+                                ->thenInvalid('client_api.context_header must be an HTTP header name.')
+                            ->end()
+                        ->end()
+                    ->end()
+                ->end()
+                ->arrayNode('personal_data')
+                    ->info('Since 3.4.0: the personal-data export (PersonalData\TaskBoardPersonalDataExporterInterface, always registered).')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->booleanNode('user_kit')->defaultTrue()->info('Register the UserKit export section task_board when nowo-tech/user-kit-bundle is installed (default true: automatic). false when your application calls TaskBoardPersonalDataExporterInterface itself. Without UserKit nothing is registered.')->end()
                     ->end()
                 ->end()
             ->end();
@@ -771,6 +824,14 @@ final class Configuration implements ConfigurationInterface
                     ->children()
                         ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/connection/people/former')->end()
                         ->scalarNode('name')->defaultValue('nowo_task_board_board_connection_people_former')->end()
+                    ->end()
+                ->end()
+                // Since 3.4.0 (Beacon spec 208 E): "Forget this person" (with sync.people_forget).
+                ->arrayNode('board_connection_people_forget')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/connection/people/{personId}/forget')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_board_connection_people_forget')->end()
                     ->end()
                 ->end()
                 // Since 3.3.0: the board's Custom fields page (with web_ui.custom_fields_page).
@@ -1677,6 +1738,7 @@ final class Configuration implements ConfigurationInterface
                         ->scalarNode('cache_pool')->defaultNull()->info('Since 1.25: service id of a PSR-6 pool caching the list search (300 s, keyed by a hash of the connection reference, never the token). null = no cache.')->end()
                     ->end()
                 ->end()
+                ->booleanNode('people_forget')->defaultFalse()->info('Since 3.4.0 (Beacon spec 208 E): true = the People page offers "Forget this person" (name and e-mail cleared; references and the mapping stay), to whoever manages the board\'s connection AND is allowed by a SYNC_PERSON_FORGET_CHECK listener (denied by default). false = no button, and the route answers 404.')->end()
                 ->booleanNode('people_bulk_former')->defaultFalse()->info('Since 1.28.0: true = the People page offers "Mark every unmapped person as a former person" (mapping external, changeable person by person). false = no button, and the route answers 404.')->end()
                 ->booleanNode('include_multi_list_tasks')->defaultFalse()->info('Since 1.28.0: true = a ClickUp list source also reads the tasks added to it from other lists (include_timl). Each still appears once, with all its lists; a task belongs to one board.')->end()
                 ->booleanNode('full_sync_rereads_details')->defaultFalse()->info('Since 1.28.0: true = a full sync reads each task\'s detail again even when its date did not move (within sync.watchers.max_detail_calls_per_run). For when a new file does not move ClickUp\'s date_updated.')->end()
