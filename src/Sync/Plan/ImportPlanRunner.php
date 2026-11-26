@@ -159,7 +159,7 @@ final readonly class ImportPlanRunner
                 continue;
             }
             if ($this->clock->now()->getTimestamp() >= $deadline) {
-                $this->store->hold($planId, $token, ImportPlanStatus::Paused, $this->clock->now(), null, $plan->getReport());
+                $this->hold($planId, $token, ImportPlanStatus::Paused, $this->clock->now(), null, $plan->getReport());
 
                 return;
             }
@@ -322,7 +322,7 @@ final readonly class ImportPlanRunner
             }
         }
         $plan = $this->plan($plan->getId());
-        $this->store->hold($plan->getId(), $token, ImportPlanStatus::Paused, null, 'people_mapping_required', ['people_waited' => 1, 'people_board' => (string) $item->getBoardId()] + $plan->getReport());
+        $this->hold($plan->getId(), $token, ImportPlanStatus::Paused, null, 'people_mapping_required', ['people_waited' => 1, 'people_board' => (string) $item->getBoardId()] + $plan->getReport());
 
         return true;
     }
@@ -347,17 +347,17 @@ final readonly class ImportPlanRunner
         $now = $this->clock->now();
         switch ($report->status) {
             case SyncStatus::Paused:
-                $this->store->hold($planId, $token, ImportPlanStatus::Paused, $now, null, $plan->getReport());
+                $this->hold($planId, $token, ImportPlanStatus::Paused, $now, null, $plan->getReport());
 
                 return false;
             case SyncStatus::Busy:
                 // A manual refresh of the same board holds its lock: the item goes on later.
-                $this->store->hold($planId, $token, ImportPlanStatus::Paused, $now->modify('+30 seconds'), 'board_busy', $plan->getReport());
+                $this->hold($planId, $token, ImportPlanStatus::Paused, $now->modify('+30 seconds'), 'board_busy', $plan->getReport());
 
                 return false;
             case SyncStatus::RateLimited:
                 $wait = max(1, $report->retryAfterSeconds ?? 60);
-                $this->store->hold($planId, $token, ImportPlanStatus::RateLimited, $now->modify('+' . ($wait + random_int(0, max(1, intdiv($wait, 5)))) . ' seconds'), 'rate_limited', $plan->getReport());
+                $this->hold($planId, $token, ImportPlanStatus::RateLimited, $now->modify('+' . ($wait + random_int(0, max(1, intdiv($wait, 5)))) . ' seconds'), 'rate_limited', $plan->getReport());
 
                 return false;
             default:
@@ -388,7 +388,7 @@ final readonly class ImportPlanRunner
     private function transient(TaskSyncImportPlan $plan, string $token, string $code): void
     {
         $retries = $plan->reportInt('transient_retries');
-        $this->store->hold($plan->getId(), $token, ImportPlanStatus::Paused, $this->clock->now()->modify('+' . min(900, 60 << $retries) . ' seconds'), $code, ['transient_retries' => $retries + 1] + $plan->getReport());
+        $this->hold($plan->getId(), $token, ImportPlanStatus::Paused, $this->clock->now()->modify('+' . min(900, 60 << $retries) . ' seconds'), $code, ['transient_retries' => $retries + 1] + $plan->getReport());
     }
 
     private function failItem(TaskSyncImportPlanItem $item, string $code): bool
@@ -478,6 +478,19 @@ final readonly class ImportPlanRunner
     }
 
     /** The plan row as the database holds it now (the store's conditional updates bypass the identity map). */
+    /**
+     * A pause of the slice — unless a cancel was asked meanwhile: the plan then ends as cancelled instead of waiting
+     * (audit ZBYv-L2). A slice that was taken over writes nothing either way (both writes are fenced).
+     *
+     * @param array<string, int|list<string>|string> $report
+     */
+    private function hold(string $planId, string $token, ImportPlanStatus $status, ?DateTimeImmutable $resumeAt, ?string $errorCode, array $report): void
+    {
+        if (!$this->store->hold($planId, $token, $status, $resumeAt, $errorCode, $report)) {
+            $this->end($this->plan($planId), $token, ImportPlanStatus::Cancelled, null);
+        }
+    }
+
     private function plan(string $planId): TaskSyncImportPlan
     {
         return $this->store->reload($planId) ?? throw new LogicException('The running plan was removed.');

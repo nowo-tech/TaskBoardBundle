@@ -132,6 +132,10 @@ Larger pieces that need a design pass or a new table.
 
 ## Considering
 
+- **Import plans: fenced item writes** (audit ZBYv-I1, 3.2.x). Write plan items with
+  `UPDATE … WHERE plan.run_token = :token` like the plan row, so a slice that was taken over cannot touch its current
+  item either.
+
 - **Import plans: POST-only progress advance** (audit ZBY-I4). With the inline runner the progress GET advances a due
   plan (as the board connection's progress has since 1.23); moving the advance to a POST needs the progress script to
   post with a CSRF token. The Statuses step GET also stores the sources' statuses on the draft (ZBY-I5), a draft-only

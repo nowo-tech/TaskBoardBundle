@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Sync\Repository;
 
 use DateTimeImmutable;
+use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncImportPlan;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncImportPlanItem;
@@ -16,6 +17,7 @@ use function array_map;
 use function array_values;
 use function count;
 use function hash;
+use function in_array;
 use function preg_match;
 
 use const DATE_ATOM;
@@ -124,7 +126,7 @@ final readonly class ImportPlanStore
     /** The heartbeat of the slice holding `$token`; false when another slice took the plan over (or it ended). */
     public function heartbeat(string $planId, string $token, DateTimeImmutable $now): bool
     {
-        return $this->fenced('p.heartbeatAt = :now', $planId, $token, ['now' => [$now, 'datetime_immutable']]);
+        return $this->fenced('p.heartbeatAt = :now', $planId, $token, ['now' => [$now, 'datetime_immutable']], true);
     }
 
     /**
@@ -132,11 +134,12 @@ final readonly class ImportPlanStore
      */
     public function saveReport(string $planId, string $token, array $report): bool
     {
-        return $this->fenced('p.report = :report', $planId, $token, ['report' => [$report, 'json']]);
+        return $this->fenced('p.report = :report', $planId, $token, ['report' => [$report, 'json']], true);
     }
 
     /**
      * Ends the slice in a resumable state (`paused` or `rate_limited`), due at `$resumeAt` (null: until *Resume*).
+     * Refused (false) once a cancel was asked: the slice then ends the plan as cancelled (audit ZBYv-L2).
      *
      * @param array<string, int|list<string>|string> $report
      */
@@ -146,7 +149,9 @@ final readonly class ImportPlanStore
             'p.status = :status, p.resumeAt = :resume, p.errorCode = :code, p.report = :report, p.runToken = NULL, p.heartbeatAt = NULL',
             $planId,
             $token,
-            ['status' => [$status->value, null], 'resume' => [$resumeAt, 'datetime_immutable'], 'code' => [$errorCode, null], 'report' => [$report, 'json']],
+            ['status' => [$status->value, null], 'resume' => [$resumeAt, 'datetime_immutable'], 'code' => [$errorCode, null], 'report' => [$report, 'json'], 'asked' => [false, 'boolean']],
+            false,
+            ' AND p.cancelRequested = :asked',
         );
     }
 
@@ -165,26 +170,39 @@ final readonly class ImportPlanStore
         );
     }
 
-    /** Cancel of a plan nobody runs (queued, paused, rate-limited): a compare-and-set on its status. */
-    public function cancelWaiting(string $planId, DateTimeImmutable $now): bool
+    /**
+     * Cancel (audit ZBY-L2, ZBYv-L2), one decision under the row lock: a waiting plan (queued, paused, rate-limited)
+     * ends now — true; a running one is asked to stop before its next item (a pause of its slice then ends it too) —
+     * false; null when it is no longer active. No slice can hold or end the plan between the read and the write.
+     */
+    public function cancel(string $planId, DateTimeImmutable $now): ?bool
     {
-        return $this->update(
-            'p.status = :cancelled, p.finishedAt = :now, p.lockKey = NULL, p.resumeAt = NULL, p.runToken = NULL, p.heartbeatAt = NULL, p.cancelRequested = true',
-            'p.id = :id AND p.status IN (:waiting)',
-            ['cancelled' => [ImportPlanStatus::Cancelled->value, null], 'now' => [$now, 'datetime_immutable'], 'id' => [$planId, null], 'waiting' => [self::WAITING, null]],
-        );
-    }
+        // @igor-ignore - The closure runs at once inside transactional() and is never stored.
+        return $this->entityManager->getConnection()->transactional(function () use ($planId, $now): ?bool {
+            $status = $this->entityManager->createQuery('SELECT p.status FROM ' . TaskSyncImportPlan::class . ' p WHERE p.id = :id')
+                ->setParameter('id', $planId)
+                ->setLockMode(LockMode::PESSIMISTIC_WRITE)
+                ->getSingleScalarResult();
+            if (in_array($status, self::WAITING, true)) {
+                return $this->update(
+                    'p.status = :cancelled, p.finishedAt = :now, p.lockKey = NULL, p.resumeAt = NULL, p.runToken = NULL, p.heartbeatAt = NULL, p.cancelRequested = true',
+                    'p.id = :id',
+                    ['cancelled' => [ImportPlanStatus::Cancelled->value, null], 'now' => [$now, 'datetime_immutable'], 'id' => [$planId, null]],
+                );
+            }
+            if ($status !== ImportPlanStatus::Running->value) {
+                return null;
+            }
+            $this->update('p.cancelRequested = true', 'p.id = :id', ['id' => [$planId, null]], true);
 
-    /** Cancel of a running plan: its slice stops before its next item. */
-    public function requestCancel(string $planId): bool
-    {
-        return $this->update('p.cancelRequested = true', 'p.id = :id AND p.status = :running', ['id' => [$planId, null], 'running' => [ImportPlanStatus::Running->value, null]]);
+            return false;
+        });
     }
 
     /** *Resume*: a paused or rate-limited plan is due now (a compare-and-set on its status). */
     public function makeDue(string $planId, DateTimeImmutable $now): bool
     {
-        return $this->update('p.resumeAt = :now', 'p.id = :id AND p.status IN (:held)', ['now' => [$now, 'datetime_immutable'], 'id' => [$planId, null], 'held' => [[ImportPlanStatus::Paused->value, ImportPlanStatus::RateLimited->value], null]]);
+        return $this->update('p.resumeAt = :now', 'p.id = :id AND p.status IN (:held)', ['now' => [$now, 'datetime_immutable'], 'id' => [$planId, null], 'held' => [[ImportPlanStatus::Paused->value, ImportPlanStatus::RateLimited->value], null]], true);
     }
 
     /** The plan as the database holds it now (the conditional updates bypass the identity map). */
@@ -203,15 +221,18 @@ final readonly class ImportPlanStore
      *
      * @param array<string, array{0: mixed, 1: string|null}> $parameters
      */
-    private function fenced(string $set, string $planId, string $token, array $parameters): bool
+    private function fenced(string $set, string $planId, string $token, array $parameters, bool $mayBeUnchanged = false, string $andWhere = ''): bool
     {
-        return $this->update($set, 'p.id = :id AND p.runToken = :token AND p.status = :running', $parameters + ['id' => [$planId, null], 'token' => [$token, null], 'running' => [ImportPlanStatus::Running->value, null]]);
+        return $this->update($set, 'p.id = :id AND p.runToken = :token AND p.status = :running' . $andWhere, $parameters + ['id' => [$planId, null], 'token' => [$token, null], 'running' => [ImportPlanStatus::Running->value, null]], $mayBeUnchanged);
     }
 
     /**
+     * `$mayBeUnchanged`: only for writes that can leave the row as it was (a heartbeat in the same second, the same
+     * report, a flag already set); a write that changes the status never takes the fallback (audit ZBYv-L2).
+     *
      * @param array<string, array{0: mixed, 1: string|null}> $parameters
      */
-    private function update(string $set, string $where, array $parameters): bool
+    private function update(string $set, string $where, array $parameters, bool $mayBeUnchanged = false): bool
     {
         $query = $this->entityManager->createQuery('UPDATE ' . TaskSyncImportPlan::class . ' p SET ' . $set . ' WHERE ' . $where);
         foreach ($parameters as $name => [$value, $type]) {
@@ -222,7 +243,7 @@ final readonly class ImportPlanStore
 
         // MySQL and MariaDB count changed rows, not matched ones: a write that leaves the row as it was (the same
         // heartbeat second, the same report) reports 0 although the guard still holds — so check the guard itself.
-        return $updated === 1 || ($updated === 0 && $this->matches($where, $parameters));
+        return $updated === 1 || ($mayBeUnchanged && $updated === 0 && $this->matches($where, $parameters));
     }
 
     /**

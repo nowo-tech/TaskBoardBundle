@@ -917,6 +917,8 @@ Grouped by feature; each row names the semantic requirement of [`spec.md`](spec.
 | `Sync/Provider/TimeAccessMode.php` | FR-SYNC-010 |
 | `Sync/Provider/TimeEntryProviderInterface.php` | FR-SYNC-010 |
 | `Sync/Provider/TimeEntryQuery.php` | FR-SYNC-010 |
+| `Sync/Provider/WorkspaceScope.php` | FR-SYNC-015 |
+| `Sync/Provider/WorkspaceScopeProviderInterface.php` | FR-SYNC-015 |
 | `Sync/Repository/SyncStore.php` | FR-SYNC-010 |
 | `Sync/SourceScanResult.php` | FR-SYNC-010 |
 | `Sync/Status/FirstImportFinisher.php` | FR-SYNC-013 |

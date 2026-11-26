@@ -227,7 +227,9 @@ REQ-RUNTIME-003 for the guided import (design §19):
 | Two managers editing a draft | every step is `UPDATE … SET version = version + 1 WHERE version = ? AND status = 'draft'`; the loser gets `stale` |
 | Two workers on one plan (redelivery, inline poll + worker) | `claim()`: `UPDATE … SET status = 'running', heartbeat_at = now, run_token = <new> WHERE status IN (queued, paused, rate_limited) OR (running AND heartbeat older than 10 min)`; the loser runs nothing. A slice lasts at most 300 s and beats after each board |
 | A slice taken over (or a plan cancelled) while it still runs | fencing: heartbeat, report, hold and end are `UPDATE … WHERE run_token = <its token> AND status = 'running'`; the stale slice stops and never frees `lock_key` |
-| Cancel or Resume against a claim | `cancelWaiting()` / `makeDue()` are compare-and-sets on the waiting statuses; a running plan only gets `cancel_requested` |
+| Cancel or Resume against a claim | `cancel()` reads the status `FOR UPDATE` and decides in the same transaction: a waiting plan ends (`cancelled`, `lock_key` freed), a running one gets `cancel_requested`, anything else is left alone (audit ZBYv-L2); `makeDue()` is a compare-and-set on the held statuses |
+| A cancel asked while the slice is about to pause | the hold is `… AND cancel_requested = false`: refused, the slice ends the plan `cancelled` instead (one event, from the slice) |
+| MySQL / MariaDB report changed, not matched, rows | only writes that can leave the row unchanged (heartbeat, report, `cancel_requested`, *Resume*) re-check their guard on 0 rows; status changes never do |
 | A wizard step that fails half-way | the version compare-and-set, the item rewrite and the flush are one transaction |
 | Two starts that each pass the board quota | the quota is asked again per board right before it is created |
 | A crash between "board created" and "item updated" | the board and its item are written in one transaction; a resumed start creates only the boards still missing |
@@ -239,4 +241,10 @@ REQ-RUNTIME-003 for the guided import (design §19):
 
 Tests: `ImportPlanRunnerTest` (lock, claim, adoption, busy board, cancel), `ImportPlanFencingTest` (takeover, cancel
 and resume against a claim, step transaction, and with a second database connection on MySQL / MariaDB / PostgreSQL:
-claim, workspace lock, cancel), `ImportPlanFlowTest` (stale and forged steps).
+claim, workspace lock, cancel, a pause refused after the cancel, a paused plan cancelled), `ImportPlanFlowTest` (stale and
+forged steps).
+
+Known limit (audit ZBYv-I1, planned for 3.2.x): item rows are still written through the ORM without the run token, so a
+slice that was taken over may write its current item's status once more before its next fenced write stops it. The
+board's run lock makes the live slice's item `busy` meanwhile, so no task is imported twice; at worst an item shows a
+stale status until the live slice reaches it.

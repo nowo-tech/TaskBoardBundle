@@ -349,7 +349,7 @@ nowo_task_board:
 | --- | --- | --- |
 | Connect | Picks a connection of the tenant (*Connect to ClickUp* / *Paste a token* link the host's pages) | Says what is read and copied, that nothing is written back, and where to revoke the app |
 | Workspace | One workspace per plan | Only the workspaces the connection was authorised for (`ConnectionChoice::$workspaceIds`) |
-| Tree | Ticks spaces, folders or lists; picks the layout and options | A ticked space or folder means "its lists now". A level opens by a POST (no provider call on a GET) |
+| Tree | Ticks spaces, folders or lists; picks the layout and options | A ticked space or folder means "its lists now". A level opens by a POST (no provider call on a GET). At most `max_items` ticks; each must lie in the plan's workspace (ClickUp: the workspace's spaces once, then one request per ticked list or folder, from the token's budget) |
 | Boards | Per item: *New board* (name) or an existing board of the tenant | A board linked to another source is not offered; a board is used once |
 | Statuses | One table per status set: each status → a column, *Create a column*, *Do not import* | Same-named columns preselected (case, accents, spaces ignored) |
 | Fields | Untick the fields not to import | The others are synced read-only fields; native fields come with CU-3 |
@@ -392,7 +392,9 @@ plan by one slice per poll, as the starter. The Statuses step's GET stores each 
 (a cache of the draft, nothing else). With
 `sync.plans.messenger.enabled` the handler queues the next message with a `DelayStamp`; route `RunImportPlanSlice`
 to an async transport (a sync transport ignores the delay). A host runner implements `ImportPlanRunnerInterface`
-and calls `ImportPlanRunner::runSlice($planId, $actorId, $seconds)`; it returns null when nothing ran.
+and calls `ImportPlanRunner::runSlice($planId, $seconds)` (the slice always acts as the starter); it returns null when
+nothing ran. *Cancel* ends a waiting plan at once; a running one ends `cancelled` before its next board or instead of
+pausing.
 
 ### Shared request budget per token
 

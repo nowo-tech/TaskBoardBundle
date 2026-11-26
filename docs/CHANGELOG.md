@@ -210,16 +210,24 @@ Import plans and the guided import from ClickUp, phase CU-2 of [design/CLICKUP_I
 - Fencing (audit ZBY-L2): the claim hands each slice a token (`run_token` column); heartbeat, report, hold and end
   are conditional on it, so a slice that was taken over cannot overwrite the plan or free the workspace lock. On MySQL
   and MariaDB, which count changed rather than matched rows, a write that leaves the row unchanged still counts as
-  held (the guard is re-checked). Cancel
-  and *Resume* are compare-and-sets on the status. `sync.plans.messenger.slice_seconds` is at most 300 (half the
+  held (the guard is re-checked) — only for writes that can leave the row as it was, never for a status change.
+  Cancel is one decision under the row lock (a waiting plan ends, a running one is asked), and a slice can no longer
+  pause past a cancel: it ends the plan `cancelled` instead (audit ZBYv-L2). *Resume* is a compare-and-set on the
+  status. `sync.plans.messenger.slice_seconds` is at most 300 (half the
   10-minute takeover window). Each wizard step is one transaction.
 - The Tree step opens only levels listed from the plan's workspace, and the chosen containers are checked to belong
-  to it (`PeopleProviderInterface::workspaceOf()`, audit ZBY-L1). The board quota is asked again for each board right
+  to it (audit ZBY-L1): more containers than `sync.plans.max_items` are refused before any call, and the new optional
+  `WorkspaceScopeProviderInterface` checks them in bounded calls — ClickUp reads the workspace's spaces once, then one
+  call per list or folder (was three or more each, audit ZBYv-L1); other providers fall back to
+  `PeopleProviderInterface::workspaceOf()`. The board quota is asked again for each board right
   before it is created (ZBY-L3). Provider errors of the Workspace and Fields steps are messages, and the preview reads
   at most `sync.plans.preview_max_requests` requests for `sync.plans.preview_seconds` (ZBY-L4). A re-import leaves a
   board linked again elsewhere alone, and adopts only a link made since the plan started (ZBY-I1). Starting a plan
   needs a connection the host offers to the starter (ZBY-I3). A connection that no longer works stops the plan
   (`failed: credential`); an outage pauses it (1, 2, 4, 8 then 15 minutes); a failed list never stops the others.
+- Known limit (audit ZBYv-I1, fix planned for 3.2.x): plan item rows are not yet fenced by the run token; a slice that
+  was taken over may write its current item's status once more. No task is imported twice (the board's run lock); see
+  `docs/CONCURRENCY.md`.
 
 ## [3.1.0] - 2026-11-25
 
