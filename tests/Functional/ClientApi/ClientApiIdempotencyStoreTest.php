@@ -11,6 +11,7 @@ use Nowo\TransactionContract\ConcurrencyConflict;
 use Nowo\TransactionContract\TransientFailureKind;
 use RuntimeException;
 
+use function class_exists;
 use function json_decode;
 
 /**
@@ -48,7 +49,11 @@ final class ClientApiIdempotencyStoreTest extends ClientApiTestCase
         $this->call('DELETE', '/tasks/' . $task->getId() . '/members/me', null, ['HTTP_IF_MATCH' => '"1"', 'HTTP_IDEMPOTENCY_KEY' => 'k3']);
         self::assertResponseIsSuccessful();
 
-        // A lock conflict after part of the write was committed: the answer is kept for the key.
+        // A lock conflict after part of the write was committed: the answer is kept for the key. ConcurrencyConflict exists
+        // from nowo-tech/transaction-contract 1.0.1 on (the dependency floor job installs 1.0.0).
+        if (!class_exists(ConcurrencyConflict::class)) {
+            self::markTestSkipped('nowo-tech/transaction-contract < 1.0.1 has no ConcurrencyConflict.');
+        }
         $doing = $board->getColumns()->get(1);
         self::assertNotNull($doing);
         RecordingTransitionPolicy::$decider = static fn (): never => throw new ConcurrencyConflict(2, TransientFailureKind::Deadlock, null, new RuntimeException('deadlock'), true);
