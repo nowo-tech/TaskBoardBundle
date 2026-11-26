@@ -543,8 +543,9 @@ See [.github/SECURITY.md](../.github/SECURITY.md) for coordinated disclosure.
   and keeps the values synced, read-only. The wizard offers only the fields its user may change. Names and option names
   come from ClickUp, sanitised and cut by the adapter, escaped where shown. The provenance marker is `<provider>:<id>`
   (checked pattern); a re-import never overwrites a value changed here. An imported field deleted here leaves a
-  tombstone (board, marker, name): a re-import does not create it again (audit ZCF-L2) until *Import it again* (same
-  right, its own CSRF token).
+  tombstone (board, marker, name): a re-import imports neither the field nor its values, not even as a synced,
+  read-only field (audits ZCF-L2, ZCFv-L1), until *Import it again* (same right, its own CSRF token). The delete
+  confirmation says so.
 - **Personal data.** A native text value may name a person, typed here or imported. `TaskCustomFieldPersonalData`
   answers access requests (`exportByValue()`, `exportBoard()`) and erases by value (`eraseByValue()`); the host
   authorises the caller and passes the board on a multi-tenant installation (null crosses tenants). An erased imported
@@ -564,3 +565,6 @@ See [.github/SECURITY.md](../.github/SECURITY.md) for coordinated disclosure.
     leave a target that no longer fits); the run then warns `native_field_unavailable` and keeps the values synced.
   - ZCF-I6: a person's value write that read a drop-down's options before a concurrent definition edit removed that
     option may store the removed option id (shown empty). Contention only; since 2.31.
+  - ZCFv-I2: a ClickUp field that fell back to a synced field (refused or unavailable for a while) keeps that synced copy
+    with its last values once it lands on a native field; it stops updating. A host removes it with
+    `SyncFieldValueEraser::eraseField()` (per task, by the field's name) or leaves it.

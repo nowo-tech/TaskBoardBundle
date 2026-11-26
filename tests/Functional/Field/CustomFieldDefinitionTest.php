@@ -7,8 +7,11 @@ namespace Nowo\TaskBoardBundle\Tests\Functional\Field;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
+use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use Doctrine\DBAL\Platforms\SQLitePlatform;
 use InvalidArgumentException;
+use Nowo\TaskBoardBundle\Doctrine\LockConflictChain;
+use Nowo\TaskBoardBundle\Doctrine\TransactionRollback;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskCustomField;
 use Nowo\TaskBoardBundle\Entity\TaskCustomFieldValue;
@@ -20,13 +23,17 @@ use Nowo\TaskBoardBundle\Tests\Functional\FunctionalTestCase;
 use PHPUnit\Framework\Attributes\Group;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
 use Symfony\Component\Security\Core\Authentication\Token\UsernamePasswordToken;
+use Throwable;
 
 use function array_column;
 use function array_keys;
 use function array_map;
 use function array_unique;
 use function iterator_to_array;
+use function json_decode;
+use function json_encode;
 use function range;
+use function str_contains;
 use function str_repeat;
 use function usort;
 
@@ -96,6 +103,49 @@ final class CustomFieldDefinitionTest extends FunctionalTestCase
             self::fail('a second field of the marker');
         } catch (UniqueConstraintViolationException) {
             self::assertSame(1, (int) $other->fetchOne("SELECT COUNT(*) FROM task_board_custom_fields WHERE source_ref = 'clickup:f-1'"));
+        }
+        $other->close();
+    }
+
+    /**
+     * Audit ZCFv-L2: inside a caller's REPEATABLE READ transaction that already read the field, a definition change
+     * committed by another connection is not written over (the version is read by the locking read, not the snapshot).
+     */
+    public function testAnOuterTransactionsOldSnapshotNeverWritesOverANewerDefinition(): void
+    {
+        $other  = $this->secondConnection();
+        $fields = $this->fields();
+        $field  = $fields->define($this->owner, $this->board, null, 'Stage', CustomFieldType::Dropdown, [['name' => 'a'], ['name' => 'b']]);
+        $db     = $this->em->getConnection();
+        foreach ([
+            'edit'  => fn (): TaskCustomField => $fields->update($this->owner, $field, 'Mine', null, 0, 1),
+            'merge' => fn (): array => $fields->adoptSourceOptions($this->owner, $field, [['id' => 'o9', 'name' => 'From ClickUp', 'color' => null]]),
+            'blind' => fn (): TaskCustomField => $fields->update($this->owner, $field, 'Mine', null, 0),
+        ] as $case => $write) {
+            $before = (int) $other->fetchOne('SELECT version FROM task_board_custom_fields WHERE id = ?', [$field->getId()]);
+            $db->beginTransaction();
+            if ($db->getDatabasePlatform() instanceof PostgreSQLPlatform) {
+                $db->executeStatement('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+            }
+            // The caller's transaction reads the field: its snapshot starts here.
+            self::assertSame($before, (int) $db->fetchOne('SELECT version FROM task_board_custom_fields WHERE id = ?', [$field->getId()]));
+            // A person renames the options on another connection, and commits.
+            $other->executeStatement('UPDATE task_board_custom_fields SET options = ?, version = version + 1 WHERE id = ?', [json_encode([['id' => 'p1', 'name' => 'Person ' . $case, 'color' => null]]), $field->getId()]);
+            try {
+                $write();
+                self::fail($case . ': written from an old snapshot');
+            } catch (TaskCustomFieldRefusedException $refused) {
+                self::assertSame(TaskCustomFieldRefusedException::CHANGED, $refused->reason, $case);
+            } catch (Throwable $failure) {
+                // PostgreSQL refuses the locking read itself (could not serialize access): nothing written either.
+                self::assertTrue(LockConflictChain::isConflict($failure) || str_contains($failure->getMessage(), 'serialize'), $case . ': ' . $failure->getMessage());
+            } finally {
+                TransactionRollback::toLevel($db, 0);
+            }
+            self::assertSame(['Person ' . $case], array_column(json_decode((string) $other->fetchOne('SELECT options FROM task_board_custom_fields WHERE id = ?', [$field->getId()]), true), 'name'), $case . ': the person\'s edit stays');
+            self::assertSame($before + 1, (int) $other->fetchOne('SELECT version FROM task_board_custom_fields WHERE id = ?', [$field->getId()]));
+            $this->em->clear();
+            $field = $fields->find($field->getId()) ?? $field;
         }
         $other->close();
     }

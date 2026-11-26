@@ -13,6 +13,7 @@ use Doctrine\Persistence\ManagerRegistry;
 use InvalidArgumentException;
 use Nowo\TaskBoardBundle\Doctrine\RecoveringFlusher;
 use Nowo\TaskBoardBundle\Doctrine\TaskBoardEntityManager;
+use Nowo\TaskBoardBundle\Doctrine\TaskBoardSavepoint;
 use Nowo\TaskBoardBundle\Doctrine\TransactionRollback;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
@@ -34,6 +35,7 @@ use function array_filter;
 use function array_keys;
 use function array_map;
 use function array_values;
+use function bin2hex;
 use function count;
 use function explode;
 use function in_array;
@@ -47,6 +49,7 @@ use function max;
 use function mb_strlen;
 use function number_format;
 use function preg_match;
+use function random_bytes;
 use function rtrim;
 use function str_contains;
 use function strcmp;
@@ -380,7 +383,7 @@ final readonly class TaskCustomFieldManager
                     ->setParameter('id', $board->getId())
                     ->setLockMode(LockMode::PESSIMISTIC_WRITE)
                     ->getSingleColumnResult();
-                $existing = $this->sourceField($board, $sourceRef);
+                $existing = $this->sourceField($board, $sourceRef, true);
                 if ($existing instanceof TaskCustomField) {
                     // Another writer created it between the first look and the lock.
                     return;
@@ -405,13 +408,15 @@ final readonly class TaskCustomFieldManager
      * Audit ZCF-L3: the new field's row, written in a savepoint of its own (not through the unit of work): a writer that
      * skipped the board lock (another engine, a host writer) and won the unique key (board, marker) only undoes this
      * savepoint — the caller's transaction and the private manager's rows stay (a sync page goes on) — and its field is
-     * read again.
+     * read again. Audit ZCFv-I1: a named savepoint of its own, not a nested beginTransaction(), so the recovery holds on
+     * DBAL 3 without `use_savepoints` too. When rolling back to it fails, the original failure is rethrown and the caller's
+     * unit rolls back to its entry level ({@see TransactionRollback}). Always called inside {@see self::write()}.
      */
     private function insertSourceField(TaskCustomField $field, TaskBoard $board, string $sourceRef): ?TaskCustomField
     {
         $connection = $this->entityManager->getConnection();
-        $level      = $connection->getTransactionNestingLevel();
-        $connection->beginTransaction();
+        $savepoint  = TaskBoardSavepoint::PREFIX . bin2hex(random_bytes(6));
+        $connection->createSavepoint($savepoint);
         try {
             $connection->insert($this->entityManager->getClassMetadata(TaskCustomField::class)->getTableName(), [
                 'id'             => $field->getId(),
@@ -426,11 +431,21 @@ final readonly class TaskCustomFieldManager
                 'source_options' => null,
                 'version'        => 1,
             ], ['created_at' => Types::DATETIME_IMMUTABLE, 'options' => Types::JSON, 'position' => Types::INTEGER, 'version' => Types::INTEGER]);
-            $connection->commit();
-        } catch (UniqueConstraintViolationException) {
-            TransactionRollback::toLevel($connection, $level);
+        } catch (UniqueConstraintViolationException $duplicate) {
+            try {
+                $connection->rollbackSavepoint($savepoint);
+                // @codeCoverageIgnoreStart
+            } catch (Throwable) {
+                // The duplicate is what the caller must see; its unit then rolls back to its entry level (and closes the
+                // connection at level 0). Only a connection lost between the insert and the rollback gets here.
+                throw $duplicate;
+            }
+            // @codeCoverageIgnoreEnd
 
-            return $this->sourceField($board, $sourceRef);
+            return $this->sourceField($board, $sourceRef, true);
+        }
+        if ($connection->getDatabasePlatform()->supportsReleaseSavepoints()) {
+            $connection->releaseSavepoint($savepoint);
         }
 
         return $this->entityManager->find(TaskCustomField::class, $field->getId());
@@ -497,10 +512,22 @@ final readonly class TaskCustomFieldManager
         return $result;
     }
 
-    /** Since 3.3.0 (CU-3): the board's own field of a provenance marker, null when none. */
-    public function sourceField(TaskBoard $board, string $sourceRef): ?TaskCustomField
+    /** Since 3.3.0 (CU-3): the board's own field of a provenance marker, null when none; `$locking`: a locking (current) read. */
+    public function sourceField(TaskBoard $board, string $sourceRef, bool $locking = false): ?TaskCustomField
     {
-        $field = $this->entityManager->getRepository(TaskCustomField::class)->findOneBy(['board' => $board->getId(), 'sourceRef' => $sourceRef]);
+        if ($locking) {
+            // Audit ZCFv-I3: a current read (under the board lock, or after a lost unique key), not the transaction's snapshot.
+            $id = $this->entityManager->createQuery('SELECT f.id FROM ' . TaskCustomField::class . ' f WHERE IDENTITY(f.board) = :board AND f.sourceRef = :ref')
+                ->setParameter('board', $board->getId())->setParameter('ref', $sourceRef)
+                ->setLockMode(LockMode::PESSIMISTIC_WRITE)
+                ->getSingleColumnResult();
+            $field = $id === [] ? null : $this->entityManager->find(TaskCustomField::class, (string) $id[0]);
+            if ($field instanceof TaskCustomField) {
+                $this->entityManager->refresh($field);
+            }
+        } else {
+            $field = $this->entityManager->getRepository(TaskCustomField::class)->findOneBy(['board' => $board->getId(), 'sourceRef' => $sourceRef]);
+        }
 
         // Byte for byte (the column's collation may fold case on a host without the bundle's key collation).
         return $field instanceof TaskCustomField && $field->getSourceRef() === $sourceRef && $field->getBoardId() === $board->getId() ? $field : null;
@@ -512,17 +539,22 @@ final readonly class TaskCustomFieldManager
      */
     private function lockDefinition(TaskCustomField $field, ?int $expectedVersion): TaskCustomField
     {
-        $found = $this->entityManager->createQuery('SELECT f.id FROM ' . TaskCustomField::class . ' f WHERE f.id = :id')
+        // Audit ZCFv-L2: the version is read by the locking read itself (a current read), not by refresh() — inside a
+        // caller's REPEATABLE READ transaction that already read the row, a plain read returns that snapshot.
+        $locked = $this->entityManager->createQuery('SELECT f.version FROM ' . TaskCustomField::class . ' f WHERE f.id = :id')
             ->setParameter('id', $field->getId())
             ->setLockMode(LockMode::PESSIMISTIC_WRITE)
             ->getSingleColumnResult();
         // A row this manager no longer holds (cleared after an earlier failure) is read again by id.
         $managed = $this->entityManager->contains($field) ? $field : $this->entityManager->find(TaskCustomField::class, $field->getId());
-        if ($found === [] || !$managed instanceof TaskCustomField) {
+        if ($locked === [] || !$managed instanceof TaskCustomField) {
             throw new TaskCustomFieldRefusedException(TaskCustomFieldRefusedException::NOT_FOUND);
         }
+        $version = (int) $locked[0];
         $this->entityManager->refresh($managed);
-        if ($expectedVersion !== null && $managed->getVersion() !== $expectedVersion) {
+        if (($expectedVersion !== null && $version !== $expectedVersion) || $managed->getVersion() !== $version) {
+            // Changed since the caller read it, or this transaction's snapshot is older than the locked row (the copy would
+            // write over the newer one): refused, nothing written.
             throw new TaskCustomFieldRefusedException(TaskCustomFieldRefusedException::CHANGED);
         }
 

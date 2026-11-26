@@ -132,9 +132,10 @@ final class SyncRunContext
 
     /**
      * Since 3.3.0 (CU-3): the native fields of this run's provider fields (remote id => the native field's id, null when
-     * it cannot be used, and its dropdown option map); ids only, kept for the whole run.
+     * it cannot be used, its dropdown option map, and whether the field is not imported at all this run); ids only, kept
+     * for the whole run.
      *
-     * @var array<string, array{id: string|null, options: array<string, string|null>}>
+     * @var array<string, array{id: string|null, options: array<string, string|null>, skip: bool}>
      */
     public array $nativeFields = [];
 

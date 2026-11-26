@@ -201,11 +201,21 @@ mode), and a *Custom fields* page per board. **Schema change** (three columns an
   sides are tested with a second process (MySQL, MariaDB, PostgreSQL) and in process on every database; the lock order is
   in CONCURRENCY.md.
 - ZCF-I3: two ClickUp fields may not target one existing native field; conflict notes are keyed by field id.
-- Any field that could not land on a native field (no right, deleted, unavailable) stays a synced, read-only field.
+- Any field that could not land on a native field (no right, unavailable) stays a synced, read-only field.
+- ZCFv-L1: an imported field deleted here is not imported at all any more — neither native nor synced — until *Import
+  it again*; the delete confirmation says so.
+- ZCFv-L2 (REQ-RUNTIME-003): a definition's version is read by the locking read itself; a change made from a caller's
+  transaction whose snapshot is older than the locked row is refused (`changed`), so an option merge or an edit never
+  writes over a newer committed definition (two-connection test on MySQL, MariaDB and PostgreSQL). The import warns
+  `native_field_changed` and imports those values at the next run.
+- ZCFv-I3: the marker's field is looked up again with a locking read under the board lock and after a lost unique key.
+- ZCFv-I1: the new imported field's row is written in a named savepoint of its own, so a duplicate marker is read again
+  on DBAL 3 without `use_savepoints` too (it failed the whole unit there); tested on DBAL 3 and 4.
 
 ### Known limitations
 
-- ZCF-I1, ZCF-I2, ZCF-I4 and ZCF-I6 are accepted for 3.3.0 and described in SECURITY.md (native custom fields).
+- ZCF-I1, ZCF-I2, ZCF-I4, ZCF-I6 and ZCFv-I2 (a synced fallback copy left after the field lands natively) are
+  accepted for 3.3.0 and described in SECURITY.md (native custom fields).
 
 ## [3.2.0] - 2026-11-26
 

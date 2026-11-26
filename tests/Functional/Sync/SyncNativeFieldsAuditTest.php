@@ -145,7 +145,9 @@ final class SyncNativeFieldsAuditTest extends SyncFunctionalTestCase
         self::assertContains('native_field_deleted', $this->warnings($report));
         self::assertNull($this->fields()->sourceField($this->freshBoard($board), 'clickup:fOwner'), 'not created again');
         self::assertNull($this->fields()->defineFromSource($this->owner, $this->freshBoard($board), 'clickup:fOwner', 'Owner', CustomFieldType::Text));
-        self::assertSame(['Owner'], $this->syncedNames(), 'its values stay synced, read-only');
+        // Audit ZCFv-L1: not imported at all — no synced definition or value either.
+        self::assertSame([], $this->syncedNames(), 'its values are not imported, not even read-only');
+        self::assertSame(0, (int) $this->em->getConnection()->fetchOne('SELECT COUNT(*) FROM task_board_sync_field_values'));
 
         // Cleared (Custom fields page: Import it again): the next import creates it again.
         foreach (['', 'unknown'] as $bad) {

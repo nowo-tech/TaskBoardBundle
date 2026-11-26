@@ -252,9 +252,9 @@ forged steps).
 
 | Race | Guard |
 | --- | --- |
-| Two people editing one field's definition (name, options) | `update()` / `delete()` lock the field's row (`SELECT … FOR UPDATE`), read it again and raise `version`; the page's forms send the version they showed and an older one is refused (`changed`, nothing written) |
+| Two people editing one field's definition (name, options) | `update()` / `delete()` lock the field's row and read its `version` in that locking read (a current read, audit ZCFv-L2), then read the row again and raise `version`; the page's forms send the version they showed and an older one is refused (`changed`, nothing written). Inside a caller's REPEATABLE READ transaction whose snapshot is older than the locked row, the change is refused too (the copy would write over the newer row) |
 | An import adding drop-down options while someone edits the field | `adoptSourceOptions()` takes the same row lock and re-reads the options; the person's edit then fails its version check (reload and save again) |
-| Two runs creating the board's field of one ClickUp field | `defineFromSource()` locks the board's row, then looks for the marker again: the second writer waits and takes the first's field. The insert runs in a savepoint of its own, so a writer that skipped the lock and won the unique key (`board_id`, `source_ref`) only undoes that savepoint; its field is read again and the sync page goes on (audit ZCF-L3) |
+| Two runs creating the board's field of one ClickUp field | `defineFromSource()` locks the board's row, then looks for the marker again with a locking (current) read (audit ZCFv-I3, also inside a caller's older snapshot): the second writer waits and takes the first's field. The insert runs in a named savepoint of its own (also on DBAL 3 without `use_savepoints`, audit ZCFv-I1), so a writer that skipped the lock and won the unique key (`board_id`, `source_ref`) only undoes that savepoint; its field is read again and the sync page goes on (audit ZCF-L3) |
 | A person editing a task's value while the import writes it | the import first reads and decides every value of the task, then writes each through `setFieldIfUnchanged()`: the task's row is locked and the value read again; when it is no longer the one the import read, nothing is written (the transaction commits empty, so the sync page's rows stay managed) and the person's value wins (a conflict note) |
 
 The import never holds a task row while it locks a field or board row: definitions are resolved before the values are
@@ -266,7 +266,10 @@ connection first, a second field of one marker refused by the unique key), `Sync
 this one waits and then takes it; another process holds the task's row with a person's value while the import waits and
 then keeps it — and on every database the same interleavings through the restructure policy, asked between the reads and
 the writes, plus a duplicate marker inside the write, read again, during a sync page that still succeeds),
-`SyncNativeFieldsTest` (the re-import rule), `CustomFieldPagesTest` (stale forms).
+`SyncNativeFieldsTest` (the re-import rule), `CustomFieldPagesTest` (stale forms), and
+`CustomFieldDefinitionTest::testAnOuterTransactionsOldSnapshotNeverWritesOverANewerDefinition` (audit ZCFv-L2: an outer
+REPEATABLE READ transaction reads first, a second connection commits an option edit, then an edit, an option merge and a
+version-less edit from the old snapshot are refused on MySQL, MariaDB and PostgreSQL).
 
 Known limit (audit ZBYv-I1, planned for 3.2.x): item rows are still written through the ORM without the run token, so a
 slice that was taken over may write its current item's status once more before its next fenced write stops it. The

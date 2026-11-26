@@ -71,14 +71,16 @@ final readonly class SyncNativeFieldWriter
     }
 
     /**
-     * Whether this provider field lands on a native field in this run (the synced writer then leaves it out). Since the
-     * audit ZCF-L1 / L2 only once its native field was resolved: a field the run may not create or change, a deleted one
-     * and an unavailable one stay synced, read-only fields. Call it after {@see self::write()} for the task.
+     * Whether the synced writer leaves this provider field out in this run: it landed on a native field, or (audit ZCFv-L1)
+     * it is not imported at all — deleted here, or (ZCFv-L2) its definition changed under this run. A field the run may
+     * not create or change and an unavailable one stay synced, read-only fields. Call it after {@see self::write()}.
      */
     public static function handles(SyncRunContext $ctx, RemoteCustomField $remote): bool
     {
+        $known = $ctx->nativeFields[$remote->id] ?? null;
+
         return isset($ctx->connection->nativeFields()[$remote->id]) && self::nativeType($remote->remoteType) instanceof CustomFieldType
-            && ($ctx->nativeFields[$remote->id]['id'] ?? null) !== null;
+            && $known !== null && ($known['id'] !== null || $known['skip']);
     }
 
     /**
@@ -232,19 +234,27 @@ final readonly class SyncNativeFieldWriter
         if ($known !== null) {
             return $known['id'] !== null ? $this->fields->fieldOfBoard($ctx->board, $known['id']) : null;
         }
-        $field   = $this->resolve($ctx, $remote, $type, $target);
+        // Audit ZCFv-L1: a field deleted here is not imported at all (neither native nor synced) until *Import it again*.
+        $skip    = $target === TaskBoardConnection::NATIVE_CREATE && $this->fields->isDeletedSource($ctx->board, $ctx->provider->id() . ':' . $remote->id);
+        $field   = $skip ? null : $this->resolve($ctx, $remote, $type, $target);
         $options = [];
+        if ($skip) {
+            $ctx->warn('native_field_deleted');
+        }
         if ($field instanceof TaskCustomField && $type === CustomFieldType::Dropdown) {
             try {
                 $options = $this->fields->adoptSourceOptions($ctx->actor, $field, $remote->choices);
-            } catch (TaskCustomFieldRefusedException) {
-                // Checked by resolve() (mayChange); a policy that changed its answer meanwhile.
+            } catch (TaskCustomFieldRefusedException $refused) {
+                // A policy that changed its answer since resolve() asked (`native_field_refused`: values synced), or (audit
+                // ZCFv-L2) a definition changed under this run's snapshot (`native_field_changed`: the values wait for the
+                // next run, neither native nor synced).
                 $field = null;
-                $ctx->warn('native_field_refused');
+                $skip  = $refused->reason === TaskCustomFieldRefusedException::CHANGED;
+                $ctx->warn($skip ? 'native_field_changed' : 'native_field_refused');
             }
         }
         // @igor-ignore - Built per sync run, not a shared service.
-        $ctx->nativeFields[$remote->id] = ['id' => $field?->getId(), 'options' => $options];
+        $ctx->nativeFields[$remote->id] = ['id' => $field?->getId(), 'options' => $options, 'skip' => $skip];
         if ($field instanceof TaskCustomField && $target === TaskBoardConnection::NATIVE_CREATE) {
             $ctx->count('fields.native_fields');
         }
@@ -253,21 +263,15 @@ final readonly class SyncNativeFieldWriter
     }
 
     /**
-     * The native field a provider field lands on, or null (warned once; its values stay synced): a deleted imported field
-     * (`native_field_deleted`, audit ZCF-L2), a field the run's actor may not create or change (`native_field_refused`,
-     * audit ZCF-L1: the restructure policy, as the Custom fields page), or one gone or retyped (`native_field_unavailable`).
+     * The native field a provider field lands on, or null (warned once; its values stay synced): a field the run's actor
+     * may not create or change (`native_field_refused`, audit ZCF-L1: the restructure policy, as the Custom fields page),
+     * or one gone or retyped (`native_field_unavailable`). A deleted imported field is not imported at all ({@see self::target()}).
      */
     private function resolve(SyncRunContext $ctx, RemoteCustomField $remote, CustomFieldType $type, string $target): ?TaskCustomField
     {
         if ($target === TaskBoardConnection::NATIVE_CREATE) {
-            $sourceRef = $ctx->provider->id() . ':' . $remote->id;
-            if ($this->fields->isDeletedSource($ctx->board, $sourceRef)) {
-                $ctx->warn('native_field_deleted');
-
-                return null;
-            }
             try {
-                $field = $this->fields->defineFromSource($ctx->actor, $ctx->board, $sourceRef, $remote->name, $type);
+                $field = $this->fields->defineFromSource($ctx->actor, $ctx->board, $ctx->provider->id() . ':' . $remote->id, $remote->name, $type);
             } catch (TaskCustomFieldRefusedException) {
                 $ctx->warn('native_field_refused');
 
