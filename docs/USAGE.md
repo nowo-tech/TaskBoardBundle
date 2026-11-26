@@ -2147,7 +2147,7 @@ restructure the board (by default its manage right):
 - **Delete** opens an inline confirmation (no JavaScript needed) and removes the field and every value of it. A field
   that came from an import also stops being imported — no values, not even read-only — and is listed under *Deleted
   imported fields* until you choose *Import it again*; the next sync then reads every task again and brings the field
-  and its values back.
+  and its values back. While a sync of the board runs, *Import it again* asks you to try again when it ends.
 
 Every save carries the field's version: when someone else saved the field meanwhile, the page says so and nothing is
 written (reload and save again). A field created by a ClickUp import shows *from ClickUp*; renaming it here is safe (a

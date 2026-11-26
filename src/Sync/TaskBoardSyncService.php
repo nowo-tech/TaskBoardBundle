@@ -42,6 +42,7 @@ use Nowo\TaskBoardBundle\Sync\Exception\ProviderErrorCode;
 use Nowo\TaskBoardBundle\Sync\Exception\ProviderException;
 use Nowo\TaskBoardBundle\Sync\Exception\RateLimitedException;
 use Nowo\TaskBoardBundle\Sync\Exception\SyncBusyException;
+use Nowo\TaskBoardBundle\Sync\Field\SyncNativeFieldReread;
 use Nowo\TaskBoardBundle\Sync\Field\SyncNativeFieldWriter;
 use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
 use Nowo\TaskBoardBundle\Sync\People\PeopleMappingService;
@@ -80,8 +81,11 @@ use function intdiv;
  */
 final readonly class TaskBoardSyncService
 {
-    /** A run whose heartbeat is older than this is considered dead and its lock may be taken over. */
-    private const STALE_AFTER = 'PT10M';
+    /**
+     * A run whose heartbeat is older than this is considered dead and its lock may be taken over. Public since 3.3.0
+     * (audit ZCFv3-L1: {@see SyncNativeFieldReread} applies the same rule).
+     */
+    public const STALE_AFTER = 'PT10M';
 
     /** The incremental window starts this long before the watermark (clock skew; the upsert is idempotent). */
     private const OVERLAP_SECONDS = 120;

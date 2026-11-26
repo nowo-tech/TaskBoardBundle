@@ -396,7 +396,8 @@ lists them).
   the field nor its values — not even as a synced, read-only field (audit ZCFv-L1). *Import it again* on the page clears
   it and makes the next sync read every task again (the connection's watermark is cleared and every task's remote date
   reset; audit ZCFv2-L1): that sync creates the field anew and lands the values of every task on it, also of the tasks
-  that did not change in ClickUp.
+  that did not change in ClickUp. While a sync of the board runs, *Import it again* is refused ("A sync of this board is
+  running; try again when it ends", `sync_running`; audit ZCFv3-L1).
 - **A definition changed under the run.** When the field's definition changed after the run's transaction started
   reading (a host transaction around the import), the option merge is refused: the run warns `native_field_changed`, defers the tasks that carry the field
   (`fields.native_deferred`) and keeps the previous watermark, so the next run, incremental or not, imports those

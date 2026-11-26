@@ -10,14 +10,16 @@ use RuntimeException;
  * Since 2.19.0 (FR-028): a custom field write refused before anything was written. `reason`: `not_found` (unknown, of
  * another tenant, or not a field of the task's board), `not_allowed` (the policy), `invalid` (`$params['field']` names
  * what: `name`, `type`, `options`, `value`), and since 3.3.0 `changed` (REQ-RUNTIME-003: the definition changed since the
- * caller read it; nothing written).
+ * caller read it; nothing written) and `sync_running` (audit ZCFv3-L1: *Import it again* while a sync of the board
+ * runs; try again when it ends).
  */
 final class TaskCustomFieldRefusedException extends RuntimeException
 {
-    public const NOT_FOUND   = 'not_found';
-    public const NOT_ALLOWED = 'not_allowed';
-    public const INVALID     = 'invalid';
-    public const CHANGED     = 'changed';
+    public const NOT_FOUND    = 'not_found';
+    public const NOT_ALLOWED  = 'not_allowed';
+    public const INVALID      = 'invalid';
+    public const CHANGED      = 'changed';
+    public const SYNC_RUNNING = 'sync_running';
 
     /**
      * @param array<string, string> $params

@@ -213,6 +213,9 @@ mode), and a *Custom fields* page per board. **Schema change** (three columns an
   so the next run reads them again. *Import it again* clears the connection's watermark and resets every task's remote
   date (`SyncNativeFieldReread`, with `sync.enabled`): the next sync reads every task and brings the field and all its
   values back, also on the tasks that did not change in ClickUp.
+- ZCFv3-L1 (REQ-RUNTIME-003): *Import it again* is refused (`TaskCustomFieldRefusedException::SYNC_RUNNING`, a flash
+  on the page) while a sync of the board holds its run lock; the check runs under a lock of the connection row, so a
+  sync cannot start between the check and the commit.
 - ZCFv2-I1: the marker's field is hydrated by the locking read itself, so an older snapshot cannot hide it.
 - ZCFv2-I2: deleting an imported field locks the board's row before the field's, as creating one does.
 - ZCFv-I3: the marker's field is looked up again with a locking read under the board lock and after a lost unique key.

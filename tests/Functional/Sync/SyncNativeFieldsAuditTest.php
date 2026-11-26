@@ -201,6 +201,42 @@ final class SyncNativeFieldsAuditTest extends SyncFunctionalTestCase
     }
 
     /**
+     * Audit ZCFv3-L1: *Import it again* is refused while a sync of the board holds its run lock (that run would cache the
+     * field as deleted and write over the reset); a dead run's stale lock does not block it.
+     */
+    public function testImportItAgainIsRefusedWhileASyncOfTheBoardRuns(): void
+    {
+        $board = $this->board();
+        $this->linked($board, 'fOwner=create');
+        $this->put($this->withFields('t1', 'Task', 1, [new RemoteCustomField('fOwner', 'Owner', SyncFieldType::Text, 'text', [], [], 'Ana', 'Ana')]));
+        $this->sync($board);
+        $field = $this->fields()->sourceField($this->freshBoard($board), 'clickup:fOwner');
+        self::assertInstanceOf(TaskCustomField::class, $field);
+        $this->fields()->delete($this->owner, $field);
+        $tombstone = $this->fields()->tombstones($this->freshBoard($board))[0]->getId();
+        $db        = $this->em->getConnection();
+        $running   = "UPDATE task_board_connections SET running_run_id = 'other-run', heartbeat_at = ? WHERE board_id = ?";
+
+        $db->executeStatement($running, [(new DateTimeImmutable())->format('Y-m-d H:i:s'), $board->getId()]);
+        try {
+            $this->fields()->clearTombstone($this->owner, $this->freshBoard($board), $tombstone);
+            self::fail('refused while a sync runs');
+        } catch (TaskCustomFieldRefusedException $refused) {
+            self::assertSame(TaskCustomFieldRefusedException::SYNC_RUNNING, $refused->reason);
+        }
+        $this->em->clear();
+        self::assertCount(1, $this->fields()->tombstones($this->freshBoard($board)), 'nothing written');
+        self::assertNotNull($db->fetchOne('SELECT watermark FROM task_board_connections WHERE board_id = ?', [$board->getId()]));
+
+        // A dead run (no heartbeat for longer than the lock's stale time) does not block it.
+        $db->executeStatement($running, [(new DateTimeImmutable('-1 hour'))->format('Y-m-d H:i:s'), $board->getId()]);
+        $this->fields()->clearTombstone($this->owner, $this->freshBoard($board), $tombstone);
+        $this->em->clear();
+        self::assertSame([], $this->fields()->tombstones($this->freshBoard($board)));
+        self::assertNull($db->fetchOne('SELECT watermark FROM task_board_connections WHERE board_id = ?', [$board->getId()]));
+    }
+
+    /**
      * Audit ZCFv2-L1 (a): a definition that changed under the run (`native_field_changed`) defers the tasks that carry the
      * field: the run keeps the previous watermark and the next sync, with no change in ClickUp, imports their values.
      */
