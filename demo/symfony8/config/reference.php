@@ -1532,6 +1532,22 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *             path?: scalar|Param|null, // Default: "/tools/task-board/board/{boardId}/connection/people/former"
  *             name?: scalar|Param|null, // Default: "nowo_task_board_board_connection_people_former"
  *         },
+ *         board_fields?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/board/{boardId}/fields"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_board_fields"
+ *         },
+ *         board_field_new?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/board/{boardId}/fields/new"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_board_field_new"
+ *         },
+ *         board_field_edit?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/board/{boardId}/fields/{fieldId}"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_board_field_edit"
+ *         },
+ *         board_field_delete?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/board/{boardId}/fields/{fieldId}/delete"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_board_field_delete"
+ *         },
  *         import_plans?: array{
  *             path?: scalar|Param|null, // Default: "/tools/task-board/import-plans"
  *             name?: scalar|Param|null, // Default: "nowo_task_board_import_plans"
@@ -1576,6 +1592,7 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *     web_ui?: array{ // Since 2.0.0: the UiKit page contract (REQ-UI-003).
  *         layout_template?: scalar|Param|null, // Layout the pages extend. null = nowo_ui_kit.layouts.admin. Since 3.0.0 a layout without the UiKit canonical blocks fails when a page is rendered (its 2.x bridge was removed). // Default: null
  *         templates?: array<string, scalar|Param|null>,
+ *         custom_fields_page?: bool|Param, // Since 3.3.0: the board's Custom fields page (list, add, edit and delete its native text, number and dropdown fields) and its header action on the board and list views, for users the restructure policy lets restructure the board. false = no routes and no action (a host with its own field screens). // Default: true
  *         context_menus?: scalar|Param|null, // Since 2.22.0: the context menu of the board cards, list rows and column headers (right-click, Shift+F10 or the ContextMenu key, a long press) opens the items of their kebab (UiKit 2.54 context menus). null follows nowo_ui_kit.theme.context_menus; true or false forces it on or off for TaskBoard's pages. The kebab itself is always there. // Default: null
  *     },
  *     templates?: array{
@@ -1598,6 +1615,8 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         connection_history?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/_connection_history.html.twig"
  *         connection_people?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/connection_people.html.twig"
  *         connection_people_summary?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/_connection_people_summary.html.twig"
+ *         board_fields?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/board_fields.html.twig"
+ *         board_field?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/board_field.html.twig"
  *         import_plans?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/import_plans.html.twig"
  *         import_plan?: scalar|Param|null, // Default: "@NowoTaskBoardBundle/manage/import_plan.html.twig"
  *         page_header?: bool|Param, // Since 2.0.0: false leaves the page header out of the board, list, Gantt and import pages, for a host that draws its own. // Default: true
@@ -1649,6 +1668,7 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         max_boards?: int|Param, // The most visible boards one search keeps (the most recently changed first; a search that stops there is partial and logged as a warning). Bounds the IN-list of the task query. // Default: 200
  *         max_scanned_boards?: int|Param, // The most boards one search reads, in batches of max_boards, to find the visible ones (boards the viewer cannot open count too): bounds the queries and the per-board access checks. Below max_boards it counts as max_boards. // Default: 1000
  *         description_min_length?: int|Param, // Since 2.26.0: the shortest query word matched in task descriptions (shorter words match titles only, so a one- or two-letter query never scans descriptions). With search.fulltext on MySQL / MariaDB, longer words of letters and digits use the FULLTEXT index. // Default: 3
+ *         custom_fields?: bool|Param, // Since 3.3.0: words of description_min_length characters or more also match the tasks' native text custom field values (an escaped LIKE per word, on the boards the viewer may open). Off by default: these values may hold personal data and are not indexed. // Default: false
  *         max_candidates?: int|Param, // The most matching rows one search reads and checks (TASK_ACCESS_CHECK): bounds the checks, the visible total and the deepest results page. // Default: 100
  *     },
  *     humans_only_policy?: array{ // Since 2.16.0 (spec 234): options of Nowo\TaskBoardBundle\Transition\HumansOnlyColumnTransitionPolicy.
@@ -1868,10 +1888,12 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *             inline_slice_seconds?: int|Param, // Seconds one inline slice may take (keep it below max_execution_time). // Default: 20
  *             messenger?: array{
  *                 enabled?: bool|Param, // Q-CU-9: true = RunImportPlanSlice messages on the host's bus (route them to an async transport); needs symfony/messenger. // Default: false
- *                 slice_seconds?: int|Param, // Seconds one queued slice may take (below the worker's time limit and the transport's redelivery). // Default: 120
+ *                 slice_seconds?: int|Param, // Seconds one queued slice may take (below the worker's time limit and the transport's redelivery; at most 300, half the 10-minute takeover window, audit ZBY-L2). // Default: 120
  *             },
  *             keep_days?: int|Param, // Q-CU-13: finished plans (summary, report) and abandoned drafts are deleted after this many days, pruned when a plan ends or is created. // Default: 90
  *             preview_max_pages?: int|Param, // Task pages the preview reads per board; beyond them the counts are estimated. // Default: 3
+ *             preview_max_requests?: int|Param, // Since the audit ZBY-L4: provider requests one preview page view may make; the boards past it are shown unread. // Default: 60
+ *             preview_seconds?: int|Param, // Seconds one preview page view may read from the provider; the boards past it are shown unread. // Default: 15
  *             max_items?: int|Param, // The most boards one plan may fill. // Default: 200
  *         },
  *         rate_limit?: array{ // Since 3.2.0 (CU-2): the request budget per provider token shared by every process (ClickUp: per token, 100 a minute on most plans).

@@ -14,6 +14,8 @@ use Nowo\TaskBoardBundle\Sync\Plan\ReimportMode;
 use Nowo\TaskBoardBundle\Sync\Repository\ImportPlanStore;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 
+use function array_filter;
+use function array_is_list;
 use function array_values;
 use function is_array;
 use function is_bool;
@@ -78,7 +80,13 @@ class TaskSyncImportPlan
     #[ORM\Column(type: 'json')]
     private array $options = [];
 
-    /** @var list<string> ids of the provider fields not imported */
+    /**
+     * The Fields step: until 3.2 the list of provider field ids not imported; since 3.3.0 (CU-3)
+     * `{excluded: list<id>, native: {id: target}, fields: list<{name, type, choice}>}` (a 3.2 list is read as
+     * `excluded`).
+     *
+     * @var array<mixed>
+     */
     #[ORM\Column(name: 'field_map', type: 'json')]
     private array $fieldMap = [];
 
@@ -297,7 +305,9 @@ class TaskSyncImportPlan
      */
     public function getExcludedFields(): array
     {
-        return array_values($this->fieldMap);
+        $excluded = array_is_list($this->fieldMap) ? $this->fieldMap : $this->part('excluded');
+
+        return array_values(array_filter($excluded, is_string(...)));
     }
 
     /**
@@ -306,7 +316,77 @@ class TaskSyncImportPlan
     public function setExcludedFields(array $fieldIds): void
     {
         // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
-        $this->fieldMap = array_values($fieldIds);
+        $this->fieldMap = ['excluded' => array_values($fieldIds), 'native' => $this->getNativeFields(), 'fields' => $this->getFieldChoices()];
+    }
+
+    /**
+     * Since 3.3.0 (CU-3): the provider fields landed on native fields, remote field id => `create` or a native field id.
+     *
+     * @return array<string, string>
+     */
+    public function getNativeFields(): array
+    {
+        $native = array_is_list($this->fieldMap) ? [] : $this->part('native');
+        $map    = [];
+        foreach ($native as $remoteId => $target) {
+            if (is_string($target)) {
+                $map[(string) $remoteId] = $target;
+            }
+        }
+
+        return $map;
+    }
+
+    /**
+     * Since 3.3.0 (CU-3).
+     *
+     * @param array<string, string> $native remote field id => `create` or a native field id
+     */
+    public function setNativeFields(array $native): void
+    {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->fieldMap = ['excluded' => $this->getExcludedFields(), 'native' => $native, 'fields' => $this->getFieldChoices()];
+    }
+
+    /**
+     * Since 3.3.0 (CU-3): the Fields step as saved, for the preview (no provider call there): each provider field's name,
+     * provider type and choice (`synced`, `excluded`, `native`).
+     *
+     * @return list<array{name: string, type: string, choice: string}>
+     */
+    public function getFieldChoices(): array
+    {
+        $fields = [];
+        foreach (array_is_list($this->fieldMap) ? [] : $this->part('fields') as $row) {
+            if (is_array($row) && is_string($row['name'] ?? null) && is_string($row['type'] ?? null) && is_string($row['choice'] ?? null)) {
+                $fields[] = ['name' => $row['name'], 'type' => $row['type'], 'choice' => $row['choice']];
+            }
+        }
+
+        return $fields;
+    }
+
+    /**
+     * One part of the 3.3 field map (an array; anything else reads as empty).
+     *
+     * @return array<mixed>
+     */
+    private function part(string $key): array
+    {
+        $part = $this->fieldMap[$key] ?? null;
+
+        return is_array($part) ? $part : [];
+    }
+
+    /**
+     * Since 3.3.0 (CU-3).
+     *
+     * @param list<array{name: string, type: string, choice: string}> $fields
+     */
+    public function setFieldChoices(array $fields): void
+    {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->fieldMap = ['excluded' => $this->getExcludedFields(), 'native' => $this->getNativeFields(), 'fields' => array_values($fields)];
     }
 
     public function getStartedById(): ?string

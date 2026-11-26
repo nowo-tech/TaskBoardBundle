@@ -34,7 +34,8 @@ use function strtr;
  *   options (`comments`, `attachments`, `checklists`, `timeEntries` when the host has a time sink, `deleteUnusedColumns`);
  * - `boards`: per item `t_<item id>` (*New board* or an existing board) and `n_<item id>` (the new board's name);
  * - `statuses`: per table and status `s_<table key>_<n>` (a column, `__create` or `__skip`);
- * - `fields`: `imported` (checkboxes, all checked by default); `people`: `peopleFirst`;
+ * - `fields`: since 3.3.0 (CU-3) per provider field `f_<field id>`: `synced` (default), `excluded`, and for text, number
+ *   and dropdown fields `create` (a native field of the board) or an existing native field's id; `people`: `peopleFirst`;
  * - `preview` (and *Re-import now*): `mode` (update changed / add new only).
  *
  * @extends AbstractType<array<string, mixed>>
@@ -49,53 +50,28 @@ final class ImportPlanStepFormType extends AbstractType
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
         $builder->add('version', HiddenType::class, ['data' => (string) $options['version']]);
-        switch ($options['step']) {
-            case 'connect':
-                $this->radios($builder, 'connection', 'task_board.import_plan.connect.legend', $options['choices'], $options['selected']);
-                break;
-            case 'workspace':
-                $this->radios($builder, 'workspace', 'task_board.import_plan.workspace.legend', $options['choices'], $options['selected']);
-                break;
-            case 'tree':
-                $this->tree($builder, $options);
-                break;
-            case 'boards':
-                $this->boards($builder, $options['items']);
-                break;
-            case 'statuses':
-                $this->statuses($builder, $options['groups']);
-                break;
-            case 'fields':
-                $choices = $options['choices'];
-                $this->addWithDefaults($builder, 'imported', ChoiceType::class, [
-                    'label'                     => 'task_board.import_plan.fields.legend',
-                    'choices'                   => array_map(strval(...), array_keys($choices)),
-                    'choice_label'              => static fn (string $value): string => $choices[$value],
-                    'choice_translation_domain' => false,
-                    'multiple'                  => true,
-                    'expanded'                  => true,
-                    'required'                  => false,
-                    'data'                      => $options['selected'] ?? array_map(strval(...), array_keys($choices)),
-                ]);
-                break;
-            case 'people':
-                $this->addCheckbox($builder, 'peopleFirst', [
-                    'label'    => 'task_board.import_plan.people.first',
-                    'required' => false,
-                    'data'     => $options['people_first'],
-                ]);
-                break;
-            default:
-                $this->addWithDefaults($builder, 'mode', ChoiceType::class, [
-                    'label'   => 'task_board.import_plan.mode.legend',
-                    'choices' => [
-                        'task_board.import_plan.mode.update'  => ReimportMode::UpdateChanged->value,
-                        'task_board.import_plan.mode.add_new' => ReimportMode::AddNewOnly->value,
-                    ],
-                    'expanded' => true,
-                    'data'     => $options['mode'],
-                ]);
-        }
+        match ($options['step']) {
+            'connect'   => $this->radios($builder, 'connection', 'task_board.import_plan.connect.legend', $options['choices'], $options['selected']),
+            'workspace' => $this->radios($builder, 'workspace', 'task_board.import_plan.workspace.legend', $options['choices'], $options['selected']),
+            'tree'      => $this->tree($builder, $options),
+            'boards'    => $this->boards($builder, $options['items']),
+            'statuses'  => $this->statuses($builder, $options['groups']),
+            'fields'    => $this->fields($builder, $options['fields']),
+            'people'    => $this->addCheckbox($builder, 'peopleFirst', [
+                'label'    => 'task_board.import_plan.people.first',
+                'required' => false,
+                'data'     => $options['people_first'],
+            ]),
+            default => $this->addWithDefaults($builder, 'mode', ChoiceType::class, [
+                'label'   => 'task_board.import_plan.mode.legend',
+                'choices' => [
+                    'task_board.import_plan.mode.update'  => ReimportMode::UpdateChanged->value,
+                    'task_board.import_plan.mode.add_new' => ReimportMode::AddNewOnly->value,
+                ],
+                'expanded' => true,
+                'data'     => $options['mode'],
+            ]),
+        };
     }
 
     public function configureOptions(OptionsResolver $resolver): void
@@ -107,6 +83,7 @@ final class ImportPlanStepFormType extends AbstractType
             'selected'           => null,
             'items'              => [],
             'groups'             => [],
+            'fields'             => [],
             'plan_options'       => [],
             'time_option'        => false,
             'layout'             => ImportPlanLayout::PerList->value,
@@ -121,6 +98,7 @@ final class ImportPlanStepFormType extends AbstractType
         $resolver->setAllowedTypes('choices', 'array');
         $resolver->setAllowedTypes('items', 'array');
         $resolver->setAllowedTypes('groups', 'array');
+        $resolver->setAllowedTypes('fields', 'array');
         $resolver->setAllowedTypes('plan_options', 'array');
         $resolver->setAllowedTypes('time_option', 'bool');
         $resolver->setAllowedTypes('people_first', 'bool');
@@ -223,6 +201,34 @@ final class ImportPlanStepFormType extends AbstractType
                 'constraints' => [new Length(max: 255)],
             ]);
         }
+    }
+
+    /**
+     * Since 3.3.0 (CU-3): one choice per provider field (its name is the row header of the step's table).
+     *
+     * @param list<array{id: string, name: string, choices: array<string, string>, selected: string}> $fields
+     * @param FormBuilderInterface<mixed> $builder
+     */
+    private function fields(FormBuilderInterface $builder, array $fields): void
+    {
+        foreach ($fields as $field) {
+            $choices = $field['choices'];
+            $this->addWithDefaults($builder, self::fieldName($field['id']), ChoiceType::class, [
+                'label'                     => $field['name'],
+                'translation_domain'        => false,
+                'choices'                   => array_map(strval(...), array_keys($choices)),
+                'choice_label'              => static fn (string $value): string => $choices[$value],
+                'choice_translation_domain' => false,
+                'data'                      => $field['selected'],
+                'placeholder'               => false,
+            ]);
+        }
+    }
+
+    /** Since 3.3.0 (CU-3): the name of a provider field's choice on the Fields step. */
+    public static function fieldName(string $fieldId): string
+    {
+        return 'f_' . $fieldId;
     }
 
     /**

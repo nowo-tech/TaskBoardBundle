@@ -1,3 +1,4 @@
 task_board.import.form.file_invalid: "Upload een geldige CSV- of JSON-export (max. 20 MB)."
 task_board.sync.browser.pick_list: "Kies een lijst."
 task_board.import_plan.error.pick_one: "Kies er een."
+task_board.custom_field.form.color_invalid: "Gebruik een kleur zoals #e03131."

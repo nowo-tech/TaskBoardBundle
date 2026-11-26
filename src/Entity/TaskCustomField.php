@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Doctrine\ORM\Mapping as ORM;
 use InvalidArgumentException;
 use Nowo\TaskBoardBundle\Enum\CustomFieldType;
+use Nowo\TaskBoardBundle\Field\TaskCustomFieldManager;
 use Nowo\TaskBoardBundle\Support\Text;
 use Nowo\TaskBoardBundle\ValueObject\Uuid;
 
@@ -26,10 +27,14 @@ use function trim;
 #[ORM\Entity]
 #[ORM\Table(name: 'task_board_custom_fields')]
 #[ORM\Index(name: 'idx_task_board_custom_fields_tenant', columns: ['tenant_key'])]
+#[ORM\UniqueConstraint(name: 'uniq_task_board_custom_fields_source', columns: ['board_id', 'source_ref'])]
 class TaskCustomField
 {
     public const NAME_MAX    = 128;
     public const OPTIONS_MAX = 200;
+
+    /** Since 3.3.0 (CU-3): the longest provenance marker (`<provider>:<remote field id>`). */
+    public const SOURCE_REF_MAX = 191;
 
     #[ORM\Id]
     #[ORM\Column(type: 'string', length: 36)]
@@ -44,6 +49,29 @@ class TaskCustomField
     /** @var list<array{id: string, name: string, color: ?string}> */
     #[ORM\Column(type: 'json')]
     private array $options = [];
+
+    /**
+     * Since 3.3.0 (CU-3, design §11): where an import created the field (`clickup:<field id>`), so a re-import finds it
+     * again by id; null for a field defined here. Unique per board.
+     */
+    #[ORM\Column(name: 'source_ref', type: 'string', length: 191, nullable: true)]
+    private ?string $sourceRef = null;
+
+    /**
+     * Since 3.3.0 (CU-3): the provider's dropdown option ids an import met, each with the option of this field it became
+     * (renamed options stay the same option; an option deleted here is not recreated). Null until an import writes it.
+     *
+     * @var array<string, string>|null
+     */
+    #[ORM\Column(name: 'source_options', type: 'json', nullable: true)]
+    private ?array $sourceOptions = null;
+
+    /**
+     * Since 3.3.0 (REQ-RUNTIME-003): the definition's revision, raised by every change of its name, position or options;
+     * an edit made from an older revision is refused (compare-and-set under the row lock).
+     */
+    #[ORM\Column(type: 'integer', options: ['default' => 1])]
+    private int $version = 1;
 
     /**
      * @param TaskBoard|null $board null: a field of every board of the tenant
@@ -136,6 +164,68 @@ class TaskCustomField
     public function getOptions(): array
     {
         return $this->options;
+    }
+
+    /** Since 3.3.0 (CU-3): the provenance marker of a field an import created, null otherwise. */
+    public function getSourceRef(): ?string
+    {
+        return $this->sourceRef;
+    }
+
+    /**
+     * Since 3.3.0 (CU-3): sets the provenance marker once (a field defined here, or one already marked, keeps its own).
+     *
+     * @internal through {@see TaskCustomFieldManager::defineFromSource()}
+     */
+    public function markSource(string $sourceRef): self
+    {
+        if (mb_strlen($sourceRef) > self::SOURCE_REF_MAX || preg_match('/^[a-z0-9_-]{1,32}:[A-Za-z0-9_-]{1,128}$/D', $sourceRef) !== 1) {
+            throw new InvalidArgumentException('Invalid source reference.');
+        }
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->sourceRef ??= $sourceRef;
+
+        return $this;
+    }
+
+    /**
+     * Since 3.3.0 (CU-3): the provider option ids met so far, each with this field's option id.
+     *
+     * @return array<string, string>
+     */
+    public function getSourceOptions(): array
+    {
+        return $this->sourceOptions ?? [];
+    }
+
+    /**
+     * Since 3.3.0 (CU-3): records that the provider's option `$remoteId` is this field's option `$optionId`.
+     *
+     * @internal through {@see TaskCustomFieldManager::adoptSourceOptions()}
+     */
+    public function mapSourceOption(string $remoteId, string $optionId): self
+    {
+        $map            = $this->sourceOptions ?? [];
+        $map[$remoteId] = $optionId;
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        $this->sourceOptions = $map;
+
+        return $this;
+    }
+
+    /** Since 3.3.0 (REQ-RUNTIME-003): the definition's revision ({@see self::$version}). */
+    public function getVersion(): int
+    {
+        return $this->version;
+    }
+
+    /** Since 3.3.0: called once per saved change of the definition, under its row lock. */
+    public function bumpVersion(): self
+    {
+        // @igor-ignore - Doctrine entity field; instance-scoped, not a shared service.
+        ++$this->version;
+
+        return $this;
     }
 
     /**

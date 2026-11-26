@@ -64,6 +64,11 @@ final readonly class SyncCustomFieldWriter
                 $ctx->count('fields.excluded');
                 continue;
             }
+            // Since 3.3.0 (CU-3): a field landed on a native field is written by SyncNativeFieldWriter (which runs first),
+            // not here; one it could not land (audits ZCF-L1 / L2) stays a synced field.
+            if (SyncNativeFieldWriter::handles($ctx, $remote)) {
+                continue;
+            }
             $definition = $this->definition($ctx, $remote, $position);
             if (!$remote->hasValue()) {
                 continue;

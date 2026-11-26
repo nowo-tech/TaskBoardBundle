@@ -136,6 +136,97 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Native custom fields from the ClickUp import, phase CU-3 of [design/CLICKUP_IMPORT.md](design/CLICKUP_IMPORT.md)
+(Beacon D-20261124-07; owner decisions Q-CU-1 … Q-CU-16 of 2026-11-25: text, number and drop-down only, no overwrite
+mode), and a *Custom fields* page per board. **Schema change** (three columns and a unique index on
+`task_board_custom_fields`): see UPGRADING "To 3.3.0".
+
+### Added
+
+- Import plans, Fields step: one choice per ClickUp field — *Synced, read-only* (default), *Do not import* and, for
+  `text` / `short_text`, `number` and `drop_down` fields, *Native field: create “name”* or an existing native field of
+  the same type (the tenant's fields, and the board's own when every item fills the same existing board;
+  `ImportPlanService::nativeTargets()`). Other types show *synced only*. The plan keeps the choices
+  (`TaskSyncImportPlan::getNativeFields()` / `getFieldChoices()`; the 3.2 `field_map` list is still read) and the
+  runner hands them to the board connection (option `nativeFields`, `TaskBoardConnection::nativeFields()`).
+- Preview: the fields line (native / synced / not imported) and the fields of other types, listed as imported synced.
+- `Sync\Field\SyncNativeFieldWriter`: the values of those fields land on the native fields. A created field carries the
+  provenance marker `clickup:<field id>` (`TaskCustomField::getSourceRef()`, unique per board) and is found again by it on
+  every re-import, whatever its name; drop-down options are followed by the provider's option id
+  (`TaskCustomField::getSourceOptions()`), so renamed options stay the same option, new ones are added, and an option
+  deleted here is never recreated (the value becomes a conflict note). **Re-import rule:** the provider's value is
+  written only while nobody changed the task's value here since the last import; a value changed here — or one that
+  existed before the provider had one — is kept and the provider's value is noted once in a comment (as the other
+  fields' conflicts); an empty provider value never clears one. Run stats `fields.native_fields`,
+  `fields.native_values`, `fields.native_conflicts`, `fields.native_misfit`, `fields.native_invalid`; warnings
+  `native_field_refused` (the run's actor may not change the board's fields) and `native_field_unavailable`.
+- `TaskCustomFieldManager::defineFromSource()`, `adoptSourceOptions()`, `sourceField()`; `TaskCustomField::markSource()`,
+  `mapSourceOption()`, `getVersion()`.
+- A board's *Custom fields* page (`TaskCustomFieldController`, templates `board_fields` / `board_field`, FormKit
+  `TaskCustomFieldDefinitionFormType`, routes `board_fields`, `board_field_new`, `board_field_edit`,
+  `board_field_delete`): the tenant's fields (read-only there) and the board's own — add (text, number, drop-down with
+  options, one per line, colour optional), edit (options as rows: rename, recolour, remove; new ones added), delete
+  (inline disclosure, no JavaScript needed). For users the restructure policy lets restructure the board (the board's
+  manage right by default); the board and list views show the action to them. `web_ui.custom_fields_page: false` removes
+  the routes and the action.
+- `Field\TaskCustomFieldPersonalData` (public service): `exportByValue()`, `exportBoard()` and `eraseByValue()` for native
+  values (RGPD Art. 15, 17, 20), next to the synced fields' `SyncFieldValueEraser`.
+- `search_kit.custom_fields` (default `false`): the header search and the SearchKit `tasks` group also match the
+  tasks' native text values.
+- Multi-board export (CSV / XLSX): a last column *Custom fields* (`Name: value; …`), guarded against formula injection
+  like the other cells.
+
+### Changed
+
+- REQ-RUNTIME-003: a field definition has a `version`. `TaskCustomFieldManager::update()` and `delete()` lock the
+  field's row, read it again and raise the version; with the new `$expectedVersion` argument an edit or a delete made
+  from an older version is refused (`TaskCustomFieldRefusedException::CHANGED`, nothing written). The page's forms send
+  it. A refused definition (bad name or options) is now refused before the transaction starts.
+- `TaskCustomFieldManager::trimDecimal()` is public (static).
+- Requires UiKit `^2.74.1` and FormKit `^2.25.1` (their latest minors).
+
+### Security (audit ZCF, before the release)
+
+- ZCF-L1: the import lands values on an existing native field, and adds its drop-down options, only with the right the
+  Custom fields page asks of the run's actor (`TaskCustomFieldManager::mayChange()`; `adoptSourceOptions()` takes the
+  actor and asks the restructure policy). Otherwise it warns `native_field_refused`, leaves the definition untouched and
+  keeps the values synced. The wizard offers only the fields its user may change (`nativeTargets($plan, $actor)`).
+- ZCF-L2: an imported field deleted here leaves a tombstone (`task_board_custom_field_tombstones`,
+  `TaskCustomFieldTombstone`; also when a board configuration drops it): a re-import does not create it again (warning
+  `native_field_deleted`; ZCFv-L1: its values are not imported either) until *Import it again* on the Custom fields page (route
+  `board_field_reimport`, `TaskCustomFieldManager::clearTombstone()`).
+- ZCF-L3 (REQ-RUNTIME-003): the import reads and decides a task's values before writing them and writes through
+  `TaskCustomFieldManager::setFieldIfUnchanged()` (no rollback when a person's change wins); the marker's field is inserted
+  in a savepoint of its own, so a duplicate on the unique key is read again and never fails the sync page. Both losing
+  sides are tested with a second process (MySQL, MariaDB, PostgreSQL) and in process on every database; the lock order is
+  in CONCURRENCY.md.
+- ZCF-I3: two ClickUp fields may not target one existing native field; conflict notes are keyed by field id.
+- Any field that could not land on a native field (no right, unavailable) stays a synced, read-only field.
+- ZCFv-L1: an imported field deleted here is not imported at all any more — neither native nor synced — until *Import
+  it again*; the delete confirmation says so.
+- ZCFv-L2 (REQ-RUNTIME-003): a definition's version is read by the locking read itself; a change made from a caller's
+  transaction whose snapshot is older than the locked row is refused (`changed`), so an option merge or an edit never
+  writes over a newer committed definition (two-connection test on MySQL, MariaDB and PostgreSQL). The import warns
+  `native_field_changed` and imports those values at the next run.
+- ZCFv2-L1: those promises hold for an incremental sync too. A run whose definition changed under it defers the tasks
+  that carry the field (their remote date is reset, counter `fields.native_deferred`) and keeps the previous watermark,
+  so the next run reads them again. *Import it again* clears the connection's watermark and resets every task's remote
+  date (`SyncNativeFieldReread`, with `sync.enabled`): the next sync reads every task and brings the field and all its
+  values back, also on the tasks that did not change in ClickUp.
+- ZCFv3-L1 (REQ-RUNTIME-003): *Import it again* is refused (`TaskCustomFieldRefusedException::SYNC_RUNNING`, a flash
+  on the page) while a sync of the board holds its run lock; the check runs under a lock of the connection row, so a
+  sync cannot start between the check and the commit.
+- ZCFv2-I1: the marker's field is hydrated by the locking read itself, so an older snapshot cannot hide it.
+- ZCFv2-I2: deleting an imported field locks the board's row before the field's, as creating one does.
+- ZCFv-I3: the marker's field is looked up again with a locking read under the board lock and after a lost unique key.
+- ZCFv-I1: the new imported field's row is written in a named savepoint of its own, so a duplicate marker is read again
+  on DBAL 3 without `use_savepoints` too (it failed the whole unit there); tested on DBAL 3 and 4.
+
+### Known limitations
+
+- ZCF-I1, ZCF-I2, ZCF-I4, ZCF-I6 and ZCFv-I2 (a synced fallback copy left after the field lands natively) are
+  accepted for 3.3.0 and described in SECURITY.md (native custom fields).
+
 ## [3.2.0] - 2026-11-26
 
 Import plans and the guided import from ClickUp, phase CU-2 of [design/CLICKUP_IMPORT.md](design/CLICKUP_IMPORT.md)

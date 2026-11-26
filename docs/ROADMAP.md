@@ -21,7 +21,7 @@ and must work in FrankenPHP worker mode with the kernel not reset between reques
 |------|-------------------------------|
 | Boards and folders | Boards per team or tenant (1.0, 1.10), icon and description, archive, folders of boards with shared column sets and cross-board dependencies (2.19), numbering prefix (2.19), board configuration as data (2.19) |
 | Columns | Rename, colour, icon or emoji, reorder, delete with warnings (1.11, 2.9, 2.10), column sets (1.11), column types open / custom / done / closed (2.19), a transition policy port and a humans-only flag (2.16) |
-| Tasks and fields | Title, Markdown description through the host renderer (1.19), four priorities, start and due dates (1.15), estimate, colour (1.14), tags, task numbers (2.1), native custom fields: text, number, dropdown (2.19), task documents, previous / next task (1.20) |
+| Tasks and fields | Title, Markdown description through the host renderer (1.19), four priorities, start and due dates (1.15), estimate, colour (1.14), tags, task numbers (2.1), native custom fields: text, number, dropdown (2.19) with a *Custom fields* page per board (3.3), task documents, previous / next task (1.20) |
 | Hierarchy | Subtasks of any depth with a tree view (1.10), optional depth limit and reparenting (2.20), checklists as tagged subtasks |
 | People | Several assignees, reviewers, stakeholders and watchers (1.0), host assignee policy (1.10), member pictures and badges (1.23, 2.18), teams with manager / member roles |
 | Comments and activity | Comments with @mentions and edit (1.16, 2.16), activity history with the cause of each change (2.3), write provenance (2.18), questions on a task with recorded answers (2.23) |
@@ -31,7 +31,7 @@ and must work in FrankenPHP worker mode with the kernel not reset between reques
 | Views | Board with drag and drop and subtask progress on cards (1.12), list with groups, sorting and time columns (1.12–1.15), read-only Gantt in hours to months (1.13, 1.15), calendar in month / week / list with drag to reschedule (2.1), working days and leave (2.14), all tasks across boards with workload per person (2.13), default view per user (1.24), focus mode and context menus (2.22) |
 | Filters and search | Client-side list filters (text, priority, column, over estimate), calendar and cross-board filters in the URL, text search in the Task API (2.16) |
 | Bulk work | Atomic bulk update in the Task API (2.16), move and duplicate a task tree to another board (2.3) |
-| Import and export | CSV / JSON import from three file formats and the bundle's own format (1.2, 1.18), a read-only provider sync (1.23–1.29), CSV / XLSX export of the cross-board list (2.13) |
+| Import and export | CSV / JSON import from three file formats and the bundle's own format (1.2, 1.18), a read-only provider sync (1.23–1.29), a guided ClickUp import of whole workspaces (3.2) landing text, number and drop-down fields on native fields (3.3), CSV / XLSX export of the cross-board list (2.13) |
 | API | Versioned Task API with idempotency, optimistic locking and conflict answers (2.2, 2.16, 2.22), a channel for agent tools (2.4), events after every write (1.10) |
 | Time | Time tracking integration, estimate deviation, billable manual entries (1.0, 1.15, 2.12) |
 | Platform | Multi-tenant paths (1.10), quota checks, account erasure, seven languages, phone layouts, keyboard-reachable menus, axe checks in the demo end-to-end tests |
@@ -132,6 +132,9 @@ Larger pieces that need a design pass or a new table.
 
 ## Considering
 
+- **Native fields of more ClickUp types** (after CU-3). Date, checkbox, URL, e-mail, labels and people land on native
+  fields once the native types above exist; until then they stay synced read-only fields.
+
 - **Import plans: fenced item writes** (audit ZBYv-I1, 3.2.x). Write plan items with
   `UPDATE … WHERE plan.run_token = :token` like the plan row, so a slice that was taken over cannot touch its current
   item either.
@@ -162,7 +165,9 @@ Ideas that need more feedback before they are planned.
 Already settled; not planned in another form.
 
 - **Checklists:** stay subtasks tagged `checklist:<name>`, with no separate checklist table.
-- **Custom fields from a provider sync:** read-only (409 `FIELD_001`); only the board's own fields are writable.
+- **Custom fields from a provider sync:** read-only (409 `FIELD_001`); only the board's own fields are writable. Since
+  3.3.0 an import plan can land ClickUp text, number and drop-down fields on native (writable) fields instead; there is
+  no overwrite mode (a value changed here wins, Q-CU-7 / Q-CU-8).
 - **Tracked time:** never deleted through the Task API (`DELETE` of a time entry is always 403), and never deleted by a
   move, a re-sync or an erasure.
 - **E-mail notifications:** the host's responsibility; the bundle dispatches events and sends nothing itself.

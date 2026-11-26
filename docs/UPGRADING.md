@@ -5,6 +5,11 @@ This document describes how to upgrade between versions of TaskBoard Bundle.
 ## Table of contents
 
 - [Unreleased](#unreleased)
+- [To 3.3.0](#to-330)
+  - [Schema change: custom field provenance and version](#schema-change-custom-field-provenance-and-version)
+  - [Native fields from the ClickUp import](#native-fields-from-the-clickup-import)
+  - [Custom fields page](#custom-fields-page)
+  - [Personal data, search and export](#personal-data-search-and-export)
 - [To 3.2.0](#to-320)
   - [Schema change for hosts with sync: import plans](#schema-change-for-hosts-with-sync-import-plans)
   - [Import plans: what a host does (opt-in)](#import-plans-what-a-host-does-opt-in)
@@ -227,6 +232,108 @@ This document describes how to upgrade between versions of TaskBoard Bundle.
   - [FormKitBundle (admin forms)](#formkitbundle-admin-forms)
 
 ## Unreleased
+
+## To 3.3.0
+
+```bash
+composer require nowo-tech/task-board-bundle:^3.3
+```
+
+UiKit `^2.74.1` and FormKit `^2.25.1` are required (their latest minors).
+
+### Schema change: custom field provenance and version
+
+`task_board_custom_fields` gets three columns — `source_ref` (where an import created the field, a key column: binary
+on MySQL / MariaDB), `source_options` (the provider's option ids) and `version` (REQ-RUNTIME-003) — and a unique index
+on (`board_id`, `source_ref`). A new table, `task_board_custom_field_tombstones`, remembers the imported fields deleted
+on a board (audit ZCF-L2: a re-import does not create them again). Generate a migration (`doctrine:migrations:diff`) or apply the SQL of your platform
+(table prefix `task_board_`; change it if you set `table_prefix`). Existing fields get version 1 and no marker.
+
+MySQL 8 / 9:
+
+```sql
+ALTER TABLE task_board_custom_fields ADD source_ref VARCHAR(191) COLLATE `utf8mb4_0900_bin` DEFAULT NULL, ADD source_options JSON DEFAULT NULL, ADD version INT DEFAULT 1 NOT NULL;
+CREATE UNIQUE INDEX uniq_task_board_custom_fields_source ON task_board_custom_fields (board_id, source_ref);
+CREATE TABLE task_board_custom_field_tombstones (id VARCHAR(36) NOT NULL, deleted_at DATETIME NOT NULL, name VARCHAR(128) NOT NULL, source_ref VARCHAR(191) NOT NULL COLLATE `utf8mb4_0900_bin`, board_id VARCHAR(36) NOT NULL, UNIQUE INDEX uniq_task_board_custom_field_tombstones (board_id, source_ref), INDEX IDX_A7286CF5E7EC5785 (board_id), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4;
+ALTER TABLE task_board_custom_field_tombstones ADD CONSTRAINT FK_A7286CF5E7EC5785 FOREIGN KEY (board_id) REFERENCES task_board_boards (id) ON DELETE CASCADE;
+```
+
+MariaDB:
+
+```sql
+ALTER TABLE task_board_custom_fields ADD source_ref VARCHAR(191) COLLATE `utf8mb4_nopad_bin` DEFAULT NULL, ADD source_options JSON DEFAULT NULL, ADD version INT DEFAULT 1 NOT NULL;
+CREATE UNIQUE INDEX uniq_task_board_custom_fields_source ON task_board_custom_fields (board_id, source_ref);
+CREATE TABLE task_board_custom_field_tombstones (id VARCHAR(36) NOT NULL, deleted_at DATETIME NOT NULL, name VARCHAR(128) NOT NULL, source_ref VARCHAR(191) NOT NULL COLLATE `utf8mb4_nopad_bin`, board_id VARCHAR(36) NOT NULL, UNIQUE INDEX uniq_task_board_custom_field_tombstones (board_id, source_ref), INDEX IDX_A7286CF5E7EC5785 (board_id), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4;
+ALTER TABLE task_board_custom_field_tombstones ADD CONSTRAINT FK_A7286CF5E7EC5785 FOREIGN KEY (board_id) REFERENCES task_board_boards (id) ON DELETE CASCADE;
+```
+
+PostgreSQL:
+
+```sql
+ALTER TABLE task_board_custom_fields ADD source_ref VARCHAR(191) DEFAULT NULL;
+ALTER TABLE task_board_custom_fields ADD source_options JSON DEFAULT NULL;
+ALTER TABLE task_board_custom_fields ADD version INT DEFAULT 1 NOT NULL;
+CREATE UNIQUE INDEX uniq_task_board_custom_fields_source ON task_board_custom_fields (board_id, source_ref);
+CREATE TABLE task_board_custom_field_tombstones (id VARCHAR(36) NOT NULL, deleted_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, name VARCHAR(128) NOT NULL, source_ref VARCHAR(191) NOT NULL, board_id VARCHAR(36) NOT NULL, PRIMARY KEY (id));
+CREATE UNIQUE INDEX uniq_task_board_custom_field_tombstones ON task_board_custom_field_tombstones (board_id, source_ref);
+CREATE INDEX IDX_A7286CF5E7EC5785 ON task_board_custom_field_tombstones (board_id);
+ALTER TABLE task_board_custom_field_tombstones ADD CONSTRAINT FK_A7286CF5E7EC5785 FOREIGN KEY (board_id) REFERENCES task_board_boards (id) ON DELETE CASCADE NOT DEFERRABLE;
+```
+
+SQLite:
+
+```sql
+ALTER TABLE task_board_custom_fields ADD COLUMN source_ref VARCHAR(191) DEFAULT NULL;
+ALTER TABLE task_board_custom_fields ADD COLUMN source_options CLOB DEFAULT NULL;
+ALTER TABLE task_board_custom_fields ADD COLUMN version INTEGER DEFAULT 1 NOT NULL;
+CREATE UNIQUE INDEX uniq_task_board_custom_fields_source ON task_board_custom_fields (board_id, source_ref);
+CREATE TABLE task_board_custom_field_tombstones (id VARCHAR(36) NOT NULL, deleted_at DATETIME NOT NULL, name VARCHAR(128) NOT NULL, source_ref VARCHAR(191) NOT NULL, board_id VARCHAR(36) NOT NULL, PRIMARY KEY (id), CONSTRAINT FK_A7286CF5E7EC5785 FOREIGN KEY (board_id) REFERENCES task_board_boards (id) ON DELETE CASCADE NOT DEFERRABLE INITIALLY IMMEDIATE);
+CREATE UNIQUE INDEX uniq_task_board_custom_field_tombstones ON task_board_custom_field_tombstones (board_id, source_ref);
+CREATE INDEX IDX_A7286CF5E7EC5785 ON task_board_custom_field_tombstones (board_id);
+```
+
+Several fields with no marker (or tenant fields, `board_id` NULL) are allowed on all four engines (NULLs are distinct).
+Without this schema every custom field read fails, so apply it before deploying 3.3.
+
+### Native fields from the ClickUp import
+
+Nothing to do for existing connections: a field lands on a native field only when an import plan chose it (Fields
+step). The run's actor (the plan's starter) needs the right the Custom fields page asks to **create** a field or to land
+values on an **existing** one (audit ZCF-L1; the restructure policy, `restructure.policy`: a board's field needs
+`mayRestructureBoard()` — by default the board's manage right —, a tenant field `mayManageFolders()`). Without it the run
+warns `native_field_refused`, leaves the definition untouched and keeps those values as synced, read-only fields; the
+wizard offers only the fields its user may change. An imported field deleted here (on the page, through the manager or by
+applying a board configuration without it) stops being imported: the run warns `native_field_deleted` and imports
+neither the field nor its values (not even as synced, read-only fields; audit ZCFv-L1) until *Import it again* on the
+page clears its tombstone (route `board_field_reimport`); the next sync then reads every task again (the connection's
+watermark is cleared) and brings the field and its values back (audit ZCFv2-L1). While a sync of the board runs it is
+refused with the new reason `TaskCustomFieldRefusedException::SYNC_RUNNING` (audit ZCFv3-L1). A host that builds
+`TaskCustomFieldManager` by hand passes `SyncNativeFieldReread` for that. A definition edit or option merge made from a transaction
+whose snapshot is older than the locked row is refused (`changed`; audit ZCFv-L2); the import then warns
+`native_field_changed`, keeps the previous watermark and imports those values at the next run. A drop-down field's
+options follow the provider's option ids; an option deleted here is not recreated. There is no overwrite mode: a value
+changed here is kept and the provider's value is noted in a comment.
+
+`TaskCustomFieldManager::update()` and `delete()` take an optional `$expectedVersion`. A host form that edits
+definitions should send the version it showed (`TaskCustomField::getVersion()`) and handle
+`TaskCustomFieldRefusedException::CHANGED`; without it the edit still locks the row and raises the version (last
+writer wins, as before). A definition refused for its name or options is refused before any transaction now.
+
+### Custom fields page
+
+A board's *Custom fields* page (routes `board_fields`, `board_field_new`, `board_field_edit`, `board_field_delete`;
+templates `board_fields`, `board_field`) is on by default for users the restructure policy allows; the board and list
+views show its action to them. A host with its own field screens sets `web_ui.custom_fields_page: false` (no routes, no
+action). Check your firewall / access rules if you list TaskBoard paths explicitly (`/tools/task-board/board/{id}/fields…`).
+
+### Personal data, search and export
+
+- Native text values may name a person. Add `Field\TaskCustomFieldPersonalData::exportByValue()` /
+  `exportBoard()` to your access request and `eraseByValue()` to your erasure chain (the host authorises the caller),
+  next to `SyncFieldValueEraser`. The task history keeps earlier values as text (see SECURITY.md).
+- `search_kit.custom_fields: true` lets the header search match native text values (off by default).
+- The multi-board export has a new last column, *Custom fields*. A consumer that reads columns by position is not
+  affected (it is appended).
 
 ## To 3.2.0
 

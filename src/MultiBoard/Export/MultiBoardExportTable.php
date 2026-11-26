@@ -37,6 +37,8 @@ final readonly class MultiBoardExportTable
         'task_board.multi.export.estimate',
         'task_board.multi.export.logged',
         'task_board.multi.export.task_id',
+        // Since 3.3.0: the native custom field values, `Name: value` joined by `; ` (last, so earlier columns keep their place).
+        'task_board.multi.export.custom_fields',
     ];
 
     /**
@@ -78,6 +80,7 @@ final readonly class MultiBoardExportTable
             $row->estimatedMinutes,
             $row->loggedMinutes,
             $row->taskId,
+            implode('; ', array_map(static fn (array $field): string => self::guard($field['name'] . ': ' . $field['value']), $row->customFields)),
         ];
     }
 

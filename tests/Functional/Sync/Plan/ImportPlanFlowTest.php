@@ -92,14 +92,16 @@ final class ImportPlanFlowTest extends ImportPlanTestCase
         // 5. Statuses (Backlog's three statuses; Bugs has none).
         self::assertCount(2, $crawler->filter('[data-testid="nowo-task-plan-status-table"]'));
         $crawler = $this->next($crawler, []);
-        // 6. Fields: leave "Team" out.
-        $crawler = $this->next($crawler, ['imported' => ['fld1']]);
+        // 6. Fields (since 3.3.0 one choice per field): "Size" as a native field, "Team" left out.
+        self::assertCount(2, $crawler->filter('[data-testid="nowo-task-plan-field-row"]'));
+        $crawler = $this->next($crawler, ['f_fld1' => 'create', 'f_fld2' => 'excluded']);
         // 7. People.
         self::assertSelectorExists('[data-testid="nowo-task-plan-people-counts"]');
         $crawler = $this->next($crawler, []);
         // 8. Preview, then start (the inline runner imports in the request).
         self::assertSelectorExists('[data-testid="nowo-task-plan-eta"]');
         self::assertCount(2, $crawler->filter('[data-testid="nowo-task-plan-preview-row"]'));
+        self::assertSelectorTextContains('[data-testid="nowo-task-plan-fields"]', '1 native, 0 synced, 1 not imported');
         $this->client->submit($crawler->filter('#nowo-task-plan-start-form')->form());
         self::assertResponseRedirects();
         $crawler = $this->client->followRedirect();
@@ -114,6 +116,7 @@ final class ImportPlanFlowTest extends ImportPlanTestCase
         $connection = $this->connectionOf($backlog);
         self::assertInstanceOf(TaskBoardConnection::class, $connection);
         self::assertSame(['fld2'], $connection->excludedFields());
+        self::assertSame(['fld1' => 'create'], $connection->nativeFields());
         self::assertFalse($connection->option('importAttachments', true));
         self::assertSame($plan->getDirectory()?->getId(), $connection->getDirectory()?->getId());
         self::assertSame($plan->getDirectory()?->getId(), $this->connectionOf($this->boardNamed('Bugs'))?->getDirectory()?->getId(), 'one directory for the tenant and workspace');

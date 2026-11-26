@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Sync\Plan;
 
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Enum\CustomFieldType;
 use Nowo\TaskBoardBundle\Event\TaskBoardQuotaCheckEvent;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 use Nowo\TaskBoardBundle\Service\TaskBoardCreator;
@@ -14,6 +15,7 @@ use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncImportPlan;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncImportPlanItem;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPersonMapping;
 use Nowo\TaskBoardBundle\Sync\Exception\ProviderException;
+use Nowo\TaskBoardBundle\Sync\Field\SyncNativeFieldWriter;
 use Nowo\TaskBoardBundle\Sync\Http\ProviderRateBudget;
 use Nowo\TaskBoardBundle\Sync\People\TaskSyncPersonRepository;
 use Nowo\TaskBoardBundle\Sync\Provider\PeopleProviderInterface;
@@ -118,7 +120,27 @@ final readonly class ImportPlanPreviewer
         $refusal   = $newBoards > 0 ? $this->quota->refusal(TaskBoardQuotaCheckEvent::ACTION_BOARD_CREATE, $plan->getTenantKey(), null, $newBoards, $actor) : null;
         $perMinute = $this->budget?->allowed($plan->getProvider() . ':' . $plan->getConnectionRef()) ?? 90;
 
-        return new PlanPreview($items, $requests, $perMinute, $warnings, $refusal, $people);
+        return new PlanPreview($items, $requests, $perMinute, $warnings, $refusal, $people, $this->fields($plan));
+    }
+
+    /**
+     * Since 3.3.0 (CU-3): the Fields step's choices as saved (no provider call); the imported fields of a type no native
+     * field takes are listed as skipped (they stay synced).
+     *
+     * @return array{native: int, synced: int, excluded: int, skipped: list<array{name: string, type: string}>}
+     */
+    private function fields(TaskSyncImportPlan $plan): array
+    {
+        $counts = ['native' => 0, 'synced' => 0, 'excluded' => 0, 'skipped' => []];
+        foreach ($plan->getFieldChoices() as $field) {
+            $choice = in_array($field['choice'], ['native', 'excluded'], true) ? $field['choice'] : 'synced';
+            ++$counts[$choice];
+            if ($choice === 'synced' && !SyncNativeFieldWriter::nativeType($field['type']) instanceof CustomFieldType) {
+                $counts['skipped'][] = ['name' => $field['name'], 'type' => $field['type']];
+            }
+        }
+
+        return $counts;
     }
 
     /**

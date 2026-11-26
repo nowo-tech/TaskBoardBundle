@@ -7,7 +7,9 @@ namespace Nowo\TaskBoardBundle\Tests\Functional\MultiBoard;
 use Nowo\TaskBoardBundle\Controller\TaskBoardMultiBoardController;
 use Nowo\TaskBoardBundle\DependencyInjection\TaskBoardExtension;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Enum\CustomFieldType;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
+use Nowo\TaskBoardBundle\Field\TaskCustomFieldManager;
 use Nowo\TaskBoardBundle\Form\MultiBoardTaskFilterType;
 use Nowo\TaskBoardBundle\MultiBoard\DoctrineMultiBoardTaskQuery;
 use Nowo\TaskBoardBundle\MultiBoard\Export\MultiBoardExportTable;
@@ -23,6 +25,8 @@ use Nowo\TaskBoardBundle\Routing\TaskBoardRouteLoader;
 use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\AppUser;
 use PHPUnit\Framework\Attributes\CoversClass;
 use SimpleXMLElement;
+use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
+use Symfony\Component\Security\Core\Authentication\Token\UsernamePasswordToken;
 use ZipArchive;
 
 use function array_map;
@@ -96,7 +100,7 @@ final class MultiBoardExportTest extends MultiBoardTestCase
         self::assertNull($this->client->getInternalResponse()->getHeader('X-Task-Board-Export-Partial'));
 
         $lines = array_map(static fn (string $line): array => str_getcsv($line, ',', '"', ''), explode("\n", trim(substr($csv, 3))));
-        self::assertSame(['Number', 'Title', 'Board / Project', 'Column', 'Status', 'Priority', 'Assignees', 'Start', 'Due', 'Overdue', 'Labels', 'Estimate (min)', 'Logged (min)', 'Task ID'], $lines[0]);
+        self::assertSame(['Number', 'Title', 'Board / Project', 'Column', 'Status', 'Priority', 'Assignees', 'Start', 'Due', 'Overdue', 'Labels', 'Estimate (min)', 'Logged (min)', 'Task ID', 'Custom fields'], $lines[0]);
         self::assertCount(6, $lines);
         $titles = [];
         foreach (array_slice($lines, 1) as $line) {
@@ -104,6 +108,27 @@ final class MultiBoardExportTest extends MultiBoardTestCase
             self::assertSame(["'@Project", 'To do', 'Open', 'High', "'=Alice", '2029-12-31', 'No', "'@tag, safe", '45', '90'], [$line[2], $line[3], $line[4], $line[5], $line[6], $line[7], $line[9], $line[10], $line[11], $line[12]]);
         }
         self::assertSame(array_values(self::INJECTIONS), $titles);
+    }
+
+    /** Since 3.3.0: the native custom field values in the last column, guarded like the rest. */
+    public function testTheCustomFieldsColumn(): void
+    {
+        $task   = $this->make($this->board, 'With fields', ['due' => '2030-01-01']);
+        $fields = self::getContainer()->get(TaskCustomFieldManager::class);
+        self::assertInstanceOf(TaskCustomFieldManager::class, $fields);
+        $tokens = self::getContainer()->get('security.token_storage');
+        self::assertInstanceOf(TokenStorageInterface::class, $tokens);
+        $tokens->setToken(new UsernamePasswordToken($this->alice, 'main', $this->alice->getRoles()));
+        $board = $this->em->find(TaskBoard::class, $this->board->getId());
+        self::assertInstanceOf(TaskBoard::class, $board);
+        $cost   = $fields->define($this->alice, $board, null, '=Cost', CustomFieldType::Text);
+        $points = $fields->define($this->alice, $board, null, 'Points', CustomFieldType::Number);
+        $fields->setField($task, $cost->getId(), '+1', $this->alice);
+        $fields->setField($task, $points->getId(), '2.50', $this->alice);
+        $this->make($this->board, 'Without', ['due' => '2030-01-02']);
+
+        $lines = array_map(static fn (string $line): array => str_getcsv($line, ',', '"', ''), explode("\n", trim(substr($this->export('csv'), 3))));
+        self::assertSame(["'=Cost: +1; Points: 2.5", ''], [$lines[1][14], $lines[2][14]]);
     }
 
     public function testTheXlsxIsAValidWorkbookWithGuardedText(): void

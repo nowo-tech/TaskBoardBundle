@@ -10,6 +10,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Generator;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
+use Nowo\TaskBoardBundle\Field\TaskCustomFieldManager;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenant;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext;
@@ -74,6 +75,8 @@ final readonly class MultiBoardTaskList implements MultiBoardTaskListInterface
         private ?TokenStorageInterface $tokenStorage = null,
         // Since 2.15.0 (database.user_reference).
         private ?TaskBoardUsers $users = null,
+        // Since 3.3.0: the tasks' native custom field values (the export's Custom fields column).
+        private ?TaskCustomFieldManager $customFields = null,
     ) {
     }
 
@@ -424,6 +427,13 @@ final readonly class MultiBoardTaskList implements MultiBoardTaskListInterface
             }
         }
         $labels = $this->query->people(array_map(strval(...), array_keys($userIds)));
+        // Since 3.3.0: the native custom field values of the batch, in one query.
+        $values = [];
+        foreach ($this->customFields?->valuesOf(array_map(static fn (array $row): string => (string) $row['taskId'], $raw)) ?? [] as $taskId => $list) {
+            foreach ($list as $value) {
+                $values[$taskId][] = ['name' => $value->getField()->getName(), 'value' => $this->customFields->display($value)];
+            }
+        }
 
         $rows = [];
         foreach ($raw as $row) {
@@ -449,6 +459,7 @@ final readonly class MultiBoardTaskList implements MultiBoardTaskListInterface
                 assignees: array_map(static fn (string $id): MultiBoardPerson => new MultiBoardPerson($id, $labels[$id] ?? $id), $assignees[$taskId] ?? []),
                 parentId: isset($row['parentId']) && $row['parentId'] !== '' ? (string) $row['parentId'] : null,
                 overdue: !$completed instanceof DateTimeImmutable && $due instanceof DateTimeImmutable && $due < $now,
+                customFields: $values[$taskId] ?? [],
             );
         }
 

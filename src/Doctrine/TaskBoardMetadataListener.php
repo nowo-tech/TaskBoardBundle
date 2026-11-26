@@ -17,6 +17,7 @@ use Nowo\TaskBoardBundle\Entity\TaskBoardFolder;
 use Nowo\TaskBoardBundle\Entity\TaskChangeHistory;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\Entity\TaskCustomField;
+use Nowo\TaskBoardBundle\Entity\TaskCustomFieldTombstone;
 use Nowo\TaskBoardBundle\Entity\TaskDocument;
 use Nowo\TaskBoardBundle\Entity\TaskLink;
 use Nowo\TaskBoardBundle\Entity\TaskMember;
@@ -70,7 +71,9 @@ final readonly class TaskBoardMetadataListener
         // Since 2.19.0 (Beacon spec 234, FR-031): a folder's tenant.
         TaskBoardFolder::class => ['tenantKey'],
         // Since 2.19.0 (FR-028): a tenant custom field's tenant.
-        TaskCustomField::class => ['tenantKey'],
+        TaskCustomField::class => ['tenantKey', 'sourceRef'],
+        // Since 3.3.0 (audit ZCF-L2).
+        TaskCustomFieldTombstone::class => ['sourceRef'],
         // Since 2.23.0 (Beacon spec 242): the host's opaque recipient ids, mapped only with `task_questions.enabled`.
         TaskQuestionRecipient::class => ['subjectId'],
         TaskQuestionAnswer::class    => ['answeredBySubject'],

@@ -45,6 +45,7 @@ final class AttributeRoutesTest extends TestCase
             templatesEnabled: true,
             questionsEnabled: true,
             importPlansEnabled: true,
+            customFieldsEnabled: true,
         );
 
         $declared = [];

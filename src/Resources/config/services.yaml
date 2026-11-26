@@ -304,6 +304,12 @@ services:
         public: true
     Nowo\TaskBoardBundle\Field\TaskCustomFieldManager:
         public: true
+        arguments:
+            # Since 3.3.0 (audit ZCFv2-L1): only with sync.enabled.
+            $reread: '@?Nowo\TaskBoardBundle\Sync\Field\SyncNativeFieldReread'
+    # Since 3.3.0: access and erasure of native custom field values (public for the host's data-subject chain).
+    Nowo\TaskBoardBundle\Field\TaskCustomFieldPersonalData:
+        public: true
 
     # Since 2.22.0: the menus of the board cards, list rows and column headers (UiKit context menus) and their writes.
     Nowo\TaskBoardBundle\Menu\TaskMenuBuilder:
@@ -325,6 +331,16 @@ services:
             $logger: '@?logger'
 
     # Since 2.3.0 (spec 217): Move to another board and Duplicate (routes only with move.enabled).
+    # Since 3.3.0: the board's Custom fields page (routes only with web_ui.custom_fields_page).
+    Nowo\TaskBoardBundle\Controller\TaskCustomFieldController:
+        public: true
+        autoconfigure: false
+        tags: ['controller.service_arguments', 'container.service_subscriber']
+        arguments:
+            $routes: '%nowo_task_board.routes%'
+            $templates: '%nowo_task_board.templates%'
+            $logger: '@?logger'
+
     Nowo\TaskBoardBundle\Controller\TaskCopyController:
         public: true
         autoconfigure: false

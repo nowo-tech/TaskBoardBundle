@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Tests\Functional\Sync\Plan;
 
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Enum\CustomFieldType;
+use Nowo\TaskBoardBundle\Field\TaskCustomFieldManager;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncImportPlan;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncImportPlanItem;
 use Nowo\TaskBoardBundle\Sync\Exception\ProviderErrorCode;
@@ -145,10 +147,32 @@ final class ImportPlanServiceTest extends ImportPlanTestCase
         self::assertTrue($this->store()->items($plan)[0]->isCreateBoard());
 
         // Fields: counted per source; a forged id is refused.
-        self::assertSame([['id' => 'fld1', 'name' => 'Size', 'type' => 'text', 'sources' => 1], ['id' => 'fld2', 'name' => 'Team', 'type' => 'text', 'sources' => 1]], $plans->fields($plan));
+        $fields = $plans->fields($plan);
+        self::assertSame([['id' => 'fld1', 'name' => 'Size', 'type' => 'text', 'remoteType' => 'short_text', 'nativeType' => 'text', 'sources' => 1], ['id' => 'fld2', 'name' => 'Team', 'type' => 'text', 'remoteType' => 'short_text', 'nativeType' => 'text', 'sources' => 1]], $fields);
         $this->refused(ImportPlanException::INVALID, static fn () => $plans->chooseFields($plan, $plan->getVersion(), ['bad id']));
         $plans->chooseFields($plan, $plan->getVersion(), ['fld2', 'fld2']);
         self::assertSame(['fld2'], $this->fresh($plan)->getExcludedFields());
+
+        // Since 3.3.0 (CU-3): native targets — "create", or an existing field of the type; anything else is refused.
+        $plan    = $this->fresh($plan);
+        $manager = self::getContainer()->get(TaskCustomFieldManager::class);
+        self::assertInstanceOf(TaskCustomFieldManager::class, $manager);
+        $tenantNo = $manager->define($this->admin, null, null, 'Count', CustomFieldType::Number);
+        $tenantTx = $manager->define($this->admin, null, null, 'Owner', CustomFieldType::Text);
+        self::assertSame([$tenantNo->getId(), $tenantTx->getId()], array_keys($plans->nativeTargets($plan)), 'a plan of new boards: the tenant\'s fields');
+        $typed = [...$fields, ['id' => 'fld3', 'name' => 'When', 'type' => 'date', 'remoteType' => 'date', 'nativeType' => null, 'sources' => 1]];
+        foreach ([['fld1' => $tenantNo->getId()], ['fld3' => 'create'], ['fld2' => 'create'], ['nope' => 'create'], ['bad id' => 'create'], ['fld1' => '00000000-0000-4000-8000-000000000000']] as $native) {
+            $this->refused(ImportPlanException::INVALID, static fn () => $plans->chooseFields($plan, $plan->getVersion(), ['fld2'], $native, $typed));
+        }
+        // Audit ZCF-I3: two provider fields on one native field are refused.
+        $this->refused(ImportPlanException::INVALID, static fn () => $plans->chooseFields($plan, $plan->getVersion(), [], ['fld1' => $tenantTx->getId(), 'fld2' => $tenantTx->getId()], $typed));
+        $plan = $this->fresh($plan);
+        $plans->chooseFields($plan, $plan->getVersion(), ['fld2'], ['fld1' => $tenantTx->getId()], $typed, $this->admin);
+        $plan = $this->fresh($plan);
+        self::assertSame([['fld2'], ['fld1' => $tenantTx->getId()]], [$plan->getExcludedFields(), $plan->getNativeFields()]);
+        self::assertSame([['name' => 'Size', 'type' => 'short_text', 'choice' => 'native'], ['name' => 'Team', 'type' => 'short_text', 'choice' => 'excluded'], ['name' => 'When', 'type' => 'date', 'choice' => 'synced']], $plan->getFieldChoices());
+        $preview = $this->previewer()->preview($plan, $this->admin);
+        self::assertSame(['native' => 1, 'synced' => 1, 'excluded' => 1, 'skipped' => [['name' => 'When', 'type' => 'date']]], $preview->fields);
         $plan = $this->fresh($plan);
         $plans->choosePeople($plan, $plan->getVersion(), true);
         self::assertTrue($plan->option(TaskSyncImportPlan::OPTION_PEOPLE, false));

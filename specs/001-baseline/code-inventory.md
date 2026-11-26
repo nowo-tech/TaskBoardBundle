@@ -2,7 +2,7 @@
 
 **Baseline spec**: [`spec.md`](spec.md)  
 **Package**: `nowo-tech/task-board-bundle`  
-**Last audited**: 2026-11-25 (3.2.0: ClickUp import plans, FR-SYNC-015); 2026-11-25 (3.1.0: ClickUp OAuth, FR-SYNC-014); 2026-11-24 (3.0.0: every tracked file of `src/`, releases 1.10–3.0; 2026-11-22: v2.30.0)
+**Last audited**: 2026-11-26 (3.3.0: native custom fields from the import and the Custom fields page, FR-FIELD-002); 2026-11-25 (3.2.0: ClickUp import plans, FR-SYNC-015); 2026-11-25 (3.1.0: ClickUp OAuth, FR-SYNC-014); 2026-11-24 (3.0.0: every tracked file of `src/`, releases 1.10–3.0; 2026-11-22: v2.30.0)
 
 Production scope excludes Vitest sources (`*.test.ts`).
 
@@ -208,6 +208,7 @@ Files added by the 1.27.0 stack. The coverage summary below is the 2026-11-03 au
 | `Sync/Entity/TaskSyncField.php` | Typed custom fields | FR-SYNC-FIELD-001 |
 | `Sync/Entity/TaskSyncFieldValue.php` | Typed custom fields | FR-SYNC-FIELD-001 |
 | `Sync/Field/SyncCustomFieldWriter.php` | Typed custom fields | FR-SYNC-FIELD-001, FR-SYNC-PRIVACY-001 |
+| `Sync/Field/SyncNativeFieldWriter.php` | Native fields from the import (3.3.0) | FR-FIELD-002 |
 | `Sync/Field/SyncFieldType.php` | Typed custom fields | FR-SYNC-FIELD-001 |
 | `Sync/Provider/ClickUp/ClickUpCustomFieldParser.php` | Typed custom fields | FR-SYNC-FIELD-001 |
 | `Sync/Provider/RemoteCustomField.php` | Typed custom fields | FR-SYNC-FIELD-001 |
@@ -443,6 +444,7 @@ Grouped by feature; each row names the semantic requirement of [`spec.md`](spec.
 | `Controller/TaskBoardConnectionController.php` | FR-SYNC-010 |
 | `Controller/TaskBoardMultiBoardController.php` | FR-MULTI-001 |
 | `Controller/TaskCopyController.php` | FR-MOVE-001 |
+| `Controller/TaskCustomFieldController.php` | FR-FIELD-002 |
 | `Controller/TaskRecurrenceController.php` | FR-SVC-010 |
 | `Copy/TaskColumnRule.php` | FR-MOVE-001 |
 | `Copy/TaskCopier.php` | FR-MOVE-001 |
@@ -476,6 +478,7 @@ Grouped by feature; each row names the semantic requirement of [`spec.md`](spec.
 | `Dto/TaskRecurrenceFormData.php` | FR-SVC-010 |
 | `Entity/TaskBoardFolder.php` | FR-FOLDER-001 |
 | `Entity/TaskCustomField.php` | FR-FIELD-001 |
+| `Entity/TaskCustomFieldTombstone.php` | FR-FIELD-002 |
 | `Entity/TaskCustomFieldValue.php` | FR-FIELD-001 |
 | `Enum/CalendarMode.php` | FR-CAL-001 |
 | `Enum/ColumnType.php` | FR-FOLDER-001 |
@@ -528,6 +531,7 @@ Grouped by feature; each row names the semantic requirement of [`spec.md`](spec.
 | `Field/TaskCustomFieldForm.php` | FR-FIELD-001 |
 | `Field/TaskCustomFieldListView.php` | FR-FIELD-001 |
 | `Field/TaskCustomFieldManager.php` | FR-FIELD-001 |
+| `Field/TaskCustomFieldPersonalData.php` | FR-FIELD-002 |
 | `Field/TaskCustomFieldRefusedException.php` | FR-FIELD-001 |
 | `Folder/FolderStatusSetListener.php` | FR-FOLDER-001 |
 | `Folder/FolderStatusSets.php` | FR-FOLDER-001 |
@@ -548,6 +552,7 @@ Grouped by feature; each row names the semantic requirement of [`spec.md`](spec.
 | `Form/MultiBoardTaskFilterType.php` | FR-SVC-010 |
 | `Form/TaskCalendarFilterType.php` | FR-SVC-010 |
 | `Form/TaskCopySelectFormType.php` | FR-SVC-010 |
+| `Form/TaskCustomFieldDefinitionFormType.php` | FR-FIELD-002 |
 | `Form/TaskCustomFieldFilterType.php` | FR-SVC-010 |
 | `Form/TaskRecurrenceFormType.php` | FR-SVC-010 |
 | `Form/TaskScheduleFormType.php` | FR-SVC-010 |
@@ -661,6 +666,7 @@ Grouped by feature; each row names the semantic requirement of [`spec.md`](spec.
 | `Resources/config/doctrine-xml/core/TaskChangeHistory.orm.xml` | FR-ORM-010 |
 | `Resources/config/doctrine-xml/core/TaskComment.orm.xml` | FR-ORM-010 |
 | `Resources/config/doctrine-xml/core/TaskCustomField.orm.xml` | FR-ORM-010 |
+| `Resources/config/doctrine-xml/core/TaskCustomFieldTombstone.orm.xml` | FR-ORM-010 |
 | `Resources/config/doctrine-xml/core/TaskCustomFieldValue.orm.xml` | FR-ORM-010 |
 | `Resources/config/doctrine-xml/core/TaskDependency.orm.xml` | FR-ORM-010 |
 | `Resources/config/doctrine-xml/core/TaskDocument.orm.xml` | FR-ORM-010 |
@@ -1160,6 +1166,8 @@ removed (their rows are gone).
 | `Resources/views/manage/dialog/page.html.twig` | FR-UI-021 |
 | `Resources/views/manage/import_plan.html.twig` | FR-SYNC-015 |
 | `Resources/views/manage/import_plans.html.twig` | FR-SYNC-015 |
+| `Resources/views/manage/board_fields.html.twig` | FR-FIELD-002 |
+| `Resources/views/manage/board_field.html.twig` | FR-FIELD-002 |
 | `Service/TaskRevisionLockInterface.php` | FR-LOCK-002 |
 | `Support/TaskContentDigest.php` | FR-LOCK-002 |
 | `Sync/Entity/TaskSyncImportPlan.php` | FR-SYNC-015 |

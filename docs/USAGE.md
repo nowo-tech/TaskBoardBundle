@@ -76,6 +76,7 @@
 - [Questions on tasks (since 2.23)](#questions-on-tasks-since-223)
   - [Questions: Standard Symfony host](#questions-standard-symfony-host)
   - [Questions: DDD / hexagonal host](#questions-ddd--hexagonal-host)
+- [Custom fields page (since 3.3.0)](#custom-fields-page-since-330)
 - [Header search (since 2.25)](#header-search-since-225)
   - [Narrowing the scope: the search scope event](#narrowing-the-scope-the-search-scope-event)
   - [SearchKit groups: tasks and boards](#searchkit-groups-tasks-and-boards)
@@ -2132,6 +2133,27 @@ The three ports take and return only values (`TaskSnapshot`, `TaskBoardSnapshot`
 the adapters live in your infrastructure layer. With `database.mapping_type: xml` the tables come from
 `Resources/config/doctrine-xml/question/`; with `database.user_reference: id` the asker, answerer and withdrawer are
 user ids. Every question write goes through the bundle's private manager (the only mode since 3.0).
+
+## Custom fields page (since 3.3.0)
+
+A board's native custom fields (text, number, drop-down; since 2.19) are managed on its **Custom fields** page
+(`/tools/task-board/board/{boardId}/fields`), linked from the board and list views for users the restructure policy lets
+restructure the board (by default its manage right):
+
+- the tenant's fields are listed (read-only there: they belong to every board) with the board's own;
+- **Add field**: name, type and, for a drop-down, its options one per line (`Urgent #e03131` sets a colour);
+- **Edit**: name and, for a drop-down, each option as a row (rename, recolour, remove — removing clears the tasks' values
+  that held it) plus new options; the type stays;
+- **Delete** opens an inline confirmation (no JavaScript needed) and removes the field and every value of it. A field
+  that came from an import also stops being imported — no values, not even read-only — and is listed under *Deleted
+  imported fields* until you choose *Import it again*; the next sync then reads every task again and brings the field
+  and its values back. While a sync of the board runs, *Import it again* asks you to try again when it ends.
+
+Every save carries the field's version: when someone else saved the field meanwhile, the page says so and nothing is
+written (reload and save again). A field created by a ClickUp import shows *from ClickUp*; renaming it here is safe (a
+re-import finds it by its origin). Values are edited on the task form and filtered in the list view as before.
+`web_ui.custom_fields_page: false` removes the page and its action (a host with its own screens uses
+`TaskCustomFieldManager` directly: pass `$expectedVersion` to `update()` / `delete()`).
 
 ## Header search (since 2.25)
 

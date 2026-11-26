@@ -174,8 +174,39 @@
                         {% if form %}
                             {% if fields is empty %}
                                 <p class="{{ nowo_ui_class('muted', _b) }}" data-testid="nowo-task-plan-no-fields">{{ 'task_board.import_plan.fields.none'|trans({}, _b) }}</p>
+                                {{ include('@NowoTaskBoardBundle/manage/_import_plan_form.html.twig', {form: form}) }}
+                            {% else %}
+                                {#- Since 3.3.0 (CU-3): one row per ClickUp field — synced, not imported, or a native (editable) field. -#}
+                                {{ form_start(form, {attr: {class: 'nowo-task-plan__form'}}) }}
+                                    {{ form_widget(form.version) }}
+                                    <div class="{{ nowo_ui_class('table_wrap', _b) }} nowo-task-mb-3">
+                                        <table class="{{ nowo_ui_class('table', _b) }}" data-testid="nowo-task-plan-field-table">
+                                            <caption class="visually-hidden">{{ 'task_board.import_plan.fields.title'|trans({}, _b) }}</caption>
+                                            <thead>
+                                                <tr>
+                                                    <th scope="col">{{ 'task_board.import_plan.fields.field'|trans({}, _b) }}</th>
+                                                    <th scope="col">{{ 'task_board.import_plan.fields.type'|trans({}, _b) }}</th>
+                                                    <th scope="col">{{ 'task_board.import_plan.fields.sources'|trans({}, _b) }}</th>
+                                                    <th scope="col">{{ 'task_board.import_plan.fields.import_as'|trans({}, _b) }}</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for field in fields %}
+                                                    {% set _name = 'f_' ~ field.id %}
+                                                    <tr data-testid="nowo-task-plan-field-row">
+                                                        <th scope="row" id="nowo-task-plan-field-{{ field.id }}">{{ field.name }}</th>
+                                                        <td><code>{{ field.remoteType }}</code>{% if field.nativeType is null %} <span class="{{ nowo_ui_class('badge_neutral', _b) }} nowo-task-badge">{{ 'task_board.import_plan.fields.synced_only'|trans({}, _b) }}</span>{% endif %}</td>
+                                                        <td>{{ field.sources }}</td>
+                                                        <td>{% if form[_name] is defined %}{{ form_widget(form[_name], {attr: {'aria-labelledby': 'nowo-task-plan-field-' ~ field.id, 'data-testid': 'nowo-task-plan-field-choice'}}) }}{{ form_errors(form[_name]) }}{% endif %}</td>
+                                                    </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    {% for child in form %}{% if not child.rendered and child.vars.name != '_token' %}{{ form_row(child) }}{% endif %}{% endfor %}
+                                    {{ include('@NowoTaskBoardBundle/manage/_import_plan_next.html.twig') }}
+                                {{ form_end(form) }}
                             {% endif %}
-                            {{ include('@NowoTaskBoardBundle/manage/_import_plan_form.html.twig', {form: form}) }}
                         {% endif %}
                     {% endblock %}
                 {% elseif step.value == 'people' %}

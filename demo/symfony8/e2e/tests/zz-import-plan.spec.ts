@@ -76,6 +76,12 @@ test('import two lists from ClickUp with the guided import', async ({ page }) =>
   await expect(page.getByTestId('nowo-task-plan-status-table').first()).toBeVisible();
   await check(page, '5-statuses');
   await page.getByTestId('nowo-task-plan-next').click();
+  // Since 3.3.0 (CU-3): size, team and points as native fields; the date stays synced (it cannot be native).
+  await expect(page.getByTestId('nowo-task-plan-field-row')).toHaveCount(4);
+  await page.getByRole('combobox', { name: 'T-shirt size' }).selectOption('create');
+  await page.getByRole('combobox', { name: 'Team' }).selectOption('create');
+  await page.getByRole('combobox', { name: 'Story points' }).selectOption('create');
+  await expect(page.getByRole('combobox', { name: 'Launch date' }).locator('option')).toHaveCount(2);
   await check(page, '6-fields');
   await page.getByTestId('nowo-task-plan-next').click();
   await expect(page.getByTestId('nowo-task-plan-people-counts')).toBeVisible();
@@ -84,6 +90,7 @@ test('import two lists from ClickUp with the guided import', async ({ page }) =>
 
   // Preview and the confirm dialog.
   await expect(page.getByTestId('nowo-task-plan-eta')).toBeVisible();
+  await expect(page.getByTestId('nowo-task-plan-fields')).toContainText('3 native, 1 synced, 0 not imported');
   await check(page, '8-preview');
   await page.getByTestId('nowo-task-plan-start').click();
   await expect(page.getByRole('dialog')).toBeVisible();
@@ -97,6 +104,29 @@ test('import two lists from ClickUp with the guided import', async ({ page }) =>
   await expect(page.getByTestId('nowo-task-plan-item').first()).toHaveAttribute('data-status', 'succeeded');
   await check(page, '10-summary');
   expect(errors).toEqual([]);
+
+  // Since 3.3.0 (CU-3): the backlog's board got the native fields, marked "from ClickUp".
+  const summaryUrl = page.url();
+  let imported = 0;
+  for (const name of ['Zz imported list 1', 'Zz imported list 2']) {
+    await page.goto('/tools/task-board');
+    await page.getByRole('link', { name }).first().click();
+    await page.getByRole('link', { name: 'Custom fields' }).first().click();
+    const marked = await page.getByTestId('nowo-task-field-source').count();
+    if (marked > 0) {
+      imported += marked;
+      if (shots) {
+        await page.addStyleTag({ content: '.sf-toolbar,.sf-minitoolbar,[id^="sfwdt"]{display:none!important}' });
+        for (const theme of ['light', 'dark'] as Theme[]) {
+          await setTheme(page, theme);
+          await page.screenshot({ path: resolve(shots, `after-11-native-fields-${theme}.png`), fullPage: true });
+        }
+        await setTheme(page, 'light');
+      }
+    }
+  }
+  expect(imported).toBe(3);
+  await page.goto(summaryUrl);
 
   // Clean up: delete the plan (its boards stay; the demo's own data is not touched).
   await page.getByTestId('nowo-task-plan-delete').click();

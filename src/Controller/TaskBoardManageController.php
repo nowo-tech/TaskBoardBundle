@@ -63,6 +63,7 @@ use Nowo\TaskBoardBundle\Exception\TaskTimeBillableRefusedException;
 use Nowo\TaskBoardBundle\Exception\UnassignableUserException;
 use Nowo\TaskBoardBundle\Field\TaskCustomFieldForm;
 use Nowo\TaskBoardBundle\Field\TaskCustomFieldListView;
+use Nowo\TaskBoardBundle\Folder\TaskBoardRestructurePolicyInterface;
 use Nowo\TaskBoardBundle\Folder\TaskBoardRestructureRefusedException;
 use Nowo\TaskBoardBundle\Form\BoardColumnFormType;
 use Nowo\TaskBoardBundle\Form\CalendarEventMoveFormType;
@@ -94,6 +95,7 @@ use Nowo\TaskBoardBundle\Port\Internal\FirstBoardProvisionerInterface;
 use Nowo\TaskBoardBundle\Port\Internal\SyncLimitCheckerInterface;
 use Nowo\TaskBoardBundle\Port\Internal\TaskBoardDefaultViewResolverInterface;
 use Nowo\TaskBoardBundle\Port\Internal\TaskMentionCandidatesResolverInterface;
+use Nowo\TaskBoardBundle\Port\Snapshots;
 use Nowo\TaskBoardBundle\Question\TaskQuestionView;
 use Nowo\TaskBoardBundle\Repository\ArchiveAwareTaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\BoundedTaskRepositoryInterface;
@@ -337,6 +339,9 @@ final class TaskBoardManageController extends AbstractController
         // Since 3.2.0 (CU-2): the import plans' route name with `sync.plans.enabled` (the index's "Import from ClickUp",
         // for users granted `import_plan`).
         private readonly ?string $importPlansRoute = null,
+        // Since 3.3.0: `web_ui.custom_fields_page` (the board's Custom fields page) and who may open it.
+        private readonly bool $customFieldsPage = false,
+        private readonly ?TaskBoardRestructurePolicyInterface $restructurePolicy = null,
     ) {
     }
 
@@ -481,6 +486,8 @@ final class TaskBoardManageController extends AbstractController
 
         return $this->render($this->templates['board'], [
             'board' => $board,
+            // Since 3.3.0: the Custom fields page, for users who may restructure the board (null: no action).
+            'fieldsUrl' => $this->fieldsUrl($user, $board),
             // board.top_level_only: subtasks are counted on their parent card instead of having one of their own.
             'tasks'            => $cards,
             'taskTree'         => $taskTree,
@@ -1010,6 +1017,7 @@ final class TaskBoardManageController extends AbstractController
 
         return $this->render($this->templates['list'], [
             'board'       => $board,
+            'fieldsUrl'   => $this->fieldsUrl($user, $board),
             'tasks'       => $tasks,
             'taskTree'    => TaskTree::fromTasks($tasks),
             'priorities'  => $priorityNames,
@@ -3195,6 +3203,16 @@ final class TaskBoardManageController extends AbstractController
         }
 
         return $board;
+    }
+
+    /** Since 3.3.0: the board's Custom fields page for a user the restructure policy allows, null otherwise. */
+    private function fieldsUrl(object $user, TaskBoard $board): ?string
+    {
+        if (!$this->customFieldsPage || !isset($this->routes['board_fields']) || !$this->restructurePolicy instanceof TaskBoardRestructurePolicyInterface || !$this->restructurePolicy->mayRestructureBoard($user, Snapshots::board($board))) {
+            return null;
+        }
+
+        return $this->generateUrl($this->routes['board_fields']['name'], ['boardId' => $board->getId()]);
     }
 
     /**

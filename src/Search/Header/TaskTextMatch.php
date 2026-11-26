@@ -7,7 +7,9 @@ namespace Nowo\TaskBoardBundle\Search\Header;
 use Doctrine\DBAL\Platforms\AbstractMySQLPlatform;
 use Doctrine\ORM\QueryBuilder;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Entity\TaskCustomFieldValue;
 use Nowo\TaskBoardBundle\Entity\TaskLink;
+use Nowo\TaskBoardBundle\Enum\CustomFieldType;
 use SortDirection;
 
 use function implode;
@@ -20,7 +22,8 @@ use function preg_match;
  * - **Words**: every word of the query (at most eight, lower case) must be in the title (escaped `LIKE`), or in the
  *   description when the word has at least `search_kit.description_min_length` characters. On MySQL / MariaDB with
  *   `search.fulltext`, a description word of letters and digits at least `search.min_token_length` long uses the
- *   FULLTEXT index (`+word*`); every other one is an escaped `LIKE`. Shorter words never scan descriptions.
+ *   FULLTEXT index (`+word*`); every other one is an escaped `LIKE`. Shorter words never scan descriptions. Since 3.3.0,
+ *   with `search_kit.custom_fields`, such a word also matches the task's native **text** field values (escaped `LIKE`).
  * - **References** ({@see TaskReference}): a query of one token also finds the task whose number it names (`#123`,
  *   `123`, or `DEV-123` with the board's numbering prefix) or whose stored external id it is, by exact match on bound
  *   parameters. Number matches are ordered first.
@@ -34,6 +37,8 @@ final readonly class TaskTextMatch
         private int $descriptionMinLength = 3,
         private bool $fulltext = false,
         private int $minTokenLength = 3,
+        // Since 3.3.0: `search_kit.custom_fields` — words also match the tasks' native text field values.
+        private bool $customFields = false,
     ) {
     }
 
@@ -65,6 +70,12 @@ final readonly class TaskTextMatch
                 }
                 // @codeCoverageIgnoreEnd
                 $any[] = "LOWER({$alias}.description) LIKE :tbWord{$index} ESCAPE '!'";
+                if ($this->customFields) {
+                    // Since 3.3.0: a native text field's value (dropdown values are option ids, numbers are not text).
+                    $any[] = 'EXISTS (SELECT tbField' . $index . '.id FROM ' . TaskCustomFieldValue::class . ' tbField' . $index . ' JOIN tbField' . $index . '.field tbFieldDef' . $index
+                        . " WHERE tbField{$index}.task = {$alias} AND tbFieldDef{$index}.type = :tbFieldText AND LOWER(tbField{$index}.textValue) LIKE :tbWord{$index} ESCAPE '!')";
+                    $qb->setParameter('tbFieldText', CustomFieldType::Text->value);
+                }
             }
             $all[] = '(' . implode(' OR ', $any) . ')';
         }

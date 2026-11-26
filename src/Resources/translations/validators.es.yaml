@@ -1,3 +1,4 @@
 task_board.import.form.file_invalid: Sube un CSV o JSON válido (máx. 20 MB).
 task_board.sync.browser.pick_list: "Elige una lista."
 task_board.import_plan.error.pick_one: "Elige una opción."
+task_board.custom_field.form.color_invalid: "Usa un color como #e03131."

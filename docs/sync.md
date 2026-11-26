@@ -352,7 +352,7 @@ nowo_task_board:
 | Tree | Ticks spaces, folders or lists; picks the layout and options | A ticked space or folder means "its lists now". A level opens by a POST (no provider call on a GET). At most `max_items` ticks; each must lie in the plan's workspace (ClickUp: the workspace's spaces once, then one request per ticked list or folder, from the token's budget) |
 | Boards | Per item: *New board* (name) or an existing board of the tenant | A board linked to another source is not offered; a board is used once |
 | Statuses | One table per status set: each status → a column, *Create a column*, *Do not import* | Same-named columns preselected (case, accents, spaces ignored) |
-| Fields | Untick the fields not to import | The others are synced read-only fields; native fields come with CU-3 |
+| Fields | Per field: *Synced, read-only*, *Do not import* or (text, number, drop-down) a *native field* — create one or pick one of the type | Since 3.3.0 (CU-3), see [Native fields](#native-fields-from-the-import-since-330). Other types say *synced only* |
 | People | Counts of the tenant's directory; *Stop after the first board is linked* | One directory per tenant and workspace (scope `tenant:<hash>`) |
 | Preview | Counts from ClickUp, requests and minutes, warnings, the host's quota, the re-import mode | *Start import* behind a confirm dialog |
 | Run / summary | Progress (polled every 5 s), Cancel, Resume; then counts, failed lists, *Re-import now*, *Retry the failed lists*, *Download report (JSON)*, Delete | The page can be left: the plan goes on |
@@ -366,6 +366,47 @@ first import. Recurrence stays read-only text (Q-CU-11).
 
 Re-import modes (Q-CU-8): **Update changed tasks** (the field-hash rule: a local edit wins) and **Only add new
 tasks** (`SyncOptions::$createOnly`: imported tasks untouched, deletions not archived). There is no overwrite mode.
+
+### Native fields from the import (since 3.3.0)
+
+Phase CU-3 (owner Q-CU-7). On the Fields step a ClickUp field of type `text` / `short_text`, `number` or `drop_down`
+can land on a **native** field: editable on every task of the board, in the list columns and filters, the Task API and
+the board's *Custom fields* page. The choice is *Create “name”* (a board field created on first use) or an existing
+native field of the same type: the tenant's fields, and the board's own when every item of the plan fills the same
+existing board. Every other ClickUp type stays a synced, read-only field (the step says *synced only*; the preview
+lists them).
+
+- **Found again by id.** A field the import creates carries the marker `clickup:<field id>`
+  (`TaskCustomField::getSourceRef()`, unique per board). A re-import finds it by the marker, whatever it is called
+  now. Drop-down options are matched by ClickUp's option id (`getSourceOptions()`): renamed options (there or here)
+  stay the same option, new ClickUp options are added, an option deleted here is **not** recreated.
+- **No overwrite mode.** The provider's value is written only while nobody changed the task's value here since the last
+  import (a per-field hash on the sync item, key `native:<field id>`). A value changed here — or one set before the
+  provider had any — is kept, and the provider's value is noted once in a comment, as the other fields' conflicts. An
+  empty provider value never clears a value. A value written here and in ClickUp to the same thing is not a conflict.
+- **Not written twice.** A field landed on a native field is left out of the synced fields (`task_board_sync_field_*`).
+- **Rights.** Creating a field, or landing values on an existing one, needs the run actor's right of the Custom fields
+  page (the restructure policy: a board's field `mayRestructureBoard()`, by default the board's manage right; a tenant
+  field `mayManageFolders()`). Without it the run warns `native_field_refused`, the definition is not touched and those
+  values stay synced, read-only fields. The Fields step offers only the fields its user may change, and never one
+  native field to two ClickUp fields. A chosen field that was deleted or retyped warns `native_field_unavailable` (values
+  synced too).
+- **Deleted here stays deleted.** Deleting an imported field (the Custom fields page, a host through the manager, or a
+  board configuration that drops it) leaves a tombstone: the next imports warn `native_field_deleted` and import neither
+  the field nor its values — not even as a synced, read-only field (audit ZCFv-L1). *Import it again* on the page clears
+  it and makes the next sync read every task again (the connection's watermark is cleared and every task's remote date
+  reset; audit ZCFv2-L1): that sync creates the field anew and lands the values of every task on it, also of the tasks
+  that did not change in ClickUp. While a sync of the board runs, *Import it again* is refused ("A sync of this board is
+  running; try again when it ends", `sync_running`; audit ZCFv3-L1).
+- **A definition changed under the run.** When the field's definition changed after the run's transaction started
+  reading (a host transaction around the import), the option merge is refused: the run warns `native_field_changed`, defers the tasks that carry the field
+  (`fields.native_deferred`) and keeps the previous watermark, so the next run, incremental or not, imports those
+  values (audit ZCFv2-L1).
+- **A synced copy left behind (audit ZCFv-I2).** A field that fell back to a synced field for a while (refused or
+  unavailable) keeps that synced copy, with its last values, once it lands on a native field; the copy stops updating.
+  `SyncFieldValueEraser::eraseField()` removes it per task.
+- **Counts** in the run report: `fields.native_fields`, `fields.native_values`, `fields.native_conflicts`,
+  `fields.native_misfit` (a value that did not fit the provider's own type), `fields.native_invalid`.
 
 ### How a plan runs
 

@@ -10,6 +10,7 @@ use Nowo\TaskBoardBundle\Form\ImportPlanStepFormType;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Security\TenantAwareTaskBoardAccessCheckerInterface;
+use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncDirectory;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncImportPlan;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncImportPlanItem;
@@ -54,7 +55,6 @@ use Twig\Environment;
 
 use function array_filter;
 use function array_key_exists;
-use function array_keys;
 use function array_map;
 use function array_slice;
 use function array_sum;
@@ -83,6 +83,12 @@ use const JSON_UNESCAPED_SLASHES;
 final class TaskSyncImportPlanController extends AbstractController
 {
     public const PROVIDER = 'clickup';
+
+    /** Since 3.3.0 (CU-3): a provider field kept as a synced, read-only field (the default). */
+    private const FIELD_SYNCED = 'synced';
+
+    /** Since 3.3.0 (CU-3): a provider field not imported. */
+    private const FIELD_EXCLUDED = 'excluded';
 
     private const PLAN_ID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 
@@ -364,10 +370,19 @@ final class TaskSyncImportPlanController extends AbstractController
                 $this->plans->mapStatuses($plan, $version, $choices);
                 break;
             case ImportPlanStep::Fields:
-                /** @var list<string> $imported */
-                $imported = $data['imported'];
-                $all      = array_map(static fn (array $field): string => $field['id'], $this->plans->fields($plan));
-                $this->plans->chooseFields($plan, $version, array_values(array_filter($all, static fn (string $id): bool => !in_array($id, $imported, true))));
+                // Since 3.3.0 (CU-3): one choice per field — synced, excluded, or a native target.
+                $fields   = $this->plans->fields($plan);
+                $excluded = [];
+                $native   = [];
+                foreach ($fields as $field) {
+                    $choice = (string) ($data[ImportPlanStepFormType::fieldName($field['id'])] ?? self::FIELD_SYNCED);
+                    if ($choice === self::FIELD_EXCLUDED) {
+                        $excluded[] = $field['id'];
+                    } elseif ($choice !== self::FIELD_SYNCED) {
+                        $native[$field['id']] = $choice;
+                    }
+                }
+                $this->plans->chooseFields($plan, $version, $excluded, $native, $fields, $user);
                 break;
             case ImportPlanStep::People:
                 $this->plans->choosePeople($plan, $version, $data['peopleFirst'] === true);
@@ -425,11 +440,7 @@ final class TaskSyncImportPlanController extends AbstractController
                 $options['groups'] = $this->statusTables($plan);
                 break;
             case ImportPlanStep::Fields:
-                $options['choices'] = [];
-                foreach ($this->plans->fields($plan) as $field) {
-                    $options['choices'][$field['id']] = $field['name'];
-                }
-                $options['selected'] = array_values(array_filter(array_map(strval(...), array_keys($options['choices'])), static fn (string $id): bool => !in_array($id, $plan->getExcludedFields(), true)));
+                $options['fields'] = $this->fieldRows($plan, $user);
                 break;
             case ImportPlanStep::People:
                 $options['people_first'] = $plan->option(TaskSyncImportPlan::OPTION_PEOPLE, false);
@@ -507,6 +518,40 @@ final class TaskSyncImportPlanController extends AbstractController
         }
 
         return $vars;
+    }
+
+    /**
+     * Since 3.3.0 (CU-3, design §8.5): the Fields step's rows — per provider field *Synced, read-only*, *Do not import*
+     * and, for a type a native field takes, *Create “name”* and the existing native fields of that type
+     * ({@see ImportPlanService::nativeTargets()}); with the plan's saved choice.
+     *
+     * @return list<array{id: string, name: string, choices: array<string, string>, selected: string}>
+     */
+    private function fieldRows(TaskSyncImportPlan $plan, object $user): array
+    {
+        $targets  = null;
+        $excluded = $plan->getExcludedFields();
+        $native   = $plan->getNativeFields();
+        $rows     = [];
+        foreach ($this->plans->fields($plan) as $field) {
+            $choices = [
+                self::FIELD_SYNCED   => $this->translator->trans('task_board.import_plan.fields.synced', [], 'NowoTaskBoardBundle'),
+                self::FIELD_EXCLUDED => $this->translator->trans('task_board.import_plan.fields.excluded', [], 'NowoTaskBoardBundle'),
+            ];
+            if ($field['nativeType'] !== null) {
+                $targets ??= $this->plans->nativeTargets($plan, $user);
+                $choices[TaskBoardConnection::NATIVE_CREATE] = $this->translator->trans('task_board.import_plan.fields.native_create', ['%name%' => $field['name']], 'NowoTaskBoardBundle');
+                foreach ($targets as $id => $target) {
+                    if ($target->getType()->value === $field['nativeType']) {
+                        $choices[$id] = $this->translator->trans('task_board.import_plan.fields.native_existing', ['%name%' => $target->getName()], 'NowoTaskBoardBundle');
+                    }
+                }
+            }
+            $selected = $native[$field['id']] ?? (in_array($field['id'], $excluded, true) ? self::FIELD_EXCLUDED : self::FIELD_SYNCED);
+            $rows[]   = ['id' => $field['id'], 'name' => $field['name'], 'choices' => $choices, 'selected' => isset($choices[$selected]) ? $selected : self::FIELD_SYNCED];
+        }
+
+        return $rows;
     }
 
     /**
