@@ -5,6 +5,7 @@ This document describes how to upgrade between versions of TaskBoard Bundle.
 ## Table of contents
 
 - [Unreleased](#unreleased)
+- [To 3.4.0](#to-340)
 - [To 3.3.0](#to-330)
   - [Schema change: custom field provenance and version](#schema-change-custom-field-provenance-and-version)
   - [Native fields from the ClickUp import](#native-fields-from-the-clickup-import)
@@ -232,6 +233,105 @@ This document describes how to upgrade between versions of TaskBoard Bundle.
   - [FormKitBundle (admin forms)](#formkitbundle-admin-forms)
 
 ## Unreleased
+
+## To 3.4.0
+
+```bash
+composer require nowo-tech/task-board-bundle:^3.4
+```
+
+No BC break: every new option is off (or additive), `TenantCredentialSourceInterface` is unchanged, and every new
+constructor argument is optional and appended.
+
+### Schema change: two indexes
+
+For the client API's `changes` and `my-tasks` (the same SQL on MySQL 8 / 9, MariaDB, PostgreSQL and SQLite; table prefix
+`task_board_`, change it if you set `table_prefix`), or `doctrine:migrations:diff`:
+
+```sql
+CREATE INDEX task_board_tasks_board_updated_idx ON task_board_tasks (board_id, updated_at);
+CREATE INDEX task_board_member_user_role_idx ON task_board_task_members (user_id, member_role);
+```
+
+Nothing reads differently without them; they only keep the two queries cheap.
+
+### Personal-data export (UserKit section `task_board`)
+
+With nowo-tech/user-kit-bundle installed, UserKit's export now has a `task_board` section (registered automatically;
+`personal_data.user_kit: false` turns it off when your application calls
+`PersonalData\TaskBoardPersonalDataExporterInterface` itself). A DDD host without UserKit calls the interface (public
+service) from its own export. It lists ids, dates and metadata — boards and tasks the person created, assignments,
+comments, documents, history and member history, last writes, custom field values they set, time entries, questions,
+recurring series, import plans and the remote people mapped to them — never a secret, a token, a connection reference
+or a comment / description body. Your erasure flow does not change (`TaskSyncPeopleReassigner::detachUser()`, then
+`TaskRecurrenceManager::forgetAuthor()`); after it, every section an erasure step reaches is empty.
+
+### The token page's way back (optional)
+
+Implement `Sync\Hook\TenantCredentialReturnAwareSourceInterface::tenantCredentialFormUrlWithReturn()` on your
+credential source (`sync.credential_resolver`) to send the person back to the import plan's Connect step after they
+paste a token: `$returnTo` is a same-origin path the bundle already checked with `OAuthReturnPath::isSafe()`; check it
+again when you keep it. Without it the link is `tenantCredentialFormUrl()`, as before.
+
+### "Forget this person" (optional)
+
+`sync.people_forget: true` shows the action on the People page; a listener of
+`TaskBoardEvents::SYNC_PERSON_FORGET_CHECK` must call `SyncPersonForgetCheckEvent::allow()` (denied by default; asked
+once per page with `personId` null, and again before a forget with the person's id). The person must also manage the
+board's connection. Route `board_connection_people_forget` (`POST
+/tools/task-board/board/{boardId}/connection/people/{personId}/forget`), CSRF token id
+`task_board_connection_people_forget`. A host that overrides `templates.connection_people` adds the per-person button
+and `manage/_connection_person_forget_dialog.html.twig` (variable `peopleForgetForms`).
+
+### Client API v1 (optional)
+
+See [CLIENT-API](CLIENT-API.md). Off until `client_api.principal_resolver` is set; it needs `api.enabled` and
+`client_api.context_policy` (the build fails with a message otherwise) and a stateless firewall with
+`nowo_task_board.client_api.authenticator` on `^%nowo_task_board.client_api.v1_path_prefix%/`, before any firewall that
+matches the same prefix.
+
+### Beacon adoption
+
+1. **Config** (`config/packages/nowo_task_board.yaml`):
+   ```yaml
+   nowo_task_board:
+       client_api:
+           principal_resolver: App\Tasks\DesktopTasksClient   # over TimeTrack's ClientFamilyTokenAuthenticator, family 'tasks'
+           context_policy: App\Tasks\DesktopTasksClient       # personal / org:<uuid>; minus organisations with task_api_allowed = false
+           reference_resolver: App\Tasks\DesktopTaskReferences
+           link_visibility: App\Tasks\DesktopTaskReferences   # issues, chat messages, wiki pages, monitors
+           file_resolver: App\Tasks\DesktopTaskFiles          # beacon-file images (visibility; the signed URL comes in 3.5.0)
+           source_link: App\Tasks\DesktopTaskSources          # chat_message sources the person may read now
+           file_scheme: beacon-file
+           prefix: /api/task-board                             # routes under /api/task-board/v1
+           context_header: X-Beacon-Context
+       sync:
+           people_forget: true
+       personal_data:
+           user_kit: true                                      # the default
+   ```
+   `TASK_API_ENABLED` stays host-side (a runtime setting the bundle does not read): to answer "as if off" (`404`, §3.1
+   of the design), add a `kernel.request` listener at priority 9 (before the firewall) that returns a `404` under
+   `/api/task-board/v1/` while the switch is off; returning null from the resolver instead answers `401 invalid_token`.
+   The organisation gate is `taskApiAllowed`: organisations with `task_api_allowed = false` are left out of
+   `contextsFor()` and `allows()` (`403 context_forbidden`), and their tenants out of `whereFor()`.
+2. **Firewall** (`security.yaml`), before the Task API's `^/api/` firewall:
+   `task_board_client: {pattern: ^/api/task-board/v1/, stateless: true, provider: …, custom_authenticators:
+   [nowo_task_board.client_api.authenticator], entry_point: nowo_task_board.client_api.authenticator}`.
+3. **Scopes** of the `tasks` scope family (`DeviceScopeFamilyProviderInterface`): `task-board:read`,
+   `task-board:write` (`tasks:read` stays the `time` family's).
+4. **Events**: listen to `nowo_task_board.client_api_denied` (`TaskClientApiDeniedEvent`, audit of refusals with the
+   family) and `nowo_task_board.sync_person_forget_check` (`SyncPersonForgetCheckEvent::allow()` for project and
+   organisation managers). `nowo_task_board.api_write` already has Beacon's listener (writes arrive with
+   `channel: app`).
+5. **Provenance**: the write provenance provider answers `WriteChannel::App` for paths under `/api/task-board/v1`, with
+   the device label as the actor label.
+6. **Revocation and erasure** (B-T8): call `TaskApiIdempotencyStoreInterface::forget(hash('sha256',
+   'nowo-task-board-api|' . $tokenId))` when a `tasks` token is revoked and for every `tasks` token of an erased user (the
+   client API uses the Task API's store and scope).
+7. **Routes**: `nowo_task_board_client_v1_*` (19, see the OpenAPI document) and
+   `nowo_task_board_board_connection_people_forget`. No template override is needed.
+8. **Schema**: the two indexes above.
 
 ## To 3.3.0
 

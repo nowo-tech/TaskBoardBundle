@@ -77,6 +77,9 @@
   - [Questions: Standard Symfony host](#questions-standard-symfony-host)
   - [Questions: DDD / hexagonal host](#questions-ddd--hexagonal-host)
 - [Custom fields page (since 3.3.0)](#custom-fields-page-since-330)
+- [Personal-data export (since 3.4.0)](#personal-data-export-since-340)
+- [Forget this person (since 3.4.0)](#forget-this-person-since-340)
+- [Client API v1 (since 3.4.0)](#client-api-v1-since-340)
 - [Header search (since 2.25)](#header-search-since-225)
   - [Narrowing the scope: the search scope event](#narrowing-the-scope-the-search-scope-event)
   - [SearchKit groups: tasks and boards](#searchkit-groups-tasks-and-boards)
@@ -1912,9 +1915,9 @@ edit by a provider sync changes the text without changing the provenance.
 comments that person wrote (as it clears the name snapshots). Residuals, as for the name snapshots: a row an earlier,
 non-anonymising erasure already detached keeps its label, and so does a row whose user was deleted directly (the
 foreign key's `ON DELETE SET NULL`) without `detachUser()`. The channel is not personal data and stays. The Task API
-answers `token_name` only when the host shows the writer to the viewer (`profiles()`, FR-010). **No export:** the bundle
-has no per-user export of personal data; to answer an access request, read `getActorLabel()` on the user's tasks,
-comments and history rows (by `getUpdatedBy()` / `getUser()`) yourself.
+answers `token_name` only when the host shows the writer to the viewer (`profiles()`, FR-010). **Export:** since 3.4.0
+the personal-data export lists the tasks and comments the user last wrote (`last_writes`, by id) — see
+[Personal-data export](#personal-data-export-since-340); the actor labels themselves are not exported.
 
 ### Standard Symfony host
 
@@ -2154,6 +2157,48 @@ written (reload and save again). A field created by a ClickUp import shows *from
 re-import finds it by its origin). Values are edited on the task form and filtered in the list view as before.
 `web_ui.custom_fields_page: false` removes the page and its action (a host with its own screens uses
 `TaskCustomFieldManager` directly: pass `$expectedVersion` to `update()` / `delete()`).
+
+## Personal-data export (since 3.4.0)
+
+`PersonalData\TaskBoardPersonalDataExporterInterface::export($user)` returns one person's TaskBoard data for an access
+or portability request (RGPD Art. 15 / 20), as plain arrays: `boards`, `tasks_created`, `task_memberships`, `comments`,
+`documents`, `history`, `member_history`, `last_writes`, `custom_field_values`, `time_entries`, `questions`,
+`recurrence`, `import_plans`, `sync_people` (every key always present). Ids, dates, roles and the names the person gave
+(board name, task and document titles); never a body, a secret, a token or a connection reference. **The host
+authorises the caller.**
+
+- With nowo-tech/user-kit-bundle it is UserKit's `task_board` section (automatic; `personal_data.user_kit: false` to
+  call it yourself).
+- A DDD host calls the interface (a public service) from its own export.
+- Parity with the erasure: each step of `TaskSyncPeopleReassigner::detachUser()` (`ERASURE_STEPS`) and
+  `TaskRecurrenceManager::forgetAuthor()` has its section (`TaskBoardPersonalDataExporter::ERASURE_SECTIONS`); after
+  them those sections are empty. `task_memberships` and `custom_field_values` are not erasure steps (the database removes
+  the assignments with the user's row; values stay on the task).
+
+## Forget this person (since 3.4.0)
+
+With `sync.people_forget: true`, the People page of a linked board shows **Forget** on each remote person not forgotten
+yet, behind a confirm dialog (Cancel first). It clears the person's name and e-mail
+(`TaskSyncPeopleDirectoryService::anonymise()`; references and the mapping stay, views show a former person). Who may:
+whoever manages the board's connection **and** is allowed by a listener of `TaskBoardEvents::SYNC_PERSON_FORGET_CHECK`:
+
+```php
+#[AsEventListener(event: TaskBoardEvents::SYNC_PERSON_FORGET_CHECK)]
+public function onForgetCheck(SyncPersonForgetCheckEvent $event): void
+{
+    if ($this->isManagerOfTenant($event->actor, $event->tenantKey)) {
+        $event->allow();
+    }
+}
+```
+
+Denied by default. The page asks once with `personId` null; the POST asks again with the person's id. Idempotent; the
+log line and `SYNC_PERSON_ANONYMISED` carry ids only.
+
+## Client API v1 (since 3.4.0)
+
+A versioned client API for a first-party app (Beacon Desktop's Tasks module) at `<client_api.prefix>/v1`: see
+[CLIENT-API](CLIENT-API.md).
 
 ## Header search (since 2.25)
 

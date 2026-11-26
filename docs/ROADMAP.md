@@ -32,9 +32,9 @@ and must work in FrankenPHP worker mode with the kernel not reset between reques
 | Filters and search | Client-side list filters (text, priority, column, over estimate), calendar and cross-board filters in the URL, text search in the Task API (2.16) |
 | Bulk work | Atomic bulk update in the Task API (2.16), move and duplicate a task tree to another board (2.3) |
 | Import and export | CSV / JSON import from three file formats and the bundle's own format (1.2, 1.18), a read-only provider sync (1.23–1.29), a guided ClickUp import of whole workspaces (3.2) landing text, number and drop-down fields on native fields (3.3), CSV / XLSX export of the cross-board list (2.13) |
-| API | Versioned Task API with idempotency, optimistic locking and conflict answers (2.2, 2.16, 2.22), a channel for agent tools (2.4), events after every write (1.10) |
+| API | Versioned Task API with idempotency, optimistic locking and conflict answers (2.2, 2.16, 2.22), a channel for agent tools (2.4), events after every write (1.10), a client API for a first-party app (3.4) |
 | Time | Time tracking integration, estimate deviation, billable manual entries (1.0, 1.15, 2.12) |
-| Platform | Multi-tenant paths (1.10), quota checks, account erasure, seven languages, phone layouts, keyboard-reachable menus, axe checks in the demo end-to-end tests |
+| Platform | Multi-tenant paths (1.10), quota checks, account erasure and export (3.4), seven languages, phone layouts, keyboard-reachable menus, axe checks in the demo end-to-end tests |
 
 ## Next
 

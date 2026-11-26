@@ -27,6 +27,8 @@
 - [Questions on tasks (2.23)](#questions-on-tasks-223)
 - [Logging and personal data](#logging-and-personal-data)
 - [Personal data in synced tasks (RGPD / LOPDGDD)](#personal-data-in-synced-tasks-rgpd--lopdgdd)
+- [Client API v1 (since 3.4.0)](#client-api-v1-since-340)
+- [Personal-data export and "Forget this person" (since 3.4.0)](#personal-data-export-and-forget-this-person-since-340)
 - [Dependencies](#dependencies)
 - [Reporting](#reporting)
 - [Release security checklist](#release-security-checklist)
@@ -457,7 +459,7 @@ What the bundle does and does not do:
 | --- | --- |
 | Erasure, Art. 17 and 19 RGPD; Art. 15 LOPDGDD | `SyncFieldValueEraser::eraseByValue()` / `eraseBoard()`, called by the host, which authorises the caller; `eraseByValue()` with a null board crosses every tenant, so a multi-tenant host passes the board. An erased value does not return on a re-sync while the provider has the same one; a different one is imported, also for `people` and `checkbox` values. Clear it at the source too. A suppression record stays in the row: an HMAC with a subkey of `kernel.secret`, over the stored value. Without the secret it cannot be tested against guesses; with the secret it can, so it may still be personal data (GWd-L2). Changing `kernel.secret` makes erased values importable again if the provider still has them: a host that must keep a value out keeps its erasure log and runs it again after rotating. Since 1.28.0 the eraser also removes the lines of the *Fields* document in `text` and `both` modes and `exportByValue()` / `exportBoard()` read them (see the residual below). |
 | Blocking, Art. 32 LOPDGDD | The bundle has no blocking state. Erasure in Spain implies blocking for the limitation periods: the host keeps this outside and defines its policy. |
-| Access and portability, Art. 15 and 20 RGPD; Art. 13 and 17 LOPDGDD | `SyncFieldValueEraser::exportByValue()` / `exportBoard()` for field values, `TaskSyncPersonRepository::exportPerson()` for one person's row, estimates, comment assignments and people fields (GWd), `exportFor()` / `exportDirectory()` for people. Since 1.28.0 `exportPerson()` also names the comments they wrote, the tasks they created and the tasks they are assigned to or watch, by id. **Not in any export:** comment bodies and task text; the host adds them if it must. |
+| Access and portability, Art. 15 and 20 RGPD; Art. 13 and 17 LOPDGDD | Since 3.4.0: `TaskBoardPersonalDataExporterInterface` (UserKit section `task_board`), one section per erasure step. Also `SyncFieldValueEraser::exportByValue()` / `exportBoard()` for field values, `TaskSyncPersonRepository::exportPerson()` for one person's row, estimates, comment assignments and people fields (GWd), `exportFor()` / `exportDirectory()` for people. Since 1.28.0 `exportPerson()` also names the comments they wrote, the tasks they created and the tasks they are assigned to or watch, by id. **Not in any export:** comment bodies and task text; the host adds them if it must. |
 | Minimisation and by default, Art. 5(1)(c) and 25 RGPD | See the default above. |
 | Storage limitation, Art. 5(1)(e) RGPD | After an unlink, tasks, their field values and the rows that track stored files stay; a later deletion of the task or board names the files (GWd-M1). Run `eraseBoard()` when the host's retention rule asks for it. |
 | Information, Art. 14 RGPD; Art. 11 LOPDGDD | Data arrives indirectly from the provider. The people concerned, who may be customers and not staff, must be informed within a month or an exception documented. Host side. |
@@ -486,6 +488,34 @@ Accepted residuals (audit GW, all pre-existing unless noted):
 - Host note: a `BOARD_ACCESS_CHECK` listener that grants every action makes every editor a board manager, including for removing another user's time entry.
 - `TimeTrackBundle` entries (`TimeEntry.user`) are that bundle's own; this rule and this audit do not reach them.
 - CSRF token ids are bound to the action, not the target (REQ-SEC-005 asks for that).
+
+## Client API v1 (since 3.4.0)
+
+New authenticated surface (immediate audit per the Beacon Desktop plan): `/task-board/v1`, off unless
+`client_api.principal_resolver` is set. [CLIENT-API](CLIENT-API.md) has the full contract.
+
+| Threat | Mitigation |
+|---|---|
+| A token of another family (time, chat), a revoked or expired one | The host's resolver answers null; `401 invalid_token`, never a redirect; the resolver is asked once per request and never cached (worker mode). Tokens over 4096 bytes never reach it. |
+| A token that reaches another tenant | Every request names a context the host's policy allows **now**; `where` comes from the context (never `everything()`; a context whose `where` is everything lists nothing). A bound token never opens another context. Unknown and foreign contexts are one answer (`403 context_forbidden`). |
+| Reading what the person may not see (R2) | Lists are narrowed by `where`, the plan gate and the person's view rights before paging and counting; a single object out of reach is `404 not_found`, the same as unknown (REQ-SEC-006: ids compared exactly, a collation's look-alike never answers). Parents, subtasks and dependencies the reader may not open are `{visible: false}`; host-object links, references and images are shown only when the host's ports say so (deny by default); the title written in a reference is never shown. |
+| HTML or script reaching the app | Text is `tokens/1` (strings only); links are `http(s)` / `mailto`; reference URLs and avatars are same-origin or `https://` only. |
+| Writing beyond the person's rights | `task-board:write` maps to level Tasks (never Full: no board or column management); every write runs the Task API's guard (`ACCESS_002`), the column transition policy (channel `app`, a person: *humans only* lets it in, Q-BD-24), the plan limits and the audit (`503` without an `API_WRITE` listener). |
+| Lost updates between devices | `If-Match` required (428), compared on the locked row (409). |
+| Replay of a create | `Idempotency-Key` required on creates; keyed to the token; a replay re-checks reach. |
+| CSRF / sessions | Bearer only; cookies, sessions and CSRF are never read; answers never set a cookie; `Cache-Control: no-store, private`. |
+| Probing | Every refusal (including each `404` of an authenticated call) dispatches `TaskClientApiDeniedEvent` (ids, codes and the `/24` or `/64` network only). |
+| A host that forgot the firewall | The API fails closed (`500 server_error`, logged) instead of answering as nobody. |
+
+## Personal-data export and "Forget this person" (since 3.4.0)
+
+- `TaskBoardPersonalDataExporterInterface` / UserKit's `task_board` section: the host authorises the caller (UserKit:
+  the person themself). Ids, dates and metadata only; never a secret, a token, a connection reference, a run token or a
+  body; the rows of exactly the user (REQ-SEC-006). Each section matches an erasure step, pinned by a test.
+- "Forget this person": `sync.people_forget` off by default; deny by default (`SYNC_PERSON_FORGET_CHECK`), on top of
+  the connection-manage right; CSRF POST behind a confirm dialog; the person of exactly this id in exactly this
+  board's directory (else `404`); logged and audited by id only; pseudonymisation as described above.
+- The token page's way back: only a same-origin path (`OAuthReturnPath::isSafe()`) is ever passed to the host.
 
 ## Dependencies
 

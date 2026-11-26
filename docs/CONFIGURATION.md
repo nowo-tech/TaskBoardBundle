@@ -7,6 +7,8 @@
 - [Routes](#routes)
   - [Attribute routes and the route loader (REQ-SF-004)](#attribute-routes-and-the-route-loader-req-sf-004)
 - [Task API (since 2.2)](#task-api-since-22)
+- [Client API v1 (since 3.4)](#client-api-v1-since-34)
+- [Personal-data export (since 3.4)](#personal-data-export-since-34)
 - [Member badges and write provenance (since 2.18)](#member-badges-and-write-provenance-since-218)
 - [Subtask depth (since 2.20)](#subtask-depth-since-220)
 - [Column transitions, humans-only columns and text search (since 2.16)](#column-transitions-humans-only-columns-and-text-search-since-216)
@@ -181,6 +183,37 @@ Off by default. `api.enabled`, `api.prefix`, `api.host_decides_access`, `api.quo
 
 Since 2.16.0 (Beacon spec 234): `api.hooks.members` (`TaskApiMembersInterface`; null: teams list no members) and
 `api.hooks.comment_edit_policy` (`TaskApiCommentEditPolicyInterface`; null: a comment's author only).
+
+## Client API v1 (since 3.4)
+
+Off until `client_api.principal_resolver` is set; needs `api.enabled` and `client_api.context_policy`. See
+[CLIENT-API](CLIENT-API.md) for the ports, the firewall and the routes.
+
+```yaml
+nowo_task_board:
+    client_api:
+        principal_resolver: null       # ClientApi\Contract\TaskClientPrincipalResolverInterface (null: off, no route)
+        context_policy: null           # ClientApi\Contract\TaskClientContextPolicyInterface (required with the resolver)
+        reference_resolver: null       # tokens/1 references (null: every reference visible: false)
+        link_visibility: null          # Link\TaskObjectLinkVisibilityInterface (null: host-object links visible: false)
+        file_resolver: null            # tokens/1 images (null: every image visible: false)
+        source_link: null              # POST tasks with source (null: 400 invalid_field)
+        file_scheme: null              # the scheme of host files in Markdown images, e.g. beacon-file
+        prefix: /api/task-board        # the routes live under <prefix>/v1
+        context_header: X-Beacon-Context
+```
+
+The parameter `nowo_task_board.client_api.v1_path_prefix` holds `<prefix>/v1` for the firewall pattern.
+
+## Personal-data export (since 3.4)
+
+```yaml
+nowo_task_board:
+    personal_data:
+        user_kit: true                 # UserKit's export section task_board when nowo-tech/user-kit-bundle is installed
+```
+
+`PersonalData\TaskBoardPersonalDataExporterInterface` is always registered (public) for a host's own export.
 
 ## Member badges and write provenance (since 2.18)
 
@@ -721,6 +754,7 @@ nowo_task_board:
         include_multi_list_tasks: false  # since 1.28.0: a ClickUp list source also reads tasks added to it from other lists (include_timl)
         full_sync_rereads_details: false # since 1.28.0: a full sync reads each task's detail again even if its date did not move
         people_bulk_former: false     # since 1.28.0: People page button "Mark every unmapped person as a former person"
+        people_forget: false          # since 3.4.0: People page "Forget this person" (a SYNC_PERSON_FORGET_CHECK listener must allow it)
         unmatched_columns_choice: false # since 1.28.0: draw "Columns no status uses" on the link page (a posted value is accepted either way)
         status_history:
             max_calls_per_run: 200    # since 1.27.0: "time in status" requests per run for the tasks it writes (0 = never)
@@ -769,6 +803,9 @@ New templates: `connection`, `connection_containers`, `connection_badge`, `conne
 since 1.27.0 `connection_people` (the People page) and `connection_people_summary` (its line on the connection page).
 Since 1.27.0 the routes `board_connection_people` (GET) and `board_connection_people_save` (POST, CSRF) are added.
 Since 1.28.0 `board_connection_people_former` (POST, CSRF) is added; it answers 404 unless `sync.people_bulk_former` is true.
+Since 3.4.0 `board_connection_people_forget` (POST `…/connection/people/{personId}/forget`, CSRF id
+`task_board_connection_people_forget`) is added; it answers 404 unless `sync.people_forget` is true, and 403 unless a
+`TaskBoardEvents::SYNC_PERSON_FORGET_CHECK` listener allows it (deny by default).
 Since 1.27.0 the partials `manage/_connection_completeness.html.twig` (variable `completeness`, on the connection page)
 and `manage/_task_sync_details.html.twig` / `_task_sync_fields.html.twig` (task panel) are included by the bundle's
 templates; a host with its own `templates.connection` includes the first one itself.

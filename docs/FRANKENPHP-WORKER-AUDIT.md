@@ -286,3 +286,20 @@ the plan and its items again by id (a copy detached by a clear is never written)
 manager between items (the board runs clear it after each page). `ProviderRateBudget` keeps no counter in memory: the
 windows live in the configured PSR-6 pool. Messages carry ids only; no `ProviderCredential` outlives a slice. Safe in a
 worker with and without kernel reset.
+
+## Client API v1, personal-data export and Forget this person (3.4.0)
+
+Reviewed for FrankenPHP worker mode with the kernel kept alive (REQ-RUNTIME-002):
+
+- `TaskClientAuthenticator`, `TaskClientApiListener`, `TaskClientReader`, `TaskClientWriter`, `TaskClientSerializer`,
+  `TaskClientQueries`, `TaskClientIdempotency`, `TaskTextTokens`, `TaskClientApiController`: `readonly` (the
+  authenticator has readonly properties only), no static state. The principal lives in a request attribute
+  (`_nowo_task_board_client`), the call (`_nowo_task_board_client_call`) too; the context and `where` are request data.
+  Reference and file answers are memoised in a `TaskTextMemo` created per text conversion and dropped with it.
+- `TaskBoardPersonalDataExporter`, `TaskBoardUserKitExportProvider`: readonly, read-only queries.
+- `TaskSyncPeopleDirectoryService::anonymise()`: a transaction that ends in the call (commit or rollback to the entry
+  level, the connection closed when that rollback fails, a closed manager reset through the registry).
+- `strtok()` (finding W-05) is not used; the exporter splits with `explode()`.
+- Test: `ClientApiWorkerTest` — one kernel, 500 rounds, two people in two contexts, a board grant flipped every round, a
+  token revoked and a membership removed half-way, memory flat.
+

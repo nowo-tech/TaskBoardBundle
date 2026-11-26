@@ -137,6 +137,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Beacon's requests for 3.4.0 (owner-approved): the client API v1 for Beacon Desktop's Tasks module (BD-3b of
+`BEACON_DESKTOP_TASKS.md`, Q-BD-20 … Q-BD-37), the personal-data export (Beacon WORKLIST), the token page's way back
+to the import plan, and "Forget this person" on the People page (Beacon spec 208 E, owner decision 2026-11-26). No BC
+break: every new option is off or additive, every new constructor argument optional and appended. **Schema change**:
+two indexes (see UPGRADING).
+
+### Added
+
+- **Client API v1** (`client_api.*`, off by default; [CLIENT-API](CLIENT-API.md), OpenAPI 3.1
+  [`openapi/task-board-client-v1.yaml`](openapi/task-board-client-v1.yaml) pinned by `ClientApiOpenApiTest`): a
+  stateless facade at `<client_api.prefix>/v1` (default `/api/task-board/v1`, house rule `/<segment>/v<N>`) over the
+  Task API's guard, operations, audit and idempotency store. Read routes (`task-board:read`): `me`, `my-tasks`
+  (buckets overdue / today / upcoming / no_date / review / all, counts), `boards`, `boards/{id}`, `boards/{id}/tasks`
+  (per-column cursor paging, list view sorts and filters), `tasks/{id}` (detail, `ETag`, lookup by number),
+  `tasks/{id}/subtasks`, `tasks/{id}/comments`, `tasks/{id}/questions`, `questions/waiting`, `people`, `changes`
+  (polling). Core writes (`task-board:write`): `POST tasks`, `PATCH tasks/{id}`, `POST tasks/{id}/move`,
+  `PUT|DELETE tasks/{id}/members/{userId}`, `POST tasks/{id}/checklist-items`,
+  `PATCH tasks/{id}/checklist-items/{itemId}`; `If-Match` required on changes (`428` / `409 conflict`),
+  `Idempotency-Key` required on creates (the Task API's store and token scope, so `forget()` drops both).
+- Ports: `ClientApi\Contract\TaskClientPrincipalResolverInterface`, `TaskClientContextPolicyInterface` (required),
+  `TaskClientReferenceResolverInterface`, `TaskClientFileResolverInterface`, `TaskClientSourceLinkInterface` and
+  `Link\TaskObjectLinkVisibilityInterface` (optional, deny by default); the stateless Symfony authenticator
+  `nowo_task_board.client_api.authenticator` (`TaskClientAuthenticator`, `401 invalid_token`, never a redirect);
+  `TaskClientApiListener` (scope, context, the person's budget, the error shape, `Cache-Control: no-store, private`,
+  no cookie); `TaskBoardEvents::CLIENT_API_DENIED` (`TaskClientApiDeniedEvent`, ids and codes only).
+- `ClientApi\Text\TaskTextTokens`: task text as `tokens/1` (ChatKit's format; headings, rules and task lists added),
+  references and images resolved per reader (R2).
+- `ColumnTransitionVia::APP` (`app`): the client API's channel; not a machine channel, so *humans only* columns let it
+  in (Q-BD-24).
+- `TaskApiWhere::tenantKeys()` / `boardIds()`, `TaskApiGuard::canSeeBoard()`,
+  `TaskApiChecklistOperations::createItemTask()` / `itemOf()` / `updateItemTask()` / `checklistNameOf()` (additive).
+- **Personal-data export** (RGPD Art. 15 / 20): `PersonalData\TaskBoardPersonalDataExporterInterface` (framework-free
+  port, always registered, public) and UserKit's export section `task_board`
+  (`Bridge\UserKit\TaskBoardUserKitExportProvider`, registered only when nowo-tech/user-kit-bundle is installed and
+  `personal_data.user_kit` is true, the default). One section per account-erasure step
+  (`TaskBoardPersonalDataExporter::ERASURE_SECTIONS`, pinned against `TaskSyncPeopleReassigner::ERASURE_STEPS` and
+  `TaskRecurrenceManager::forgetAuthor()` by `PersonalDataExportTest`) plus the assignments and the custom field values
+  the person set. Ids, dates and metadata; never a secret, a token, a connection reference or a body.
+- **The token page's way back** (Beacon request): `Sync\Hook\TenantCredentialReturnAwareSourceInterface::
+  tenantCredentialFormUrlWithReturn(TenantRef, string $provider, ?string $returnTo): ?string`, optional. When the
+  credential source implements it, the import plan's Connect step passes its own path (checked with
+  `OAuthReturnPath::isSafe()`); otherwise the link is `tenantCredentialFormUrl()` as before.
+  `TenantCredentialSourceInterface` is unchanged.
+- **"Forget this person"** on the People page (`sync.people_forget`, off by default; route
+  `board_connection_people_forget`, `POST …/connection/people/{personId}/forget`): a UiKit confirm dialog (Cancel
+  first) and a CSRF-only form per person shown, backed by `TaskSyncPeopleDirectoryService::anonymise()`. Allowed by a
+  `TaskBoardEvents::SYNC_PERSON_FORGET_CHECK` listener (`SyncPersonForgetCheckEvent`, **deny by default**) on top of the
+  connection-manage right; idempotent; logged and audited by id (`SYNC_PERSON_ANONYMISED`). Seven languages.
+
+### Changed
+
+- `TaskSyncPeopleDirectoryService::anonymise()` (REQ-RUNTIME-003): one short transaction that locks the directory's row,
+  then the person's, reads both as committed and anonymises only when no concurrent call did; the audit event after the
+  commit, once; the lost-savepoint rollback (`TransactionRollback`), a closed manager reset (new optional
+  `$managerRegistry`, appended).
+- `TaskBoardConnectionController`: new optional `$peopleForget` and `$events` (appended).
+- `TaskBoardRouteLoader`: new optional `$clientApiPrefix` (appended).
+- `ImportPlanService::credentialFormUrl()`: new optional `$returnTo` (appended).
+- Indexes `task_board_tasks_board_updated_idx` (`board_id`, `updated_at`) and `task_board_member_user_role_idx`
+  (`user_id`, `member_role`) for `changes` and `my-tasks`.
+- require-dev: nowo-tech/user-kit-bundle `^1.24`.
+
 ## [3.3.0] - 2026-11-26
 
 Native custom fields from the ClickUp import, phase CU-3 of [design/CLICKUP_IMPORT.md](design/CLICKUP_IMPORT.md)
