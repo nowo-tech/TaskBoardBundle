@@ -33,6 +33,7 @@ use Nowo\TaskBoardBundle\Sync\Provider\TimeAccess;
 use Nowo\TaskBoardBundle\Sync\Provider\TimeAccessMode;
 use Nowo\TaskBoardBundle\Sync\Provider\TimeEntryProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\TimeEntryQuery;
+use Nowo\TaskBoardBundle\Sync\Provider\WorkspaceScopeProviderInterface;
 
 use function array_filter;
 use function array_key_exists;
@@ -62,7 +63,7 @@ use function usort;
  *
  * @final
  */
-class InMemoryTaskProvider implements TaskProviderInterface, PeopleProviderInterface, TimeEntryProviderInterface, SourceProviderInterface, ProviderApiGapsInterface, TaskTypeProviderInterface, FieldCoverageProviderInterface, CustomFieldListProviderInterface
+class InMemoryTaskProvider implements TaskProviderInterface, PeopleProviderInterface, TimeEntryProviderInterface, SourceProviderInterface, ProviderApiGapsInterface, TaskTypeProviderInterface, FieldCoverageProviderInterface, CustomFieldListProviderInterface, WorkspaceScopeProviderInterface
 {
     /** Since 1.25: the workspace every container belongs to (null = no people). */
     private ?string $workspaceId = null;
@@ -397,6 +398,14 @@ class InMemoryTaskProvider implements TaskProviderInterface, PeopleProviderInter
         $this->enter($credential, 'workspaceOf:' . $containerId);
 
         return $this->workspaceId;
+    }
+
+    /** Since 3.2.0: every container is in the double's workspace, so all are foreign to any other (one call). */
+    public function foreignContainers(ProviderCredential $credential, string $workspaceId, array $containerIds): array
+    {
+        $this->enter($credential, 'foreignContainers:' . $workspaceId);
+
+        return $workspaceId === $this->workspaceId ? [] : $containerIds;
     }
 
     public function fetchPeople(ProviderCredential $credential, string $workspaceId, ?string $cursor = null): RemotePersonPage

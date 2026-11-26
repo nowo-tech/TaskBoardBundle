@@ -18,6 +18,8 @@ use Nowo\TaskBoardBundle\Sync\Provider\TimeAccess;
 use Nowo\TaskBoardBundle\Sync\Provider\TimeAccessMode;
 use Nowo\TaskBoardBundle\Sync\Status\StatusColumns;
 
+use function count;
+
 /**
  * Since 3.2.0 (CU-2, Q-CU-9, Q-CU-15): the optional Messenger runner (the test bus handles messages at once), the
  * preview with a time sink, a member token, estimated counts, no shared budget and a one-board limit.
@@ -118,5 +120,15 @@ final class ImportPlanMessengerTest extends ImportPlanTestCase
         } catch (ImportPlanException $exception) {
             self::assertSame([ImportPlanException::TOO_MANY_ITEMS, '1'], [$exception->reason, $exception->detail]);
         }
+
+        // Audit ZBYv-L1: more ids than boards are refused before any provider call (no budget spent).
+        $calls = count($this->provider->calls);
+        try {
+            $plans->chooseSources($draft, 3, ['L1', 'L2'], ImportPlanLayout::PerList, []);
+            self::fail('too many ids');
+        } catch (ImportPlanException $exception) {
+            self::assertSame(ImportPlanException::TOO_MANY_ITEMS, $exception->reason);
+        }
+        self::assertCount($calls, $this->provider->calls);
     }
 }

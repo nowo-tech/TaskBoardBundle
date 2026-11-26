@@ -42,6 +42,7 @@ use Nowo\TaskBoardBundle\Sync\Provider\RemoteStatus;
 use Nowo\TaskBoardBundle\Sync\Provider\SourceProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\TaskProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\TaskProviderRegistry;
+use Nowo\TaskBoardBundle\Sync\Provider\WorkspaceScope;
 use Nowo\TaskBoardBundle\Sync\Repository\ImportPlanStore;
 use Nowo\TaskBoardBundle\Sync\Repository\SyncStore;
 use Nowo\TaskBoardBundle\Sync\Status\StatusColumns;
@@ -257,6 +258,11 @@ final readonly class ImportPlanService
         }
         if ($layout === ImportPlanLayout::Single && count($ids) !== 1) {
             throw new ImportPlanException(ImportPlanException::SINGLE_NEEDS_ONE);
+        }
+        // Audit ZBYv-L1: each chosen container yields at least one item, so more than max_items is refused before any
+        // provider call (the workspace check and the expansion cost calls from the token's shared budget).
+        if (count($ids) > $this->maxItems) {
+            throw new ImportPlanException(ImportPlanException::TOO_MANY_ITEMS, (string) $this->maxItems);
         }
         $credential = $this->credential($plan);
         $this->assertInWorkspace($plan, $credential, array_map(strval(...), array_keys($ids)));
@@ -558,18 +564,16 @@ final readonly class ImportPlanService
     }
 
     /**
-     * Cancel (§14): a waiting plan ends now (a compare-and-set on its status, audit ZBY-L2); a running one stops before
-     * its next item, and the board's run is asked to stop after its current page. Nothing imported is rolled back.
+     * Cancel (§14): a waiting plan ends now; a running one stops before its next item or instead of pausing, and the
+     * board's run is asked to stop after its current page — one locked decision (audit ZBY-L2, ZBYv-L2). Nothing
+     * imported is rolled back.
      */
     public function cancel(TaskSyncImportPlan $plan): void
     {
-        $plan = $this->reload($plan);
-        if (!$plan->getStatus()->isActive()) {
+        // One decision under the row lock (audit ZBYv-L2): ended now, asked of the running slice, or nothing to cancel.
+        $ended = $this->store->cancel($plan->getId(), $this->clock->now());
+        if ($ended === null) {
             return;
-        }
-        $ended = $this->store->cancelWaiting($plan->getId(), $this->clock->now());
-        if (!$ended) {
-            $this->store->requestCancel($plan->getId());
         }
         foreach ($this->store->items($plan) as $item) {
             $board = $item->getRunId() !== null && $item->getBoardId() !== null ? $this->boards->findById($item->getBoardId()) : null;
@@ -701,25 +705,21 @@ final readonly class ImportPlanService
 
     /**
      * Audit ZBY-L1: every chosen container belongs to the plan's workspace, asked from the provider when it can tell
-     * (`PeopleProviderInterface::workspaceOf()`; ClickUp: the space of the list or folder, then its team). A container of
-     * another workspace would escape the workspace lock, the people directory and the host's workspace narrowing.
+     * ({@see WorkspaceScope}; ClickUp: the workspace's spaces once, then one call per list or folder — audit ZBYv-L1).
+     * A container of another workspace would escape the workspace lock, the people directory and the host's workspace
+     * narrowing.
      *
      * @param list<string> $ids
      */
     private function assertInWorkspace(TaskSyncImportPlan $plan, ProviderCredential $credential, array $ids): void
     {
-        $provider = $this->provider($plan);
-        if (!$provider instanceof PeopleProviderInterface) {
-            return;
-        }
         try {
-            foreach ($ids as $id) {
-                if ($provider->workspaceOf($credential, $id) !== $plan->getWorkspaceId()) {
-                    throw new ImportPlanException(ImportPlanException::INVALID);
-                }
-            }
+            $foreign = WorkspaceScope::foreign($this->provider($plan), $credential, (string) $plan->getWorkspaceId(), $ids);
         } catch (ProviderException) {
             throw new ImportPlanException(ImportPlanException::PROVIDER);
+        }
+        if ($foreign !== []) {
+            throw new ImportPlanException(ImportPlanException::INVALID);
         }
     }
 

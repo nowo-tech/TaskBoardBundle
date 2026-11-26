@@ -113,7 +113,7 @@ final class ImportPlanAuditZbyTest extends ImportPlanTestCase
         $this->provider->withWorkspace('2', [new RemotePerson('7', 'Ada Example', 'ada@example.test')]);
         $this->refused(ImportPlanException::INVALID, static fn () => $plans->chooseSources($plan, 3, ['L1'], ImportPlanLayout::PerList, []));
         $this->provider->withWorkspace('1');
-        $this->provider->failOn('workspaceOf:L1', new ProviderException(ProviderErrorCode::Timeout));
+        $this->provider->failOn('foreignContainers:1', new ProviderException(ProviderErrorCode::Timeout));
         $this->refused(ImportPlanException::PROVIDER, static fn () => $plans->chooseSources($plan, 3, ['L1'], ImportPlanLayout::PerList, []));
 
         // A level the page never listed is not opened (the folder is under a space that was not opened).
