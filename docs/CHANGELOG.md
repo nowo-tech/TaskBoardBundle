@@ -208,7 +208,9 @@ Import plans and the guided import from ClickUp, phase CU-2 of [design/CLICKUP_I
   `failed` with code `actor` — no other user is ever substituted. `PlanRunRequest` and `RunImportPlanSlice` carry
   the plan id only.
 - Fencing (audit ZBY-L2): the claim hands each slice a token (`run_token` column); heartbeat, report, hold and end
-  are conditional on it, so a slice that was taken over cannot overwrite the plan or free the workspace lock. Cancel
+  are conditional on it, so a slice that was taken over cannot overwrite the plan or free the workspace lock. On MySQL
+  and MariaDB, which count changed rather than matched rows, a write that leaves the row unchanged still counts as
+  held (the guard is re-checked). Cancel
   and *Resume* are compare-and-sets on the status. `sync.plans.messenger.slice_seconds` is at most 300 (half the
   10-minute takeover window). Each wizard step is one transaction.
 - The Tree step opens only levels listed from the plan's workspace, and the chosen containers are checked to belong

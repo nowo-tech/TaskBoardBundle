@@ -16,6 +16,7 @@ use function array_map;
 use function array_values;
 use function count;
 use function hash;
+use function preg_match;
 
 use const DATE_ATOM;
 
@@ -217,7 +218,26 @@ final readonly class ImportPlanStore
             $query->setParameter($name, $value, $type);
         }
 
-        return (int) $query->execute() === 1;
+        $updated = (int) $query->execute();
+
+        // MySQL and MariaDB count changed rows, not matched ones: a write that leaves the row as it was (the same
+        // heartbeat second, the same report) reports 0 although the guard still holds — so check the guard itself.
+        return $updated === 1 || ($updated === 0 && $this->matches($where, $parameters));
+    }
+
+    /**
+     * @param array<string, array{0: mixed, 1: string|null}> $parameters
+     */
+    private function matches(string $where, array $parameters): bool
+    {
+        $query = $this->entityManager->createQuery('SELECT COUNT(p.id) FROM ' . TaskSyncImportPlan::class . ' p WHERE ' . $where);
+        foreach ($parameters as $name => [$value, $type]) {
+            if (preg_match('/:' . $name . '\\b/', $where) === 1) {
+                $query->setParameter($name, $value, $type);
+            }
+        }
+
+        return (int) $query->getSingleScalarResult() === 1;
     }
 
     /**
