@@ -8,13 +8,16 @@ use Nowo\TaskBoardBundle\Enum\CustomFieldType;
 use Nowo\TaskBoardBundle\Field\TaskCustomFieldManager;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncImportPlan;
 use Nowo\TaskBoardBundle\Sync\Field\SyncFieldType;
+use Nowo\TaskBoardBundle\Sync\Plan\ImportPlanException;
 use Nowo\TaskBoardBundle\Sync\Plan\ImportPlanLayout;
 use Nowo\TaskBoardBundle\Sync\Plan\ImportPlanStep;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteCustomField;
 use Nowo\TaskBoardBundle\Tests\Functional\App\PredictableCsrfTokenManager;
+use Nowo\TaskBoardBundle\Tests\Functional\App\ScriptedRestructurePolicy;
 use ReflectionProperty;
 
 use function array_keys;
+use function array_replace_recursive;
 
 /**
  * Since 3.3.0 (CU-3, design §8.5): the Fields step offers, per ClickUp field, *Synced*, *Do not import* and — for text,
@@ -23,6 +26,11 @@ use function array_keys;
  */
 final class ImportPlanNativeFieldsTest extends ImportPlanTestCase
 {
+    protected static function syncConfig(): array
+    {
+        return array_replace_recursive(parent::syncConfig(), ['restructure' => ['policy' => 'app.restructure_policy']]);
+    }
+
     private const BASE = '/tools/task-board/import-plans';
 
     public function testTheFieldsStepOffersTheNativeTargetsOfTheBoard(): void
@@ -79,6 +87,31 @@ final class ImportPlanNativeFieldsTest extends ImportPlanTestCase
         $manager->delete($this->admin, $own);
         $crawler = $this->client->request('GET', self::BASE . '/' . $plan->getId() . '?step=fields');
         self::assertSame('synced', $crawler->filter('select[name="task_board_import_plan[f_fNum]"] option[selected]')->attr('value'));
+    }
+
+    public function testOnlyFieldsTheActorMayChangeAreOffered(): void
+    {
+        ScriptedRestructurePolicy::reset();
+        $manager = self::getContainer()->get(TaskCustomFieldManager::class);
+        self::assertInstanceOf(TaskCustomFieldManager::class, $manager);
+        $tenant = $manager->define($this->admin, null, null, 'Shared', CustomFieldType::Text);
+        $plan   = $this->preparedPlan([self::LIST]);
+        self::assertSame([$tenant->getId()], array_keys($this->plans()->nativeTargets($plan, $this->admin)));
+        // Audit ZCF-L1: an actor who may not manage the tenant's fields is offered none and cannot choose one.
+        ScriptedRestructurePolicy::$deny = static fn (string $subject): bool => $subject === 'folders';
+        try {
+            self::assertSame([], $this->plans()->nativeTargets($plan, $this->admin));
+            $fields = $this->plans()->fields($plan);
+            $plan   = $this->fresh($plan);
+            try {
+                $this->plans()->chooseFields($plan, $plan->getVersion(), [], ['fld1' => $tenant->getId()], $fields, $this->admin);
+                self::fail('not offered');
+            } catch (ImportPlanException $exception) {
+                self::assertSame(ImportPlanException::INVALID, $exception->reason);
+            }
+        } finally {
+            ScriptedRestructurePolicy::reset();
+        }
     }
 
     public function testThe32FieldMapIsReadAndMalformedPartsAreIgnored(): void

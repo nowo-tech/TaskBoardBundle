@@ -2144,7 +2144,9 @@ restructure the board (by default its manage right):
 - **Add field**: name, type and, for a drop-down, its options one per line (`Urgent #e03131` sets a colour);
 - **Edit**: name and, for a drop-down, each option as a row (rename, recolour, remove — removing clears the tasks' values
   that held it) plus new options; the type stays;
-- **Delete** opens an inline confirmation (no JavaScript needed) and removes the field and every value of it.
+- **Delete** opens an inline confirmation (no JavaScript needed) and removes the field and every value of it. A field
+  that came from an import is listed under *Deleted imported fields*: re-imports do not create it again until you choose
+  *Import it again*.
 
 Every save carries the field's version: when someone else saved the field meanwhile, the page says so and nothing is
 written (reload and save again). A field created by a ClickUp import shows *from ClickUp*; renaming it here is safe (a

@@ -385,9 +385,15 @@ lists them).
   provider had any — is kept, and the provider's value is noted once in a comment, as the other fields' conflicts. An
   empty provider value never clears a value. A value written here and in ClickUp to the same thing is not a conflict.
 - **Not written twice.** A field landed on a native field is left out of the synced fields (`task_board_sync_field_*`).
-- **Rights.** Creating the field needs the run actor's restructure right on the board (the restructure policy, by
-  default the board's manage right); without it the run warns `native_field_refused` and skips those values. A chosen
-  field that was deleted or retyped warns `native_field_unavailable`.
+- **Rights.** Creating a field, or landing values on an existing one, needs the run actor's right of the Custom fields
+  page (the restructure policy: a board's field `mayRestructureBoard()`, by default the board's manage right; a tenant
+  field `mayManageFolders()`). Without it the run warns `native_field_refused`, the definition is not touched and those
+  values stay synced, read-only fields. The Fields step offers only the fields its user may change, and never one
+  native field to two ClickUp fields. A chosen field that was deleted or retyped warns `native_field_unavailable` (values
+  synced too).
+- **Deleted here stays deleted.** Deleting an imported field (the Custom fields page, a host through the manager, or a
+  board configuration that drops it) leaves a tombstone: the next imports warn `native_field_deleted` and keep its
+  values synced. *Import it again* on the page clears it; the next import creates the field anew.
 - **Counts** in the run report: `fields.native_fields`, `fields.native_values`, `fields.native_conflicts`,
   `fields.native_misfit` (a value that did not fit the provider's own type), `fields.native_invalid`.
 

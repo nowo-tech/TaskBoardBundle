@@ -133,7 +133,7 @@ final class CustomFieldDefinitionTest extends FunctionalTestCase
         $fields = $this->fields();
         $stage  = $fields->defineFromSource($this->owner, $this->board, 'clickup:stage', 'Stage', CustomFieldType::Dropdown);
         self::assertInstanceOf(TaskCustomField::class, $stage);
-        $map   = $fields->adoptSourceOptions($stage, [['id' => 'o1', 'name' => 'Draft', 'color' => '#ff0000'], ['id' => 'o2', 'name' => 'Live', 'color' => 'red']]);
+        $map   = $fields->adoptSourceOptions($this->owner, $stage, [['id' => 'o1', 'name' => 'Draft', 'color' => '#ff0000'], ['id' => 'o2', 'name' => 'Live', 'color' => 'red']]);
         $stage = $fields->find($stage->getId());
         self::assertInstanceOf(TaskCustomField::class, $stage);
         self::assertSame([['Draft', '#ff0000'], ['Live', null]], array_map(static fn (array $o): array => [$o['name'], $o['color']], $stage->getOptions()), 'a colour the field refuses is left out');
@@ -145,19 +145,19 @@ final class CustomFieldDefinitionTest extends FunctionalTestCase
         $fields->update($this->owner, $stage, 'Stage', [['id' => $live, 'name' => 'Published'], ['name' => 'Archived']], 0);
         $stage = $fields->find($stage->getId());
         self::assertInstanceOf(TaskCustomField::class, $stage);
-        $map = $fields->adoptSourceOptions($stage, [['id' => 'o1', 'name' => 'Draft', 'color' => null], ['id' => 'o2', 'name' => 'Go live', 'color' => null], ['id' => 'o3', 'name' => 'Archived', 'color' => null], ['id' => 'o4', 'name' => ' ', 'color' => null]]);
+        $map = $fields->adoptSourceOptions($this->owner, $stage, [['id' => 'o1', 'name' => 'Draft', 'color' => null], ['id' => 'o2', 'name' => 'Go live', 'color' => null], ['id' => 'o3', 'name' => 'Archived', 'color' => null], ['id' => 'o4', 'name' => ' ', 'color' => null]]);
         self::assertSame([null, $live, $stage->optionNamed('Archived')['id'] ?? 'x', null], [$map['o1'], $map['o2'], $map['o3'], $map['o4']]);
         self::assertSame(['Published', 'Archived'], array_column($fields->find($stage->getId())?->getOptions() ?? [], 'name'), 'nothing recreated');
         $version = $fields->find($stage->getId())?->getVersion();
-        $fields->adoptSourceOptions($stage, [['id' => 'o2', 'name' => 'Go live', 'color' => null]]);
+        $fields->adoptSourceOptions($this->owner, $stage, [['id' => 'o2', 'name' => 'Go live', 'color' => null]]);
         self::assertSame($version, $fields->find($stage->getId())?->getVersion(), 'nothing new: the version stays');
 
         // A full field takes no more options; a text field has none.
         $full = $fields->define($this->owner, $this->board, null, 'Full', CustomFieldType::Dropdown, array_map(static fn (int $n): array => ['name' => 'n' . $n], range(1, TaskCustomField::OPTIONS_MAX)));
-        self::assertSame(['x' => null], $fields->adoptSourceOptions($full, [['id' => 'x', 'name' => 'More', 'color' => null]]));
+        self::assertSame(['x' => null], $fields->adoptSourceOptions($this->owner, $full, [['id' => 'x', 'name' => 'More', 'color' => null]]));
         $text = $fields->define($this->owner, $this->board, null, 'Text', CustomFieldType::Text);
-        self::assertSame([], $fields->adoptSourceOptions($text, [['id' => 'x', 'name' => 'More', 'color' => null]]));
-        self::assertSame([], $fields->adoptSourceOptions($stage, []));
+        self::assertSame([], $fields->adoptSourceOptions($this->owner, $text, [['id' => 'x', 'name' => 'More', 'color' => null]]));
+        self::assertSame([], $fields->adoptSourceOptions($this->owner, $stage, []));
         self::assertSame(['o1', 'o2', 'o3'], array_keys($fields->find($stage->getId())?->getSourceOptions() ?? []));
     }
 

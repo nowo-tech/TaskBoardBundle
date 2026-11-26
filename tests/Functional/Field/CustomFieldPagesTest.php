@@ -117,6 +117,24 @@ final class CustomFieldPagesTest extends FunctionalTestCase
         self::assertNotContains('Stage', array_column(array_map(static fn (TaskCustomField $f): array => ['name' => $f->getName()], $this->fields()->fieldsFor($this->fresh())), 'name'));
         $this->client->request('POST', self::BASE . $this->board->getId() . '/fields/' . $imported->getId() . '/delete', ['version' => '2']);
         self::assertResponseStatusCodeSame(403, 'no CSRF token');
+
+        // Since the audit ZCF-L2: the imported field, deleted, is listed until "Import it again".
+        $this->client->request('POST', self::BASE . $this->board->getId() . '/fields/' . $imported->getId() . '/delete', ['version' => '2', '_token' => PredictableCsrfTokenManager::value('task_board_custom_field_delete')]);
+        self::assertResponseRedirects();
+        $crawler = $this->client->followRedirect();
+        self::assertSelectorTextContains('[data-testid="nowo-task-fields-deleted"]', 'Renamed here');
+        $form = $crawler->filter('[data-testid="nowo-task-fields-deleted"] form');
+        $url  = (string) $form->attr('action');
+        $this->client->request('POST', $url, ['tombstone' => 'x']);
+        self::assertResponseStatusCodeSame(403, 'no CSRF token');
+        $this->client->request('POST', self::BASE . $this->board->getId() . '/fields/deleted/00000000-0000-4000-8000-000000000000/reimport', ['tombstone' => 'x', '_token' => PredictableCsrfTokenManager::value('task_board_custom_field_reimport')]);
+        self::assertResponseRedirects();
+        $this->client->followRedirect();
+        self::assertSelectorTextContains('body', 'The field was not found.');
+        $this->client->request('POST', $url, ['tombstone' => 'x', '_token' => PredictableCsrfTokenManager::value('task_board_custom_field_reimport')]);
+        $this->client->followRedirect();
+        self::assertSelectorTextContains('body', 'The next import creates the field again.');
+        self::assertSelectorNotExists('[data-testid="nowo-task-fields-deleted"]');
     }
 
     public function testOnlyThoseWhoMayRestructureTheBoardSeeThePage(): void

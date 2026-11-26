@@ -465,11 +465,12 @@ final readonly class ImportPlanService
     /**
      * Since 3.3.0 (CU-3, design §8.5): the existing native fields a provider field may land on, by id — the tenant's
      * fields of every board and, when every item fills the same existing board, that board's own fields. A plan that
-     * creates boards or fills several only offers *Create* and the tenant's fields.
+     * creates boards or fills several only offers *Create* and the tenant's fields. Since the audit ZCF-L1, with
+     * `$actor`, only the fields that actor may change (the Custom fields page's right).
      *
      * @return array<string, TaskCustomField>
      */
-    public function nativeTargets(TaskSyncImportPlan $plan): array
+    public function nativeTargets(TaskSyncImportPlan $plan, ?object $actor = null): array
     {
         if (!$this->customFields instanceof TaskCustomFieldManager) {
             // Always wired in the bundle; a service built by hand may leave it out.
@@ -484,7 +485,10 @@ final readonly class ImportPlanService
         $fields = $board instanceof TaskBoard && $board->getTenantKey() === $plan->getTenantKey() ? $this->customFields->fieldsFor($board) : $this->customFields->tenantFields($plan->getTenantKey());
         $byId   = [];
         foreach ($fields as $field) {
-            $byId[$field->getId()] = $field;
+            // Audit ZCF-L1: only fields the actor may change (the run's starter is checked again at run time).
+            if ($actor === null || $this->customFields->mayChange($actor, $field)) {
+                $byId[$field->getId()] = $field;
+            }
         }
 
         return $byId;
@@ -493,13 +497,14 @@ final readonly class ImportPlanService
     /**
      * Step 6: the fields not imported, and since 3.3.0 (CU-3) the fields landed on native fields (the others are imported
      * as synced, read-only fields). `$fields` is the list {@see self::fields()} gave the step: a native choice must name
-     * one of them of a type a native field takes, and `create` or one of {@see self::nativeTargets()} of that type.
+     * one of them of a type a native field takes, and `create` or one of {@see self::nativeTargets()} of that type (for
+     * `$actor`); two provider fields never share one existing native field (audit ZCF-I3).
      *
      * @param list<string> $excluded
      * @param array<string, string> $native remote field id => `create` or a native field id
      * @param list<array{id: string, name: string, remoteType: string, nativeType: string|null}> $fields
      */
-    public function chooseFields(TaskSyncImportPlan $plan, int $version, array $excluded, array $native = [], array $fields = []): void
+    public function chooseFields(TaskSyncImportPlan $plan, int $version, array $excluded, array $native = [], array $fields = [], ?object $actor = null): void
     {
         foreach ($excluded as $id) {
             if (preg_match(self::FIELD_ID, $id) !== 1) {
@@ -510,7 +515,12 @@ final readonly class ImportPlanService
         foreach ($fields as $field) {
             $byId[$field['id']] = $field;
         }
-        $targets = $native === [] ? [] : $this->nativeTargets($plan);
+        $targets = $native === [] ? [] : $this->nativeTargets($plan, $actor);
+        // Audit ZCF-I3: one native field per provider field (two would overwrite each other on every run).
+        $used = array_filter($native, static fn (string $target): bool => $target !== TaskBoardConnection::NATIVE_CREATE);
+        if (count($used) !== count(array_unique($used))) {
+            throw new ImportPlanException(ImportPlanException::INVALID);
+        }
         foreach ($native as $id => $target) {
             $nativeType = $byId[$id]['nativeType'] ?? null;
             if (preg_match(self::FIELD_ID, (string) $id) !== 1 || in_array((string) $id, $excluded, true) || $nativeType === null

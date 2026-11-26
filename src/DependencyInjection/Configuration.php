@@ -802,6 +802,13 @@ final class Configuration implements ConfigurationInterface
                         ->scalarNode('name')->defaultValue('nowo_task_board_board_field_delete')->end()
                     ->end()
                 ->end()
+                ->arrayNode('board_field_reimport')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/board/{boardId}/fields/deleted/{tombstoneId}/reimport')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_board_field_reimport')->end()
+                    ->end()
+                ->end()
                 // Since 3.2.0 (CU-2): the guided import (with sync.plans.enabled).
                 ->arrayNode('import_plans')
                     ->addDefaultsIfNotSet()

@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Field;
 
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\DBAL\LockMode;
+use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
@@ -15,6 +17,7 @@ use Nowo\TaskBoardBundle\Doctrine\TransactionRollback;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Entity\TaskCustomField;
+use Nowo\TaskBoardBundle\Entity\TaskCustomFieldTombstone;
 use Nowo\TaskBoardBundle\Entity\TaskCustomFieldValue;
 use Nowo\TaskBoardBundle\Enum\CustomFieldOperator;
 use Nowo\TaskBoardBundle\Enum\CustomFieldType;
@@ -279,8 +282,73 @@ final readonly class TaskCustomFieldManager
             foreach ($this->entityManager->getRepository(TaskCustomFieldValue::class)->findBy(['field' => $field]) as $value) {
                 $this->entityManager->remove($value);
             }
+            // Since 3.3.0 (audit ZCF-L2): an imported field deleted here is not created again by a re-import.
+            $board = $field->getBoard();
+            if ($board instanceof TaskBoard && $field->getSourceRef() !== null && !$this->tombstone($board, $field->getSourceRef()) instanceof TaskCustomFieldTombstone) {
+                $this->entityManager->persist(new TaskCustomFieldTombstone($board, $field->getSourceRef(), $field->getName()));
+            }
             $this->entityManager->remove($field);
         });
+    }
+
+    /**
+     * Since 3.3.0 (audit ZCF-L2): the imported fields deleted from the board (a re-import does not create them again).
+     *
+     * @return list<TaskCustomFieldTombstone>
+     */
+    public function tombstones(TaskBoard $board): array
+    {
+        /** @var list<TaskCustomFieldTombstone> $rows */
+        $rows = $this->entityManager->getRepository(TaskCustomFieldTombstone::class)->findBy(['board' => $board->getId()], ['deletedAt' => 'ASC']);
+
+        return array_values(array_filter($rows, static fn (TaskCustomFieldTombstone $row): bool => $row->getBoard()->getId() === $board->getId()));
+    }
+
+    /** Since 3.3.0 (audit ZCF-L2): whether a re-import may create the board's field of this marker. */
+    public function isDeletedSource(TaskBoard $board, string $sourceRef): bool
+    {
+        return $this->tombstone($board, $sourceRef) instanceof TaskCustomFieldTombstone;
+    }
+
+    /**
+     * Since 3.3.0 (audit ZCF-L2): lets a re-import create the field again (*Import it again* on the Custom fields page).
+     * Under the restructure policy.
+     *
+     * @throws TaskCustomFieldRefusedException
+     */
+    public function clearTombstone(object $actor, TaskBoard $board, string $tombstoneId): void
+    {
+        $board = $this->own($board);
+        $this->requireRight($actor, $board, $board->getTenantKey());
+        $row = $tombstoneId !== '' && mb_strlen($tombstoneId) <= 36 ? $this->entityManager->find(TaskCustomFieldTombstone::class, $tombstoneId) : null;
+        if (!$row instanceof TaskCustomFieldTombstone || $row->getBoard()->getId() !== $board->getId()) {
+            throw new TaskCustomFieldRefusedException(TaskCustomFieldRefusedException::NOT_FOUND);
+        }
+        $this->write(function () use ($row): void {
+            $this->entityManager->remove($row);
+        });
+    }
+
+    /**
+     * Since 3.3.0 (audit ZCF-L1): whether the actor may change the field's definition — what the Custom fields page asks
+     * (a board's field: `mayRestructureBoard()`; a tenant's: `mayManageFolders()`).
+     */
+    public function mayChange(object $actor, TaskCustomField $field): bool
+    {
+        try {
+            $this->requireRight($actor, $field->getBoard(), $field->getTenantKey());
+        } catch (TaskCustomFieldRefusedException) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private function tombstone(TaskBoard $board, string $sourceRef): ?TaskCustomFieldTombstone
+    {
+        $row = $this->entityManager->getRepository(TaskCustomFieldTombstone::class)->findOneBy(['board' => $board->getId(), 'sourceRef' => $sourceRef]);
+
+        return $row instanceof TaskCustomFieldTombstone && $row->getSourceRef() === $sourceRef ? $row : null;
     }
 
     /**
@@ -297,6 +365,10 @@ final readonly class TaskCustomFieldManager
         $board    = $this->own($board);
         $existing = $this->sourceField($board, $sourceRef);
         if (!$existing instanceof TaskCustomField) {
+            if ($this->isDeletedSource($board, $sourceRef)) {
+                // Audit ZCF-L2: deleted here; cleared only on the Custom fields page.
+                return null;
+            }
             $this->requireRight($actor, $board, $board->getTenantKey());
             if (preg_match(self::SOURCE_REF, $sourceRef) !== 1) {
                 throw new TaskCustomFieldRefusedException(TaskCustomFieldRefusedException::INVALID, ['field' => 'definition']);
@@ -311,7 +383,7 @@ final readonly class TaskCustomFieldManager
                 $existing = $this->sourceField($board, $sourceRef);
                 if ($existing instanceof TaskCustomField) {
                     // Another writer created it between the first look and the lock.
-                    return; // @codeCoverageIgnore
+                    return;
                 }
                 $taken = [];
                 foreach ($this->fieldsFor($board) as $field) {
@@ -322,8 +394,7 @@ final readonly class TaskCustomFieldManager
                 for ($n = 2; isset($taken[$unique]); ++$n) {
                     $unique = $base . ' (' . $n . ')';
                 }
-                $existing = (new TaskCustomField($unique, $type, $board->getTenantKey(), $board, $this->nextPosition($board, $board->getTenantKey())))->markSource($sourceRef);
-                $this->entityManager->persist($existing);
+                $existing = $this->insertSourceField(new TaskCustomField($unique, $type, $board->getTenantKey(), $board, $this->nextPosition($board, $board->getTenantKey())), $board, $sourceRef);
             });
         }
 
@@ -331,22 +402,61 @@ final readonly class TaskCustomFieldManager
     }
 
     /**
+     * Audit ZCF-L3: the new field's row, written in a savepoint of its own (not through the unit of work): a writer that
+     * skipped the board lock (another engine, a host writer) and won the unique key (board, marker) only undoes this
+     * savepoint — the caller's transaction and the private manager's rows stay (a sync page goes on) — and its field is
+     * read again.
+     */
+    private function insertSourceField(TaskCustomField $field, TaskBoard $board, string $sourceRef): ?TaskCustomField
+    {
+        $connection = $this->entityManager->getConnection();
+        $level      = $connection->getTransactionNestingLevel();
+        $connection->beginTransaction();
+        try {
+            $connection->insert($this->entityManager->getClassMetadata(TaskCustomField::class)->getTableName(), [
+                'id'             => $field->getId(),
+                'created_at'     => $field->getCreatedAt(),
+                'name'           => $field->getName(),
+                'options'        => [],
+                'field_type'     => $field->getType()->value,
+                'tenant_key'     => $field->getTenantKey(),
+                'board_id'       => $board->getId(),
+                'position'       => $field->getPosition(),
+                'source_ref'     => $sourceRef,
+                'source_options' => null,
+                'version'        => 1,
+            ], ['created_at' => Types::DATETIME_IMMUTABLE, 'options' => Types::JSON, 'position' => Types::INTEGER, 'version' => Types::INTEGER]);
+            $connection->commit();
+        } catch (UniqueConstraintViolationException) {
+            TransactionRollback::toLevel($connection, $level);
+
+            return $this->sourceField($board, $sourceRef);
+        }
+
+        return $this->entityManager->find(TaskCustomField::class, $field->getId());
+    }
+
+    /**
      * Since 3.3.0 (CU-3, design §11): this dropdown field's option for each of the provider's options, by the provider's
      * option id. An option met before keeps its option (renamed here or there, it stays the same one); an option met
      * before and deleted here maps to null (never recreated: the caller notes a conflict); a new provider option takes this
      * field's option of the same name, or is added (with its colour) while the field has room. Under the field's row lock;
-     * the version rises only when something changed.
+     * the version rises only when something changed. Since the audit ZCF-L1 under the restructure policy, as {@see self::update()}.
      *
      * @param list<array{id: string, name: string, color: string|null}> $remoteOptions
      *
+     * @throws TaskCustomFieldRefusedException `not_allowed`
+     *
      * @return array<string, string|null> provider option id => this field's option id (null: none)
      */
-    public function adoptSourceOptions(TaskCustomField $field, array $remoteOptions): array
+    public function adoptSourceOptions(object $actor, TaskCustomField $field, array $remoteOptions): array
     {
         $field = $this->own($field);
         if ($field->getType() !== CustomFieldType::Dropdown || $remoteOptions === []) {
             return [];
         }
+        // Audit ZCF-L1: the import changes the definition only with the right the Custom fields page asks.
+        $this->requireRight($actor, $field->getBoard(), $field->getTenantKey());
         $result = [];
         $this->write(function () use (&$field, $remoteOptions, &$result): void {
             $field   = $this->lockDefinition($field, null);
@@ -445,7 +555,23 @@ final readonly class TaskCustomFieldManager
     public function setFieldUnlessChanged(Task $task, string $fieldId, mixed $value, object $actor, callable $unchanged): void
     {
         $task = $this->own($task);
-        $this->writeValue($task, $fieldId, $value, $actor, $unchanged);
+        if (!$this->writeValue($task, $fieldId, $value, $actor, $unchanged)) {
+            throw new TaskChangedException($task->getRevision());
+        }
+    }
+
+    /**
+     * Since 3.3.0 (audit ZCF-L3): {@see self::setFieldUnlessChanged()} that answers instead of throwing — false when the
+     * value changed meanwhile (nothing written, and nothing rolled back: the transaction commits empty, so the caller's
+     * rows stay managed, e.g. a sync page's).
+     *
+     * @param callable(TaskCustomFieldValue|null): bool $unchanged
+     *
+     * @throws TaskCustomFieldRefusedException as setField()
+     */
+    public function setFieldIfUnchanged(Task $task, string $fieldId, mixed $value, object $actor, callable $unchanged): bool
+    {
+        return $this->writeValue($this->own($task), $fieldId, $value, $actor, $unchanged);
     }
 
     /**
@@ -455,11 +581,12 @@ final readonly class TaskCustomFieldManager
      *
      * @param (callable(TaskCustomFieldValue|null): bool)|null $unchanged
      */
-    private function writeValue(Task $task, string $fieldId, mixed $value, object $actor, ?callable $unchanged): void
+    private function writeValue(Task $task, string $fieldId, mixed $value, object $actor, ?callable $unchanged): bool
     {
         $field           = $this->fieldOfBoard($task->getBoard(), $fieldId) ?? throw new TaskCustomFieldRefusedException(TaskCustomFieldRefusedException::NOT_FOUND);
         [$text, $number] = $this->normalize($field, $value);
-        $this->write(function () use ($task, $field, $text, $number, $actor, $unchanged): void {
+        $written         = true;
+        $this->write(function () use ($task, $field, $text, $number, $actor, $unchanged, &$written): void {
             $this->entityManager->createQuery('SELECT t.id FROM ' . Task::class . ' t WHERE t.id = :id')
                 ->setParameter('id', $task->getId())
                 ->setLockMode(LockMode::PESSIMISTIC_WRITE)
@@ -469,7 +596,9 @@ final readonly class TaskCustomFieldManager
                 $this->entityManager->refresh($current);
             }
             if ($unchanged !== null && !$unchanged($current)) {
-                throw new TaskChangedException($task->getRevision());
+                $written = false;
+
+                return;
             }
             $before = $current instanceof TaskCustomFieldValue ? $this->display($current) : null;
             if ($text === null && $number === null) {
@@ -485,6 +614,8 @@ final readonly class TaskCustomFieldManager
             }
             $this->changeRecorder->record($task, $actor, TaskChangeType::CustomField, $before, $after, 'field:' . $field->getId() . ' ' . $field->getName());
         });
+
+        return $written;
     }
 
     /**

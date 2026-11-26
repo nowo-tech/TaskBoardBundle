@@ -3,7 +3,8 @@
     Since 3.3.0: a board's Custom fields page (web_ui.templates.board_fields). The tenant's fields (every board, read-only
     here) and the board's own (edit, delete). A field an import created shows its provenance. Delete is a disclosure with
     its own CSRF form and the definition's version (works without JavaScript). Vars: page (ShowPage), board, fields
-    (TaskCustomField, the board's order), deleteForms (field id => form view, the board's own fields only).
+    (TaskCustomField, the board's order), deleteForms (field id => form view, the board's own fields only), deleted (since
+    the audit ZCF-L2: list of {tombstone, form}, the imported fields deleted here).
 #}
 
 {% block nowo_ui_styles %}
@@ -67,6 +68,22 @@
                         </tbody>
                     </table>
                 </div>
+            {% endif %}
+            {#- Since the audit ZCF-L2: imported fields deleted here are not created again by a re-import until cleared. -#}
+            {% if deleted|default([]) is not empty %}
+                <h3 class="nowo-task-mb-2" id="nowo-task-fields-deleted-title">{{ 'task_board.custom_field.deleted.heading'|trans({}, _b) }}</h3>
+                <p class="{{ nowo_ui_class('muted', _b) }}">{{ 'task_board.custom_field.deleted.intro'|trans({}, _b) }}</p>
+                <ul class="nowo-task-field-deleted" aria-labelledby="nowo-task-fields-deleted-title" data-testid="nowo-task-fields-deleted">
+                    {% for row in deleted %}
+                        <li class="nowo-task-flex nowo-task-wrap nowo-task-gap">
+                            <span>{{ row.tombstone.name }} <span class="{{ nowo_ui_class('badge_info', _b) }} nowo-task-badge">{{ 'task_board.custom_field.imported'|trans({'%provider%': ('task_board.sync.provider.' ~ row.tombstone.sourceRef|split(':')|first)|trans({}, _b)}, _b) }}</span></span>
+                            {{ form_start(row.form) }}
+                                {% for child in row.form %}{% if not child.rendered %}{{ form_widget(child) }}{% endif %}{% endfor %}
+                                <button type="submit" class="{{ nowo_ui_class('btn_secondary', _b) }} {{ nowo_ui_class('btn_sm', _b) }}" data-testid="nowo-task-field-reimport">{{ 'task_board.custom_field.deleted.reimport'|trans({}, _b) }}<span class="visually-hidden"> {{ row.tombstone.name }}</span></button>
+                            {{ form_end(row.form) }}
+                        </li>
+                    {% endfor %}
+                </ul>
             {% endif %}
         </div>
     </section>

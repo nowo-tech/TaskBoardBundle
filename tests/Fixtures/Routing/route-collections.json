@@ -737,6 +737,26 @@
                 "condition": ""
             },
             {
+                "name": "nowo_task_board_board_field_reimport",
+                "path": "/tools/task-board/board/{boardId}/fields/deleted/{tombstoneId}/reimport",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskCustomFieldController::reimport"
+                },
+                "requirements": {
+                    "tombstoneId": "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
                 "name": "nowo_task_board_task_by_number",
                 "path": "/tools/task-board/n/{number}",
                 "host": "",
@@ -1846,6 +1866,26 @@
                 "condition": ""
             },
             {
+                "name": "nowo_task_board_board_field_reimport",
+                "path": "/acme/tools/task-board/board/{boardId}/fields/deleted/{tombstoneId}/reimport",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskCustomFieldController::reimport"
+                },
+                "requirements": {
+                    "tombstoneId": "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
                 "name": "app_project_nowo_task_board_index",
                 "path": "/projects/{tenantSlug}/tasks",
                 "host": "",
@@ -2659,6 +2699,27 @@
                 "condition": ""
             },
             {
+                "name": "app_project_nowo_task_board_board_field_reimport",
+                "path": "/projects/{tenantSlug}/tasks/board/{boardId}/fields/deleted/{tombstoneId}/reimport",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskCustomFieldController::reimport"
+                },
+                "requirements": {
+                    "tombstoneId": "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
                 "name": "app_team_nowo_task_board_index",
                 "path": "/teams/{tenantSlug}",
                 "host": "",
@@ -3463,6 +3524,27 @@
                 },
                 "requirements": {
                     "fieldId": "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_board_field_reimport",
+                "path": "/teams/{tenantSlug}/board/{boardId}/fields/deleted/{tombstoneId}/reimport",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskCustomFieldController::reimport"
+                },
+                "requirements": {
+                    "tombstoneId": "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
                     "tenantSlug": "[a-z]+"
                 },
                 "options": {
@@ -6014,6 +6096,26 @@
                 "condition": ""
             },
             {
+                "name": "nowo_task_board_board_field_reimport",
+                "path": "/tools/task-board/board/{boardId}/fields/deleted/{tombstoneId}/reimport",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskCustomFieldController::reimport"
+                },
+                "requirements": {
+                    "tombstoneId": "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
                 "name": "nowo_task_board_api_user",
                 "path": "/api/tasks/v2/user",
                 "host": "",
@@ -8522,6 +8624,26 @@
                 "condition": ""
             },
             {
+                "name": "nowo_task_board_board_field_reimport",
+                "path": "/acme/tools/task-board/board/{boardId}/fields/deleted/{tombstoneId}/reimport",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskCustomFieldController::reimport"
+                },
+                "requirements": {
+                    "tombstoneId": "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
                 "name": "acme_number",
                 "path": "/acme/work/n/{number}",
                 "host": "",
@@ -9537,6 +9659,27 @@
                 "condition": ""
             },
             {
+                "name": "app_project_nowo_task_board_board_field_reimport",
+                "path": "/projects/{tenantSlug}/tasks/tools/task-board/board/{boardId}/fields/deleted/{tombstoneId}/reimport",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskCustomFieldController::reimport"
+                },
+                "requirements": {
+                    "tombstoneId": "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
                 "name": "app_team_acme_work",
                 "path": "/teams/{tenantSlug}",
                 "host": "",
@@ -10455,6 +10598,27 @@
                 "condition": ""
             },
             {
+                "name": "app_team_nowo_task_board_board_field_reimport",
+                "path": "/teams/{tenantSlug}/tools/task-board/board/{boardId}/fields/deleted/{tombstoneId}/reimport",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskCustomFieldController::reimport"
+                },
+                "requirements": {
+                    "tombstoneId": "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
                 "name": "nowo_task_board_tasks",
                 "path": "/acme/orgs/{organisation}/tasks",
                 "host": "",
@@ -11231,6 +11395,26 @@
                     "utf8": true
                 },
                 "condition": ""
+            },
+            {
+                "name": "nowo_task_board_board_field_reimport",
+                "path": "/tools/task-board/board/{boardId}/fields/deleted/{tombstoneId}/reimport",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskCustomFieldController::reimport"
+                },
+                "requirements": {
+                    "tombstoneId": "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
             }
         ],
         "aliases": []
@@ -11965,6 +12149,26 @@
                 },
                 "requirements": {
                     "fieldId": "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_board_field_reimport",
+                "path": "/tools/task-board/board/{boardId}/fields/deleted/{tombstoneId}/reimport",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskCustomFieldController::reimport"
+                },
+                "requirements": {
+                    "tombstoneId": "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
                 },
                 "options": {
                     "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
@@ -12743,6 +12947,26 @@
                 },
                 "requirements": {
                     "fieldId": "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_board_field_reimport",
+                "path": "/tools/task-board/board/{boardId}/fields/deleted/{tombstoneId}/reimport",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskCustomFieldController::reimport"
+                },
+                "requirements": {
+                    "tombstoneId": "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
                 },
                 "options": {
                     "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
@@ -13760,6 +13984,27 @@
                 "condition": ""
             },
             {
+                "name": "app_project_nowo_task_board_board_field_reimport",
+                "path": "/projects/{tenantSlug}/tasks/board/{boardId}/fields/deleted/{tombstoneId}/reimport",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskCustomFieldController::reimport"
+                },
+                "requirements": {
+                    "tombstoneId": "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
                 "name": "app_team_nowo_task_board_index",
                 "path": "/teams/{tenantSlug}",
                 "host": "",
@@ -14667,6 +14912,27 @@
                 },
                 "requirements": {
                     "fieldId": "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_board_field_reimport",
+                "path": "/teams/{tenantSlug}/board/{boardId}/fields/deleted/{tombstoneId}/reimport",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "POST"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskCustomFieldController::reimport"
+                },
+                "requirements": {
+                    "tombstoneId": "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
                     "tenantSlug": "[a-z]+"
                 },
                 "options": {

@@ -478,6 +478,7 @@ Grouped by feature; each row names the semantic requirement of [`spec.md`](spec.
 | `Dto/TaskRecurrenceFormData.php` | FR-SVC-010 |
 | `Entity/TaskBoardFolder.php` | FR-FOLDER-001 |
 | `Entity/TaskCustomField.php` | FR-FIELD-001 |
+| `Entity/TaskCustomFieldTombstone.php` | FR-FIELD-002 |
 | `Entity/TaskCustomFieldValue.php` | FR-FIELD-001 |
 | `Enum/CalendarMode.php` | FR-CAL-001 |
 | `Enum/ColumnType.php` | FR-FOLDER-001 |
@@ -665,6 +666,7 @@ Grouped by feature; each row names the semantic requirement of [`spec.md`](spec.
 | `Resources/config/doctrine-xml/core/TaskChangeHistory.orm.xml` | FR-ORM-010 |
 | `Resources/config/doctrine-xml/core/TaskComment.orm.xml` | FR-ORM-010 |
 | `Resources/config/doctrine-xml/core/TaskCustomField.orm.xml` | FR-ORM-010 |
+| `Resources/config/doctrine-xml/core/TaskCustomFieldTombstone.orm.xml` | FR-ORM-010 |
 | `Resources/config/doctrine-xml/core/TaskCustomFieldValue.orm.xml` | FR-ORM-010 |
 | `Resources/config/doctrine-xml/core/TaskDependency.orm.xml` | FR-ORM-010 |
 | `Resources/config/doctrine-xml/core/TaskDocument.orm.xml` | FR-ORM-010 |

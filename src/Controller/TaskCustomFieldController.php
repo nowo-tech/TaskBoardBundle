@@ -61,6 +61,9 @@ final class TaskCustomFieldController extends AbstractController
 
     private const DELETE_TOKEN = 'task_board_custom_field_delete';
 
+    /** Since the audit ZCF-L2: *Import it again* of a deleted imported field. */
+    private const RESTORE_TOKEN = 'task_board_custom_field_reimport';
+
     /**
      * @param array<string, array{path: string, name: string}> $routes
      * @param array<string, string> $templates
@@ -95,11 +98,21 @@ final class TaskCustomFieldController extends AbstractController
             }
         }
 
+        // Since the audit ZCF-L2: the imported fields deleted here, each with its *Import it again* form.
+        $deleted = [];
+        foreach ($this->fields->tombstones($board) as $tombstone) {
+            $deleted[] = ['tombstone' => $tombstone, 'form' => $this->formFactory()->createNamedBuilder('', CsrfActionType::class, null, [
+                'csrf_token_id' => self::RESTORE_TOKEN,
+                'action'        => $this->generateUrl($this->routes['board_field_reimport']['name'], ['boardId' => $board->getId(), 'tombstoneId' => $tombstone->getId()]),
+            ])->add('tombstone', HiddenType::class, ['data' => $tombstone->getId()])->getForm()->createView()];
+        }
+
         return $this->render($this->templates['board_fields'], [
             'page'        => $this->showPage($board),
             'board'       => $board,
             'fields'      => $fields,
             'deleteForms' => $own,
+            'deleted'     => $deleted,
         ]);
     }
 
@@ -169,6 +182,33 @@ final class TaskCustomFieldController extends AbstractController
             $this->fields->delete($this->user(), $field, is_numeric($version) ? (int) $version : -1);
             $this->log('custom_field_delete', $board, $field);
             $this->addFlash('success', $this->translator->trans('task_board.custom_field.flash.deleted', [], 'NowoTaskBoardBundle'));
+        } catch (TaskCustomFieldRefusedException $exception) {
+            $this->addFlash('error', $this->refusal($exception));
+        }
+
+        return $this->toList($board);
+    }
+
+    /**
+     * Since the audit ZCF-L2: lets a re-import create a deleted imported field again (the tombstone goes).
+     */
+    #[Route('/tools/task-board/board/{boardId}/fields/deleted/{tombstoneId}/reimport', name: 'nowo_task_board_board_field_reimport', requirements: ['tombstoneId' => self::FIELD_ID], methods: ['POST'])]
+    public function reimport(string $boardId, string $tombstoneId, Request $request): RedirectResponse
+    {
+        $board = $this->board($boardId);
+        // An unnamed form is submitted when one of its fields is in the request: the tombstone id is that field.
+        $form = $this->formFactory()->createNamedBuilder('', CsrfActionType::class, null, ['csrf_token_id' => self::RESTORE_TOKEN])
+            ->add('tombstone', HiddenType::class, ['required' => false])
+            ->getForm();
+        $form->handleRequest($request);
+        if (!$form->isSubmitted() || !$form->isValid()) {
+            throw $this->createAccessDeniedException('Invalid CSRF token.');
+        }
+        try {
+            // @igor-ignore - A call on the stateless field manager (it deletes a database row), not a change of the service.
+            $this->fields->clearTombstone($this->user(), $board, $tombstoneId);
+            $this->logger->info('TaskBoard write: {action}', ['bundle' => 'nowo_task_board', 'action' => 'custom_field_reimport', 'board_id' => $board->getId(), 'tombstone_id' => $tombstoneId]);
+            $this->addFlash('success', $this->translator->trans('task_board.custom_field.flash.reimport', [], 'NowoTaskBoardBundle'));
         } catch (TaskCustomFieldRefusedException $exception) {
             $this->addFlash('error', $this->refusal($exception));
         }

@@ -9,7 +9,6 @@ use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskCustomField;
 use Nowo\TaskBoardBundle\Entity\TaskCustomFieldValue;
 use Nowo\TaskBoardBundle\Enum\CustomFieldType;
-use Nowo\TaskBoardBundle\Exception\TaskChangedException;
 use Nowo\TaskBoardBundle\Field\TaskCustomFieldManager;
 use Nowo\TaskBoardBundle\Field\TaskCustomFieldRefusedException;
 use Nowo\TaskBoardBundle\Support\Text;
@@ -71,23 +70,30 @@ final readonly class SyncNativeFieldWriter
         return self::NATIVE_TYPES[$remoteType] ?? null;
     }
 
-    /** Whether the connection lands this provider field on a native field (the synced writer then leaves it out). */
-    public static function handles(TaskBoardConnection $connection, RemoteCustomField $remote): bool
+    /**
+     * Whether this provider field lands on a native field in this run (the synced writer then leaves it out). Since the
+     * audit ZCF-L1 / L2 only once its native field was resolved: a field the run may not create or change, a deleted one
+     * and an unavailable one stay synced, read-only fields. Call it after {@see self::write()} for the task.
+     */
+    public static function handles(SyncRunContext $ctx, RemoteCustomField $remote): bool
     {
-        return isset($connection->nativeFields()[$remote->id]) && self::nativeType($remote->remoteType) instanceof CustomFieldType;
+        return isset($ctx->connection->nativeFields()[$remote->id]) && self::nativeType($remote->remoteType) instanceof CustomFieldType
+            && ($ctx->nativeFields[$remote->id]['id'] ?? null) !== null;
     }
 
     /**
-     * Writes the task's native values of this connection.
+     * Writes the task's native values of this connection: first every field is resolved and its value read and decided,
+     * then the decided values are written (each through the task's row lock, compared with the value read).
      *
      * @param list<RemoteCustomField> $remoteFields
      *
-     * @return array<string, string> the values not applied (conflicts): field name => the provider's value
+     * @return array<string, array{label: string, preview: string}> the values not applied (conflicts), by native field id
      */
     public function write(SyncRunContext $ctx, TaskSyncItem $item, Task $task, array $remoteFields): array
     {
         $targets   = $ctx->connection->nativeFields();
         $conflicts = [];
+        $writes    = [];
         foreach ($remoteFields as $remote) {
             $type = self::nativeType($remote->remoteType);
             if (!isset($targets[$remote->id]) || !$type instanceof CustomFieldType) {
@@ -103,15 +109,23 @@ final readonly class SyncNativeFieldWriter
                 continue;
             }
             [$value, $preview] = $this->value($ctx, $field, $remote);
+            $conflict          = ['label' => $field->getName(), 'preview' => $preview];
             if ($value === null) {
                 // A dropdown option deleted here (or one the field had no room for): never recreated.
-                $conflicts[$field->getName()] = $preview;
+                $conflicts[$field->getId()] = $conflict;
                 $ctx->count('fields.native_conflicts');
                 continue;
             }
-            $conflict = $this->apply($ctx, $item, $task, $field, $remote, $value);
-            if ($conflict) {
-                $conflicts[$field->getName()] = $preview;
+            $decision = $this->decide($ctx, $item, $task, $field, $remote, $value);
+            if ($decision === true) {
+                $conflicts[$field->getId()] = $conflict;
+            } elseif ($decision !== false) {
+                $writes[] = [$field, $value, $conflict, $decision];
+            }
+        }
+        foreach ($writes as [$field, $value, $conflict, [$key, $remoteHash, $localHash]]) {
+            if ($this->store($ctx, $item, $task, $field, $value, $key, $remoteHash, $localHash)) {
+                $conflicts[$field->getId()] = $conflict;
             }
         }
 
@@ -119,9 +133,12 @@ final readonly class SyncNativeFieldWriter
     }
 
     /**
-     * The task's field value under the re-import rule; true when the provider's value was not applied (a conflict to note).
+     * The re-import rule for one value: `false` (nothing to do), `true` (a conflict to note) or the write to make —
+     * [baseline key, remote hash, the local hash the write expects].
+     *
+     * @return array{0: string, 1: string, 2: string}|bool
      */
-    private function apply(SyncRunContext $ctx, TaskSyncItem $item, Task $task, TaskCustomField $field, RemoteCustomField $remote, string $value): bool
+    private function decide(SyncRunContext $ctx, TaskSyncItem $item, Task $task, TaskCustomField $field, RemoteCustomField $remote, string $value): bool|array
     {
         $key        = self::BASELINE_PREFIX . $field->getId();
         $remoteHash = $this->hash([$remote->remoteType, $value]);
@@ -133,23 +150,7 @@ final readonly class SyncNativeFieldWriter
             return false;
         }
         if ($localHash === $expected) {
-            try {
-                // @igor-ignore - A call on the stateless field manager (it writes a database row), not a change of the service.
-                $this->fields->setFieldUnlessChanged($task, $field->getId(), $value, $ctx->actor, fn (?TaskCustomFieldValue $stored): bool => $this->hash($this->canonical($stored)) === $localHash);
-            } catch (TaskChangedException) {
-                // Changed here while this run wrote it: the edit here wins (REQ-RUNTIME-003). Only a second process can
-                // change the value between the read above and the locked re-read (CONCURRENCY.md).
-                return $this->conflict($ctx, $item, $key, $remoteHash); // @codeCoverageIgnore
-            } catch (TaskCustomFieldRefusedException) {
-                $ctx->count('fields.native_invalid');
-
-                return false;
-            }
-            // @igor-ignore - A Doctrine entity of this sync page, not a shared service.
-            $item->setBaseline($key, $remoteHash, $this->hash($this->current($task, $field)))->setConflictHash($key, null);
-            $ctx->count('fields.native_values');
-
-            return false;
+            return [$key, $remoteHash, $localHash];
         }
         if ($localHash === $this->hash($this->canonicalOf($field, $value))) {
             // Same value on both sides: nothing to write, the baseline follows.
@@ -160,6 +161,28 @@ final readonly class SyncNativeFieldWriter
         }
 
         return $this->conflict($ctx, $item, $key, $remoteHash);
+    }
+
+    /** Writes a decided value unless it changed since it was read; true when a person's change won (a conflict). */
+    private function store(SyncRunContext $ctx, TaskSyncItem $item, Task $task, TaskCustomField $field, string $value, string $key, string $remoteHash, string $localHash): bool
+    {
+        try {
+            // @igor-ignore - A call on the stateless field manager (it writes a database row), not a change of the service.
+            $written = $this->fields->setFieldIfUnchanged($task, $field->getId(), $value, $ctx->actor, fn (?TaskCustomFieldValue $stored): bool => $this->hash($this->canonical($stored)) === $localHash);
+        } catch (TaskCustomFieldRefusedException) {
+            $ctx->count('fields.native_invalid');
+
+            return false;
+        }
+        if (!$written) {
+            // Changed here since it was read: the edit here wins (REQ-RUNTIME-003, audit ZCF-L3).
+            return $this->conflict($ctx, $item, $key, $remoteHash);
+        }
+        // @igor-ignore - A Doctrine entity of this sync page, not a shared service.
+        $item->setBaseline($key, $remoteHash, $this->hash($this->current($task, $field)))->setConflictHash($key, null);
+        $ctx->count('fields.native_values');
+
+        return false;
     }
 
     /** Notes a conflict once per provider value (the same value is not noted again on the next re-import). */
@@ -209,28 +232,60 @@ final readonly class SyncNativeFieldWriter
         if ($known !== null) {
             return $known['id'] !== null ? $this->fields->fieldOfBoard($ctx->board, $known['id']) : null;
         }
-        $field = null;
-        if ($target === TaskBoardConnection::NATIVE_CREATE) {
+        $field   = $this->resolve($ctx, $remote, $type, $target);
+        $options = [];
+        if ($field instanceof TaskCustomField && $type === CustomFieldType::Dropdown) {
             try {
-                $field = $this->fields->defineFromSource($ctx->actor, $ctx->board, $ctx->provider->id() . ':' . $remote->id, $remote->name, $type);
-                if (!$field instanceof TaskCustomField) {
-                    $ctx->warn('native_field_unavailable');
-                }
+                $options = $this->fields->adoptSourceOptions($ctx->actor, $field, $remote->choices);
             } catch (TaskCustomFieldRefusedException) {
+                // Checked by resolve() (mayChange); a policy that changed its answer meanwhile.
+                $field = null;
                 $ctx->warn('native_field_refused');
             }
-        } else {
-            $field = $this->fields->fieldOfBoard($ctx->board, $target);
-            if (!$field instanceof TaskCustomField || $field->getType() !== $type) {
-                $field = null;
-                $ctx->warn('native_field_unavailable');
-            }
         }
-        $options = $field instanceof TaskCustomField && $type === CustomFieldType::Dropdown ? $this->fields->adoptSourceOptions($field, $remote->choices) : [];
         // @igor-ignore - Built per sync run, not a shared service.
         $ctx->nativeFields[$remote->id] = ['id' => $field?->getId(), 'options' => $options];
         if ($field instanceof TaskCustomField && $target === TaskBoardConnection::NATIVE_CREATE) {
             $ctx->count('fields.native_fields');
+        }
+
+        return $field;
+    }
+
+    /**
+     * The native field a provider field lands on, or null (warned once; its values stay synced): a deleted imported field
+     * (`native_field_deleted`, audit ZCF-L2), a field the run's actor may not create or change (`native_field_refused`,
+     * audit ZCF-L1: the restructure policy, as the Custom fields page), or one gone or retyped (`native_field_unavailable`).
+     */
+    private function resolve(SyncRunContext $ctx, RemoteCustomField $remote, CustomFieldType $type, string $target): ?TaskCustomField
+    {
+        if ($target === TaskBoardConnection::NATIVE_CREATE) {
+            $sourceRef = $ctx->provider->id() . ':' . $remote->id;
+            if ($this->fields->isDeletedSource($ctx->board, $sourceRef)) {
+                $ctx->warn('native_field_deleted');
+
+                return null;
+            }
+            try {
+                $field = $this->fields->defineFromSource($ctx->actor, $ctx->board, $sourceRef, $remote->name, $type);
+            } catch (TaskCustomFieldRefusedException) {
+                $ctx->warn('native_field_refused');
+
+                return null;
+            }
+        } else {
+            $field = $this->fields->fieldOfBoard($ctx->board, $target);
+            $field = $field instanceof TaskCustomField && $field->getType() === $type ? $field : null;
+        }
+        if (!$field instanceof TaskCustomField) {
+            $ctx->warn('native_field_unavailable');
+
+            return null;
+        }
+        if ($target !== TaskBoardConnection::NATIVE_CREATE && !$this->fields->mayChange($ctx->actor, $field)) {
+            $ctx->warn('native_field_refused');
+
+            return null;
         }
 
         return $field;

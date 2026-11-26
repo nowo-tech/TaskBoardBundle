@@ -534,11 +534,17 @@ See [.github/SECURITY.md](../.github/SECURITY.md) for coordinated disclosure.
   tenant's) and 403 unless `TaskBoardRestructurePolicyInterface::mayRestructureBoard()` allows (default: the board's
   manage right). Only the board's own fields are edited there; tenant fields are read-only on a board. Every write has
   its CSRF token (`task_board_custom_field`, `task_board_custom_field_delete`) and the definition's version; option
-  names and colours are validated (unique names, `#rrggbb`), rendered escaped; a colour reaches only a CSS custom
+  names and colours are validated (unique names; colours `#RGB` or `#RRGGBB`, hex digits in either case), rendered
+  escaped; a colour reaches only a CSS custom
   property of the escaped `style` attribute after the same check.
-- **Imported fields.** An import creates a field only with the run actor's restructure right (else
-  `native_field_refused`); names and option names come from ClickUp, sanitised and cut by the adapter, escaped where
-  shown. The provenance marker is `<provider>:<id>` (checked pattern); a re-import never overwrites a value changed here.
+- **Imported fields.** An import creates a field, or lands values on an existing one (and adds its drop-down options),
+  only with the right the Custom fields page asks of the run's actor (audit ZCF-L1: `mayRestructureBoard()` for a board's
+  field, `mayManageFolders()` for a tenant's); otherwise it warns `native_field_refused`, leaves the definition untouched
+  and keeps the values synced, read-only. The wizard offers only the fields its user may change. Names and option names
+  come from ClickUp, sanitised and cut by the adapter, escaped where shown. The provenance marker is `<provider>:<id>`
+  (checked pattern); a re-import never overwrites a value changed here. An imported field deleted here leaves a
+  tombstone (board, marker, name): a re-import does not create it again (audit ZCF-L2) until *Import it again* (same
+  right, its own CSRF token).
 - **Personal data.** A native text value may name a person, typed here or imported. `TaskCustomFieldPersonalData`
   answers access requests (`exportByValue()`, `exportBoard()`) and erases by value (`eraseByValue()`); the host
   authorises the caller and passes the board on a multi-tenant installation (null crosses tenants). An erased imported
@@ -548,3 +554,13 @@ See [.github/SECURITY.md](../.github/SECURITY.md) for coordinated disclosure.
 - **Search** of native text values is opt-in (`search_kit.custom_fields`), on the boards the viewer may open only, with
   escaped `LIKE` patterns and bound parameters.
 - **Export.** The multi-board export's *Custom fields* cell is guarded against formula injection like the others.
+- **Known limitations (audit ZCF, accepted for 3.3.0).**
+  - ZCF-I1: `TaskCustomFieldPersonalData` with a null board crosses every tenant (as `SyncFieldValueEraser`); the
+    by-value paths load every match at once. A multi-tenant host passes the board.
+  - ZCF-I2: after an erasure the sync item keeps an unsalted SHA-256 of the erased value as its baseline (key
+    `native:<field id>`), which a short value can be guessed from; drop-down option labels and field names that name a
+    person are neither exported nor erased by value. Delete the field (its tombstone holds no value) or rename the option.
+  - ZCF-I4: a native target saved on the Fields step is not checked again at *Start* (going back to the Boards step can
+    leave a target that no longer fits); the run then warns `native_field_unavailable` and keeps the values synced.
+  - ZCF-I6: a person's value write that read a drop-down's options before a concurrent definition edit removed that
+    option may store the removed option id (shown empty). Contention only; since 2.31.

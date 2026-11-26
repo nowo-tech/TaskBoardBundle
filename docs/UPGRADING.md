@@ -245,7 +245,8 @@ UiKit `^2.74.1` and FormKit `^2.25.1` are required (their latest minors).
 
 `task_board_custom_fields` gets three columns — `source_ref` (where an import created the field, a key column: binary
 on MySQL / MariaDB), `source_options` (the provider's option ids) and `version` (REQ-RUNTIME-003) — and a unique index
-on (`board_id`, `source_ref`). Generate a migration (`doctrine:migrations:diff`) or apply the SQL of your platform
+on (`board_id`, `source_ref`). A new table, `task_board_custom_field_tombstones`, remembers the imported fields deleted
+on a board (audit ZCF-L2: a re-import does not create them again). Generate a migration (`doctrine:migrations:diff`) or apply the SQL of your platform
 (table prefix `task_board_`; change it if you set `table_prefix`). Existing fields get version 1 and no marker.
 
 MySQL 8 / 9:
@@ -253,6 +254,8 @@ MySQL 8 / 9:
 ```sql
 ALTER TABLE task_board_custom_fields ADD source_ref VARCHAR(191) COLLATE `utf8mb4_0900_bin` DEFAULT NULL, ADD source_options JSON DEFAULT NULL, ADD version INT DEFAULT 1 NOT NULL;
 CREATE UNIQUE INDEX uniq_task_board_custom_fields_source ON task_board_custom_fields (board_id, source_ref);
+CREATE TABLE task_board_custom_field_tombstones (id VARCHAR(36) NOT NULL, deleted_at DATETIME NOT NULL, name VARCHAR(128) NOT NULL, source_ref VARCHAR(191) NOT NULL COLLATE `utf8mb4_0900_bin`, board_id VARCHAR(36) NOT NULL, UNIQUE INDEX uniq_task_board_custom_field_tombstones (board_id, source_ref), INDEX IDX_A7286CF5E7EC5785 (board_id), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4;
+ALTER TABLE task_board_custom_field_tombstones ADD CONSTRAINT FK_A7286CF5E7EC5785 FOREIGN KEY (board_id) REFERENCES task_board_boards (id) ON DELETE CASCADE;
 ```
 
 MariaDB:
@@ -260,6 +263,8 @@ MariaDB:
 ```sql
 ALTER TABLE task_board_custom_fields ADD source_ref VARCHAR(191) COLLATE `utf8mb4_nopad_bin` DEFAULT NULL, ADD source_options JSON DEFAULT NULL, ADD version INT DEFAULT 1 NOT NULL;
 CREATE UNIQUE INDEX uniq_task_board_custom_fields_source ON task_board_custom_fields (board_id, source_ref);
+CREATE TABLE task_board_custom_field_tombstones (id VARCHAR(36) NOT NULL, deleted_at DATETIME NOT NULL, name VARCHAR(128) NOT NULL, source_ref VARCHAR(191) NOT NULL COLLATE `utf8mb4_nopad_bin`, board_id VARCHAR(36) NOT NULL, UNIQUE INDEX uniq_task_board_custom_field_tombstones (board_id, source_ref), INDEX IDX_A7286CF5E7EC5785 (board_id), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4;
+ALTER TABLE task_board_custom_field_tombstones ADD CONSTRAINT FK_A7286CF5E7EC5785 FOREIGN KEY (board_id) REFERENCES task_board_boards (id) ON DELETE CASCADE;
 ```
 
 PostgreSQL:
@@ -269,6 +274,10 @@ ALTER TABLE task_board_custom_fields ADD source_ref VARCHAR(191) DEFAULT NULL;
 ALTER TABLE task_board_custom_fields ADD source_options JSON DEFAULT NULL;
 ALTER TABLE task_board_custom_fields ADD version INT DEFAULT 1 NOT NULL;
 CREATE UNIQUE INDEX uniq_task_board_custom_fields_source ON task_board_custom_fields (board_id, source_ref);
+CREATE TABLE task_board_custom_field_tombstones (id VARCHAR(36) NOT NULL, deleted_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, name VARCHAR(128) NOT NULL, source_ref VARCHAR(191) NOT NULL, board_id VARCHAR(36) NOT NULL, PRIMARY KEY (id));
+CREATE UNIQUE INDEX uniq_task_board_custom_field_tombstones ON task_board_custom_field_tombstones (board_id, source_ref);
+CREATE INDEX IDX_A7286CF5E7EC5785 ON task_board_custom_field_tombstones (board_id);
+ALTER TABLE task_board_custom_field_tombstones ADD CONSTRAINT FK_A7286CF5E7EC5785 FOREIGN KEY (board_id) REFERENCES task_board_boards (id) ON DELETE CASCADE NOT DEFERRABLE;
 ```
 
 SQLite:
@@ -278,6 +287,9 @@ ALTER TABLE task_board_custom_fields ADD COLUMN source_ref VARCHAR(191) DEFAULT 
 ALTER TABLE task_board_custom_fields ADD COLUMN source_options CLOB DEFAULT NULL;
 ALTER TABLE task_board_custom_fields ADD COLUMN version INTEGER DEFAULT 1 NOT NULL;
 CREATE UNIQUE INDEX uniq_task_board_custom_fields_source ON task_board_custom_fields (board_id, source_ref);
+CREATE TABLE task_board_custom_field_tombstones (id VARCHAR(36) NOT NULL, deleted_at DATETIME NOT NULL, name VARCHAR(128) NOT NULL, source_ref VARCHAR(191) NOT NULL, board_id VARCHAR(36) NOT NULL, PRIMARY KEY (id), CONSTRAINT FK_A7286CF5E7EC5785 FOREIGN KEY (board_id) REFERENCES task_board_boards (id) ON DELETE CASCADE NOT DEFERRABLE INITIALLY IMMEDIATE);
+CREATE UNIQUE INDEX uniq_task_board_custom_field_tombstones ON task_board_custom_field_tombstones (board_id, source_ref);
+CREATE INDEX IDX_A7286CF5E7EC5785 ON task_board_custom_field_tombstones (board_id);
 ```
 
 Several fields with no marker (or tenant fields, `board_id` NULL) are allowed on all four engines (NULLs are distinct).
@@ -286,9 +298,13 @@ Without this schema every custom field read fails, so apply it before deploying 
 ### Native fields from the ClickUp import
 
 Nothing to do for existing connections: a field lands on a native field only when an import plan chose it (Fields
-step). The run's actor (the plan's starter) needs the board's restructure right to **create** a field (the restructure
-policy: `restructure.policy`, by default the board's manage right); without it the run warns `native_field_refused` and
-those values are not imported — grant it, or create the field first and choose it in the plan. A drop-down field's
+step). The run's actor (the plan's starter) needs the right the Custom fields page asks to **create** a field or to land
+values on an **existing** one (audit ZCF-L1; the restructure policy, `restructure.policy`: a board's field needs
+`mayRestructureBoard()` — by default the board's manage right —, a tenant field `mayManageFolders()`). Without it the run
+warns `native_field_refused`, leaves the definition untouched and keeps those values as synced, read-only fields; the
+wizard offers only the fields its user may change. An imported field deleted here (on the page, through the manager or by
+applying a board configuration without it) is not created again: the run warns `native_field_deleted` and keeps the
+values synced until *Import it again* on the page clears its tombstone (route `board_field_reimport`). A drop-down field's
 options follow the provider's option ids; an option deleted here is not recreated. There is no overwrite mode: a value
 changed here is kept and the provider's value is noted in a comment.
 

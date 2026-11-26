@@ -382,7 +382,7 @@ final class TaskSyncImportPlanController extends AbstractController
                         $native[$field['id']] = $choice;
                     }
                 }
-                $this->plans->chooseFields($plan, $version, $excluded, $native, $fields);
+                $this->plans->chooseFields($plan, $version, $excluded, $native, $fields, $user);
                 break;
             case ImportPlanStep::People:
                 $this->plans->choosePeople($plan, $version, $data['peopleFirst'] === true);
@@ -440,7 +440,7 @@ final class TaskSyncImportPlanController extends AbstractController
                 $options['groups'] = $this->statusTables($plan);
                 break;
             case ImportPlanStep::Fields:
-                $options['fields'] = $this->fieldRows($plan);
+                $options['fields'] = $this->fieldRows($plan, $user);
                 break;
             case ImportPlanStep::People:
                 $options['people_first'] = $plan->option(TaskSyncImportPlan::OPTION_PEOPLE, false);
@@ -527,7 +527,7 @@ final class TaskSyncImportPlanController extends AbstractController
      *
      * @return list<array{id: string, name: string, choices: array<string, string>, selected: string}>
      */
-    private function fieldRows(TaskSyncImportPlan $plan): array
+    private function fieldRows(TaskSyncImportPlan $plan, object $user): array
     {
         $targets  = null;
         $excluded = $plan->getExcludedFields();
@@ -539,7 +539,7 @@ final class TaskSyncImportPlanController extends AbstractController
                 self::FIELD_EXCLUDED => $this->translator->trans('task_board.import_plan.fields.excluded', [], 'NowoTaskBoardBundle'),
             ];
             if ($field['nativeType'] !== null) {
-                $targets ??= $this->plans->nativeTargets($plan);
+                $targets ??= $this->plans->nativeTargets($plan, $user);
                 $choices[TaskBoardConnection::NATIVE_CREATE] = $this->translator->trans('task_board.import_plan.fields.native_create', ['%name%' => $field['name']], 'NowoTaskBoardBundle');
                 foreach ($targets as $id => $target) {
                     if ($target->getType()->value === $field['nativeType']) {

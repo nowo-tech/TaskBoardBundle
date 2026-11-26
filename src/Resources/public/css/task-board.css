@@ -4612,3 +4612,10 @@ html[data-nowo-ui-sortable-active] .nowo-task-cal__chip {
         grid-template-columns: 1fr;
     }
 }
+.nowo-task-field-deleted {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.5rem;
+}

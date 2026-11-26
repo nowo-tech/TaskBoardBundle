@@ -717,15 +717,16 @@ final readonly class SyncTaskWriter
      * One comment and one change-history entry listing the fields kept here although the provider changed them.
      *
      * @param array<string, string> $conflicts field => preview of the remote value
+     * @param array<string, string> $labels since 3.3.0: field => its own name (native fields, keyed by id)
      */
-    private function noteConflicts(SyncRunContext $ctx, Task $task, string $externalId, array $conflicts, bool $named = false): void
+    private function noteConflicts(SyncRunContext $ctx, Task $task, string $externalId, array $conflicts, array $labels = []): void
     {
         $lines = [];
         foreach ($conflicts as $field => $preview) {
-            $ctx->conflicts[] = new SyncConflict($task->getId(), $this->sanitizer->line($task->getTitle(), 120), $externalId, $field, $preview);
             // Since 3.3.0 (CU-3): a native field's conflict is labelled with the field's own name (escaped below).
-            $label   = $named ? $this->sanitizer->line($field, 128) : $this->trans('task_board.sync.field.' . $field, $field);
-            $lines[] = sprintf('- **%s**: %s', $label, $preview === '' ? '—' : $preview);
+            $label            = isset($labels[$field]) ? $this->sanitizer->line($labels[$field], 128) : $this->trans('task_board.sync.field.' . $field, $field);
+            $ctx->conflicts[] = new SyncConflict($task->getId(), $this->sanitizer->line($task->getTitle(), 120), $externalId, isset($labels[$field]) ? $label : $field, $preview);
+            $lines[]          = sprintf('- **%s**: %s', $label, $preview === '' ? '—' : $preview);
         }
         $header = $this->trans('task_board.sync.conflict_note', 'Changed here and in %provider%: these values from %provider% were not applied.', ['%provider%' => $this->providerName($ctx)]);
         $body   = $this->sanitizer->markdown($header . "\n\n" . implode("\n", $lines), TaskComment::MAX_LENGTH);
@@ -769,14 +770,16 @@ final readonly class SyncTaskWriter
         if ($remote->customFieldsText !== null && $this->fieldsMode !== 'typed') {
             $this->fieldsDocument($ctx, $task, $remote->customFieldsText);
         }
-        if ($this->fieldsMode !== 'text' && $this->fieldWriter instanceof SyncCustomFieldWriter) {
-            $this->fieldWriter->write($ctx, $task, $remote->customFields, $session);
-        }
+        // Since 3.3.0 (CU-3): native fields first, so the synced writer knows which fields did land on one.
         if ($this->nativeFieldWriter instanceof SyncNativeFieldWriter && $ctx->connection->nativeFields() !== []) {
             $conflicts = $this->nativeFieldWriter->write($ctx, $item, $task, $remote->customFields);
             if ($conflicts !== []) {
-                $this->noteConflicts($ctx, $task, $item->getExternalId(), $conflicts, true);
+                // Audit ZCF-I3: keyed by field id (two fields may share a name), labelled with the field's name.
+                $this->noteConflicts($ctx, $task, $item->getExternalId(), array_map(static fn (array $c): string => $c['preview'], $conflicts), array_map(static fn (array $c): string => $c['label'], $conflicts));
             }
+        }
+        if ($this->fieldsMode !== 'text' && $this->fieldWriter instanceof SyncCustomFieldWriter) {
+            $this->fieldWriter->write($ctx, $task, $remote->customFields, $session);
         }
     }
 

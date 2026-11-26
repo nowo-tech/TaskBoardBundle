@@ -59,7 +59,7 @@ final class SyncNativeFieldsTest extends SyncFunctionalTestCase
         self::assertSame(3, $first->stat('fields.native_values'));
         self::assertSame(1, $first->stat('fields.native_misfit'));
         self::assertContains('native_field_unavailable', array_map(static fn (SyncError $w): string => $w->code, $first->warnings));
-        self::assertSame(['Due', 'Empty'], $this->syncedNames(), 'the date and an unmapped field stay synced; native ones are not copied');
+        self::assertSame(['Due', 'Empty', 'Gone'], $this->syncedNames(), 'the date, an unmapped field and an unavailable target stay synced; native ones are not copied');
         self::assertSame(['Contact' => 'Ana', 'Stage' => 'Draft', 'Story points' => '3.5'], $this->values('Website'));
         $contact = $this->fields()->sourceField($this->freshBoard($board), 'clickup:fText');
         self::assertInstanceOf(TaskCustomField::class, $contact);
@@ -204,7 +204,7 @@ final class SyncNativeFieldsTest extends SyncFunctionalTestCase
     {
         $names = array_map(static fn (TaskSyncField $field): string => $field->getName(), $this->em->getRepository(TaskSyncField::class)->findAll());
         sort($names);
-        self::assertCount(1, $this->em->getRepository(TaskSyncFieldValue::class)->findAll());
+        self::assertCount(2, $this->em->getRepository(TaskSyncFieldValue::class)->findAll());
 
         return $names;
     }

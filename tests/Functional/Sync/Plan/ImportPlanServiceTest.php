@@ -164,8 +164,10 @@ final class ImportPlanServiceTest extends ImportPlanTestCase
         foreach ([['fld1' => $tenantNo->getId()], ['fld3' => 'create'], ['fld2' => 'create'], ['nope' => 'create'], ['bad id' => 'create'], ['fld1' => '00000000-0000-4000-8000-000000000000']] as $native) {
             $this->refused(ImportPlanException::INVALID, static fn () => $plans->chooseFields($plan, $plan->getVersion(), ['fld2'], $native, $typed));
         }
+        // Audit ZCF-I3: two provider fields on one native field are refused.
+        $this->refused(ImportPlanException::INVALID, static fn () => $plans->chooseFields($plan, $plan->getVersion(), [], ['fld1' => $tenantTx->getId(), 'fld2' => $tenantTx->getId()], $typed));
         $plan = $this->fresh($plan);
-        $plans->chooseFields($plan, $plan->getVersion(), ['fld2'], ['fld1' => $tenantTx->getId()], $typed);
+        $plans->chooseFields($plan, $plan->getVersion(), ['fld2'], ['fld1' => $tenantTx->getId()], $typed, $this->admin);
         $plan = $this->fresh($plan);
         self::assertSame([['fld2'], ['fld1' => $tenantTx->getId()]], [$plan->getExcludedFields(), $plan->getNativeFields()]);
         self::assertSame([['name' => 'Size', 'type' => 'short_text', 'choice' => 'native'], ['name' => 'Team', 'type' => 'short_text', 'choice' => 'excluded'], ['name' => 'When', 'type' => 'date', 'choice' => 'synced']], $plan->getFieldChoices());

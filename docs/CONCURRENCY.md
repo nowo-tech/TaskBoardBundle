@@ -72,6 +72,10 @@ only at its flush).
 | Task API writes with `base_revision` (and bulk updates) | the columns the status enters, then the task rows (ascending id) |
 | Delete (task, Task API delete) | task, then the rows its cascade removes |
 | Task edit form with `baseDigest` (2.31) | the column the edit enters (if any), then the task row (its revision read under the lock) |
+| Custom field value (form, Task API, import; 2.31, 3.3) | the task row, then the value row |
+| Custom field definition edit / delete (3.3) | the field row, then its value rows (and a tombstone row on delete) |
+| Import: drop-down options of a native field (3.3) | the field row (once per run and field, outside any task lock) |
+| Import: creating the board's field of a marker (3.3) | the board row, then a savepoint for the field row |
 
 The question paths take the task's row first in `TaskQuestionManager::lock()` (`lockTask()`), exactly as `ask()` does.
 The activity entry and the flush then touch the task again under a lock the transaction already holds.
@@ -250,12 +254,19 @@ forged steps).
 | --- | --- |
 | Two people editing one field's definition (name, options) | `update()` / `delete()` lock the field's row (`SELECT … FOR UPDATE`), read it again and raise `version`; the page's forms send the version they showed and an older one is refused (`changed`, nothing written) |
 | An import adding drop-down options while someone edits the field | `adoptSourceOptions()` takes the same row lock and re-reads the options; the person's edit then fails its version check (reload and save again) |
-| Two runs creating the board's field of one ClickUp field | `defineFromSource()` locks the board's row, then looks for the marker; the unique key (`board_id`, `source_ref`) is the last guard |
-| A person editing a task's value while the import writes it | the import writes through `setFieldUnlessChanged()`: the task's row is locked and the value read again; when it is no longer the one the import compared, nothing is written and the person's value wins (a conflict) |
+| Two runs creating the board's field of one ClickUp field | `defineFromSource()` locks the board's row, then looks for the marker again: the second writer waits and takes the first's field. The insert runs in a savepoint of its own, so a writer that skipped the lock and won the unique key (`board_id`, `source_ref`) only undoes that savepoint; its field is read again and the sync page goes on (audit ZCF-L3) |
+| A person editing a task's value while the import writes it | the import first reads and decides every value of the task, then writes each through `setFieldIfUnchanged()`: the task's row is locked and the value read again; when it is no longer the one the import read, nothing is written (the transaction commits empty, so the sync page's rows stay managed) and the person's value wins (a conflict note) |
 
-Tests: `CustomFieldDefinitionTest` (version refusals, marker reuse, option map, and with a second database connection
-on MySQL / MariaDB / PostgreSQL: a definition saved by the other connection first, a second field of one marker refused
-by the unique key), `SyncNativeFieldsTest` (the re-import rule), `CustomFieldPagesTest` (stale forms).
+The import never holds a task row while it locks a field or board row: definitions are resolved before the values are
+written, so the orders above do not cross.
+
+Tests: `CustomFieldDefinitionTest` (version refusals, marker reuse, option map, a definition saved by a second
+connection first, a second field of one marker refused by the unique key), `SyncNativeFieldsAuditTest` (audit ZCF:
+**two processes** on MySQL / MariaDB / PostgreSQL — another process holds the board's row with its field inserted while
+this one waits and then takes it; another process holds the task's row with a person's value while the import waits and
+then keeps it — and on every database the same interleavings through the restructure policy, asked between the reads and
+the writes, plus a duplicate marker inside the write, read again, during a sync page that still succeeds),
+`SyncNativeFieldsTest` (the re-import rule), `CustomFieldPagesTest` (stale forms).
 
 Known limit (audit ZBYv-I1, planned for 3.2.x): item rows are still written through the ORM without the run token, so a
 slice that was taken over may write its current item's status once more before its next fenced write stops it. The

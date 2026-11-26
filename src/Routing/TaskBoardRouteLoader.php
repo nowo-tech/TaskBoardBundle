@@ -250,7 +250,7 @@ final class TaskBoardRouteLoader extends Loader
         $this->addRoute($collection, $attributes, 'task_menu', TaskMenuController::class . '::act');
         if ($this->customFieldsEnabled) {
             // Since 3.3.0: the board's Custom fields page.
-            foreach (['board_fields' => 'fields', 'board_field_new' => 'create', 'board_field_edit' => 'edit', 'board_field_delete' => 'delete'] as $key => $action) {
+            foreach (['board_fields' => 'fields', 'board_field_new' => 'create', 'board_field_edit' => 'edit', 'board_field_delete' => 'delete', 'board_field_reimport' => 'reimport'] as $key => $action) {
                 $this->addRoute($collection, $attributes, $key, TaskCustomFieldController::class . '::' . $action);
             }
         }

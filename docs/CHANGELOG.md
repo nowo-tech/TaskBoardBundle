@@ -185,6 +185,28 @@ mode), and a *Custom fields* page per board. **Schema change** (three columns an
 - `TaskCustomFieldManager::trimDecimal()` is public (static).
 - Requires UiKit `^2.74.1` and FormKit `^2.25.1` (their latest minors).
 
+### Security (audit ZCF, before the release)
+
+- ZCF-L1: the import lands values on an existing native field, and adds its drop-down options, only with the right the
+  Custom fields page asks of the run's actor (`TaskCustomFieldManager::mayChange()`; `adoptSourceOptions()` takes the
+  actor and asks the restructure policy). Otherwise it warns `native_field_refused`, leaves the definition untouched and
+  keeps the values synced. The wizard offers only the fields its user may change (`nativeTargets($plan, $actor)`).
+- ZCF-L2: an imported field deleted here leaves a tombstone (`task_board_custom_field_tombstones`,
+  `TaskCustomFieldTombstone`; also when a board configuration drops it): a re-import does not create it again (warning
+  `native_field_deleted`, values synced) until *Import it again* on the Custom fields page (route
+  `board_field_reimport`, `TaskCustomFieldManager::clearTombstone()`).
+- ZCF-L3 (REQ-RUNTIME-003): the import reads and decides a task's values before writing them and writes through
+  `TaskCustomFieldManager::setFieldIfUnchanged()` (no rollback when a person's change wins); the marker's field is inserted
+  in a savepoint of its own, so a duplicate on the unique key is read again and never fails the sync page. Both losing
+  sides are tested with a second process (MySQL, MariaDB, PostgreSQL) and in process on every database; the lock order is
+  in CONCURRENCY.md.
+- ZCF-I3: two ClickUp fields may not target one existing native field; conflict notes are keyed by field id.
+- Any field that could not land on a native field (no right, deleted, unavailable) stays a synced, read-only field.
+
+### Known limitations
+
+- ZCF-I1, ZCF-I2, ZCF-I4 and ZCF-I6 are accepted for 3.3.0 and described in SECURITY.md (native custom fields).
+
 ## [3.2.0] - 2026-11-26
 
 Import plans and the guided import from ClickUp, phase CU-2 of [design/CLICKUP_IMPORT.md](design/CLICKUP_IMPORT.md)
