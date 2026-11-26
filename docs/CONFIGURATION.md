@@ -640,6 +640,36 @@ settings (InstanceSettings: env by default, DB switchable, the secret encrypted)
 to a repository. Redirect URIs on `http://localhost` / `127.0.0.1` are accepted only with `kernel.debug`. See
 [sync.md](sync.md#connecting-clickup-with-oauth-since-310).
 
+Since 3.2.0 (CU-2) the guided import from ClickUp (import plans) and the shared per-token request budget:
+
+```yaml
+nowo_task_board:
+    sync:
+        plans:
+            enabled: false             # true = the import plan routes and "Import from ClickUp" (users granted import_plan)
+            runner: null               # a Sync\Plan\ImportPlanRunnerInterface; null = Messenger runner when enabled, else inline
+            inline_slice_seconds: 20   # one inline slice (keep it below max_execution_time)
+            messenger:
+                enabled: false         # Q-CU-9: RunImportPlanSlice on the host's bus (needs symfony/messenger)
+                slice_seconds: 120     # one queued slice (at most 300: half the 10-minute takeover window)
+            keep_days: 90              # Q-CU-13: finished plans and abandoned drafts are pruned after this
+            preview_max_pages: 3       # task pages the preview reads per board; beyond them counts are estimated
+            preview_max_requests: 60   # provider requests one preview page view may make; later boards are shown unread
+            preview_seconds: 15        # seconds one preview page view may read from the provider
+            max_items: 200             # the most boards one plan fills
+        rate_limit:
+            enabled: true              # the per-token budget shared by every process (ClickUp: 100 requests a minute)
+            storage: null              # a PSR-6 pool every process shares (Redis across servers); null = cache.app
+            default_limit: 100         # until the provider's X-RateLimit-Limit is seen
+            margin: 0.1                # share of the limit left unused
+```
+
+The ten routes `import_plans`, `import_plan_new`, `import_plan`, `import_plan_step`, `import_plan_start`,
+`import_plan_progress`, `import_plan_cancel`, `import_plan_resume`, `import_plan_delete` and `import_plan_report`
+(`routes.*`, paths under `/tools/task-board/import-plans`) exist only with `sync.enabled` and `sync.plans.enabled`; the
+templates are `templates.import_plans` and `templates.import_plan`. See
+[sync.md](sync.md#guided-import-from-clickup-import-plans-since-320).
+
 ```yaml
 nowo_task_board:
     sync:
@@ -796,6 +826,7 @@ Every call is bounded, and a run is split into resumable slices, so no request w
 | One API call | `sync.http.timeout` (idle, default 10 s) and `sync.http.max_duration` (total, default 30 s) | `ProviderHttpClient` |
 | Rate-limit wait inside a request | `sync.http.max_inline_wait` (default 30 s); a longer wait pauses the run (`rate_limited`, resumable) | provider adapters |
 | One inline slice | `sync.inline_slice_pages` task pages per request (default 5), plus the per-run caps (`max_tasks_per_run`, `max_pages_per_run`, attachment byte caps) | `InlineSyncRunner` |
+| One import plan slice | `sync.plans.inline_slice_seconds` (default 20 s) inline, `sync.plans.messenger.slice_seconds` (default 120 s) queued | `InlinePlanRunner`, `RunImportPlanSliceHandler` |
 | PHP | `max_execution_time` of the host, **above** the worst inline slice | host `php.ini` |
 | HTTP server | FrankenPHP / Caddy `write` timeout (or the FPM / proxy read timeout), **above** PHP's limit | host Caddyfile / proxy |
 

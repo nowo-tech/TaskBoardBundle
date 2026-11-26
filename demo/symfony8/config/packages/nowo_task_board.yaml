@@ -17,6 +17,9 @@ nowo_task_board:
     sync:
         enabled: true
         credential_resolver: App\Sync\DemoCredentialResolver
+        # Since 3.2.0: the guided import from ClickUp (Import from ClickUp on the board index).
+        plans:
+            enabled: true
         providers:
             clickup:
                 enabled: false

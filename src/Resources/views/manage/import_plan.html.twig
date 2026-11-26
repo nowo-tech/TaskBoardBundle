@@ -1,0 +1,204 @@
+{% extends '@NowoUiKitBundle/page/show.html.twig' %}
+{#
+    Since 3.2.0 (CU-2, design §8): the guided import from ClickUp, one step per page — connect, workspace, tree, boards,
+    statuses, fields, people, preview, then run (progress) and summary. Every step works without JavaScript (POST +
+    redirect); the run page's progress is polled by the nowo-task-board-sync-progress controller. Vars: page, plan,
+    step, steps, items, form, error and each step's own (connectUrl, credentialFormUrl, tree, opened, tables, fields,
+    people, preview, progress, …). Each step is a block (nowo_task_board_import_plan_<step>). Override with
+    templates.import_plan.
+#}
+
+{% block nowo_ui_styles %}
+    {{ parent() }}
+    <link rel="stylesheet" href="{{ asset('css/task-board.css', 'nowo_task_board') }}">
+{% endblock %}
+
+{% block nowo_ui_scripts %}
+    {{ parent() }}
+    <script src="{{ asset('js/task-board.js', 'nowo_task_board') }}" defer></script>
+{% endblock %}
+
+{% block nowo_ui_show_sections %}
+    {% set _b = 'NowoTaskBoardBundle' %}
+    {% set _draft = plan.status.value == 'draft' %}
+    <div class="nowo-task-plan" data-testid="nowo-task-plan" data-step="{{ step.value }}">
+        {# Seven markers (UiKit steps stay readable): Boards is part of Lists, and Run is the page itself. #}
+        {% set _shown = step.value == 'boards' ? 'tree' : step.value %}
+        {% set _stepItems = [] %}
+        {% for _s in steps|filter(_s => _s.value not in ['boards', 'run']) %}
+            {% set _status = _s.value == _shown ? 'current' : (_s.position < plan.step.position or not _draft ? 'done' : 'upcoming') %}
+            {% set _stepItems = _stepItems|merge([{
+                label: ('task_board.import_plan.step.' ~ _s.value)|trans({}, _b),
+                status: _status,
+                href: _draft and _status == 'done' ? path(nowo_task_board_route('import_plan'), {planId: plan.id, step: _s.value}) : null,
+            }]) %}
+        {% endfor %}
+        <nav class="nowo-task-mb-3" aria-label="{{ 'task_board.import_plan.steps'|trans({}, _b) }}">
+            {{ include(nowo_ui_partial('steps', _b), {items: _stepItems, label: 'task_board.import_plan.steps'|trans({}, _b)}, false) }}
+        </nav>
+
+        <section class="{{ nowo_ui_class('card', _b) }}" aria-labelledby="nowo-task-plan-step-title">
+            <div class="{{ nowo_ui_class('card_header', _b) }}">
+                <h2 class="{{ nowo_ui_class('card_title', _b) }}" id="nowo-task-plan-step-title">{{ ('task_board.import_plan.' ~ step.value ~ '.title')|trans({}, _b) }}</h2>
+            </div>
+            <div class="{{ nowo_ui_class('card_body', _b) }}">
+                {% if error %}
+                    <p class="{{ nowo_ui_class('flash_error', _b) }}" role="alert" data-testid="nowo-task-plan-error">{{ ('task_board.import_plan.error.' ~ error)|trans({'%detail%': ''}, _b) }}</p>
+                {% endif %}
+
+                {% if step.value == 'connect' %}
+                    {% block nowo_task_board_import_plan_connect %}
+                        <p>{{ 'task_board.import_plan.connect.intro'|trans({}, _b) }}</p>
+                        <p class="{{ nowo_ui_class('muted', _b) }} nowo-task-small" data-testid="nowo-task-plan-privacy">{{ 'task_board.import_plan.connect.privacy'|trans({}, _b) }}</p>
+                        <div class="nowo-task-flex nowo-task-wrap nowo-task-gap nowo-task-mb-3">
+                            {% if connectUrl %}
+                                <a class="{{ nowo_ui_class('btn_secondary', _b) }}" href="{{ connectUrl }}" data-testid="nowo-task-plan-oauth">{{ 'task_board.import_plan.connect.oauth'|trans({}, _b) }}</a>
+                            {% endif %}
+                            {% if credentialFormUrl %}
+                                <a class="{{ nowo_ui_class('btn_secondary', _b) }}" href="{{ credentialFormUrl }}" data-testid="nowo-task-plan-token">{{ 'task_board.import_plan.connect.token'|trans({}, _b) }}</a>
+                            {% endif %}
+                        </div>
+                        {% if form %}
+                            {% if form.connection.vars.choices is empty %}
+                                <p class="{{ nowo_ui_class('flash_info', _b) }}" role="status" data-testid="nowo-task-plan-no-connection">{{ 'task_board.import_plan.connect.none'|trans({}, _b) }}</p>
+                                {% do form.connection.setRendered() %}
+                                {{ form_start(form) }}{{ form_end(form) }}
+                            {% else %}
+                                {{ include('@NowoTaskBoardBundle/manage/_import_plan_form.html.twig', {form: form}) }}
+                            {% endif %}
+                        {% endif %}
+                    {% endblock %}
+                {% elseif step.value == 'workspace' %}
+                    {% block nowo_task_board_import_plan_workspace %}
+                        <p>{{ 'task_board.import_plan.workspace.intro'|trans({'%connection%': plan.connectionLabel}, _b) }}</p>
+                        {% if form %}
+                            {{ include('@NowoTaskBoardBundle/manage/_import_plan_form.html.twig', {form: form}) }}
+                        {% endif %}
+                    {% endblock %}
+                {% elseif step.value == 'tree' %}
+                    {% block nowo_task_board_import_plan_tree %}
+                        <p>{{ 'task_board.import_plan.tree.intro'|trans({}, _b) }}</p>
+                        {% if form %}
+                            {{ form_start(form, {attr: {class: 'nowo-task-plan__form', novalidate: 'novalidate'}}) }}
+                                {{ form_widget(form.version) }}
+                                {{ form_widget(form.opened) }}
+                                <fieldset class="nowo-task-tree nowo-task-mb-3">
+                                    <legend class="{{ nowo_ui_class('form_label', _b) }}">{{ 'task_board.import_plan.tree.legend'|trans({}, _b) }}</legend>
+                                    {{ include('@NowoTaskBoardBundle/manage/_import_plan_tree.html.twig', {tree: tree, parent: '', depth: 1, form: form}) }}
+                                    {{ form_errors(form.containers) }}
+                                    {% do form.containers.setRendered() %}
+                                </fieldset>
+                                {{ form_row(form.layout) }}
+                                <fieldset class="nowo-task-mb-3">
+                                    <legend class="{{ nowo_ui_class('form_label', _b) }}">{{ 'task_board.import_plan.option.legend'|trans({}, _b) }}</legend>
+                                    {% for child in form %}{% if not child.rendered and child.vars.name != '_token' %}{{ form_row(child) }}{% endif %}{% endfor %}
+                                </fieldset>
+                                {{ include('@NowoTaskBoardBundle/manage/_import_plan_next.html.twig') }}
+                            {{ form_end(form) }}
+                        {% endif %}
+                    {% endblock %}
+                {% elseif step.value == 'boards' %}
+                    {% block nowo_task_board_import_plan_boards %}
+                        {% set _intro = {per_list: 'task_board.import_plan.boards.intro_per_list', per_folder: 'task_board.import_plan.boards.intro_per_folder', single: 'task_board.import_plan.boards.intro_single'} %}
+                        <p>{{ _intro[plan.layout.value]|trans({'%count%': items|length}, _b) }}</p>
+                        {% if form %}
+                            {{ form_start(form, {attr: {class: 'nowo-task-plan__form'}}) }}
+                                {{ form_widget(form.version) }}
+                                <div class="{{ nowo_ui_class('table_wrap', _b) }}">
+                                    <table class="{{ nowo_ui_class('table', _b) }}" data-testid="nowo-task-plan-boards">
+                                        <caption class="visually-hidden">{{ 'task_board.import_plan.boards.title'|trans({}, _b) }}</caption>
+                                        <thead>
+                                            <tr>
+                                                <th scope="col">{{ 'task_board.import_plan.boards.source'|trans({}, _b) }}</th>
+                                                <th scope="col">{{ 'task_board.import_plan.boards.target'|trans({}, _b) }}</th>
+                                                <th scope="col">{{ 'task_board.import_plan.boards.name'|trans({}, _b) }}</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for item in items %}
+                                                <tr data-testid="nowo-task-plan-board-row">
+                                                    <th scope="row" id="nowo-task-plan-source-{{ item.id }}">
+                                                        {{ item.sourceLabel }}
+                                                        {% if item.sourcePath is not empty %}<span class="{{ nowo_ui_class('muted', _b) }} nowo-task-small">{{ item.sourcePath|join(' › ') }}</span>{% endif %}
+                                                    </th>
+                                                    <td>{{ form_widget(form['t_' ~ item.id], {attr: {'aria-labelledby': 'nowo-task-plan-source-' ~ item.id}}) }}</td>
+                                                    <td>{{ form_widget(form['n_' ~ item.id], {attr: {'aria-label': 'task_board.import_plan.boards.name_of'|trans({'%source%': item.sourceLabel}, _b)}}) }}{{ form_errors(form['n_' ~ item.id]) }}</td>
+                                                </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                {{ include('@NowoTaskBoardBundle/manage/_import_plan_next.html.twig') }}
+                            {{ form_end(form) }}
+                        {% endif %}
+                    {% endblock %}
+                {% elseif step.value == 'statuses' %}
+                    {% block nowo_task_board_import_plan_statuses %}
+                        <p>{{ 'task_board.import_plan.statuses.intro'|trans({}, _b) }}</p>
+                        {% if form %}
+                            {{ form_start(form, {attr: {class: 'nowo-task-plan__form'}}) }}
+                                {{ form_widget(form.version) }}
+                                {% for table in tables %}
+                                    <div class="{{ nowo_ui_class('table_wrap', _b) }} nowo-task-mb-3">
+                                        <table class="{{ nowo_ui_class('table', _b) }}" data-testid="nowo-task-plan-status-table">
+                                            <caption>{{ 'task_board.import_plan.statuses.boards'|trans({'%boards%': table.items|join(', ')}, _b) }}</caption>
+                                            <thead>
+                                                <tr>
+                                                    <th scope="col">{{ 'task_board.import_plan.statuses.status'|trans({}, _b) }}</th>
+                                                    <th scope="col">{{ 'task_board.import_plan.statuses.column'|trans({}, _b) }}</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for status in table.statuses %}
+                                                    <tr>
+                                                        <th scope="row" id="nowo-task-plan-status-{{ table.key }}-{{ loop.index0 }}">
+                                                            {{ status }}
+                                                            {% if table.types[loop.index0] %}<span class="{{ nowo_ui_class('badge_neutral', _b) }} nowo-task-badge">{{ ('task_board.import_plan.statuses.type.' ~ table.types[loop.index0])|trans({}, _b) }}</span>{% endif %}
+                                                        </th>
+                                                        <td>{{ form_widget(form['s_' ~ table.key ~ '_' ~ loop.index0], {attr: {'aria-labelledby': 'nowo-task-plan-status-' ~ table.key ~ '-' ~ loop.index0}}) }}</td>
+                                                    </tr>
+                                                {% else %}
+                                                    <tr><td colspan="2">{{ 'task_board.import_plan.statuses.none'|trans({}, _b) }}</td></tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                {% endfor %}
+                                {{ include('@NowoTaskBoardBundle/manage/_import_plan_next.html.twig') }}
+                            {{ form_end(form) }}
+                        {% endif %}
+                    {% endblock %}
+                {% elseif step.value == 'fields' %}
+                    {% block nowo_task_board_import_plan_fields %}
+                        <p>{{ 'task_board.import_plan.fields.intro'|trans({}, _b) }}</p>
+                        {% if form %}
+                            {% if fields is empty %}
+                                <p class="{{ nowo_ui_class('muted', _b) }}" data-testid="nowo-task-plan-no-fields">{{ 'task_board.import_plan.fields.none'|trans({}, _b) }}</p>
+                            {% endif %}
+                            {{ include('@NowoTaskBoardBundle/manage/_import_plan_form.html.twig', {form: form}) }}
+                        {% endif %}
+                    {% endblock %}
+                {% elseif step.value == 'people' %}
+                    {% block nowo_task_board_import_plan_people %}
+                        <p>{{ 'task_board.import_plan.people.intro'|trans({}, _b) }}</p>
+                        <p data-testid="nowo-task-plan-people-counts">{{ 'task_board.import_plan.people.counts'|trans({'%total%': people.total, '%mapped%': people.mapped, '%unreviewed%': people.unreviewed}, _b) }}</p>
+                        <p class="{{ nowo_ui_class('muted', _b) }} nowo-task-small">{{ 'task_board.import_plan.people.access'|trans({}, _b) }}</p>
+                        {% if form %}
+                            {{ include('@NowoTaskBoardBundle/manage/_import_plan_form.html.twig', {form: form}) }}
+                        {% endif %}
+                    {% endblock %}
+                {% elseif step.value == 'preview' %}
+                    {% block nowo_task_board_import_plan_preview %}
+                        {% if preview is defined and preview %}
+                            {{ include('@NowoTaskBoardBundle/manage/_import_plan_preview.html.twig') }}
+                        {% endif %}
+                    {% endblock %}
+                {% else %}
+                    {% block nowo_task_board_import_plan_run %}
+                        {{ include('@NowoTaskBoardBundle/manage/_import_plan_run.html.twig') }}
+                    {% endblock %}
+                {% endif %}
+            </div>
+        </section>
+    </div>
+{% endblock %}

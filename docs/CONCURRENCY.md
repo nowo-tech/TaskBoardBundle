@@ -17,6 +17,7 @@ and which tests prove it on which databases. Worker mode (kernel not reset) is c
 - [Lock conflicts and replays](#lock-conflicts-and-replays)
 - [Remote sync, imports and the number backfill](#remote-sync-imports-and-the-number-backfill)
 - [ClickUp OAuth helper (3.1)](#clickup-oauth-helper-31)
+- [ClickUp import plans (3.2)](#clickup-import-plans-32)
 - [The application's entity manager](#the-applications-entity-manager)
 - [Residual risks](#residual-risks)
 - [Tests](#tests)
@@ -215,3 +216,35 @@ Accepted. None of them leaks data or bypasses a permission.
 
 Run them on a server with `make test-with-db` (MySQL and PostgreSQL) or with `TASK_BOARD_TEST_DATABASE_URL` set to a
 MariaDB URL (`mysql://…?serverVersion=11.4.0-MariaDB`).
+
+## ClickUp import plans (3.2)
+
+REQ-RUNTIME-003 for the guided import (design §19):
+
+| Race | Guard |
+| --- | --- |
+| Two plans of one tenant and workspace started at once | `lock_key` (SHA-256 of tenant, provider, workspace) is set in the same `UPDATE … WHERE version = ? AND lock_key IS NULL` that checks the version; its unique key refuses the second (`workspace_busy`) |
+| Two managers editing a draft | every step is `UPDATE … SET version = version + 1 WHERE version = ? AND status = 'draft'`; the loser gets `stale` |
+| Two workers on one plan (redelivery, inline poll + worker) | `claim()`: `UPDATE … SET status = 'running', heartbeat_at = now, run_token = <new> WHERE status IN (queued, paused, rate_limited) OR (running AND heartbeat older than 10 min)`; the loser runs nothing. A slice lasts at most 300 s and beats after each board |
+| A slice taken over (or a plan cancelled) while it still runs | fencing: heartbeat, report, hold and end are `UPDATE … WHERE run_token = <its token> AND status = 'running'`; the stale slice stops and never frees `lock_key` |
+| Cancel or Resume against a claim | `cancel()` reads the status `FOR UPDATE` and decides in the same transaction: a waiting plan ends (`cancelled`, `lock_key` freed), a running one gets `cancel_requested`, anything else is left alone (audit ZBYv-L2); `makeDue()` is a compare-and-set on the held statuses |
+| A cancel asked while the slice is about to pause | the hold is `… AND cancel_requested = false`: refused, the slice ends the plan `cancelled` instead (one event, from the slice) |
+| MySQL / MariaDB report changed, not matched, rows | only writes that can leave the row unchanged (heartbeat, report, `cancel_requested`, *Resume*) re-check their guard on 0 rows; status changes never do |
+| A wizard step that fails half-way | the version compare-and-set, the item rewrite and the flush are one transaction |
+| Two starts that each pass the board quota | the quota is asked again per board right before it is created |
+| A crash between "board created" and "item updated" | the board and its item are written in one transaction; a resumed start creates only the boards still missing |
+| A crash after the link, before the item recorded it | the next slice adopts the board's connection when it follows the item's source (no second link) |
+| A plan item and a manual Refresh of the same board | the board's run lock: the item gets `busy` and the plan retries 30 s later |
+| People mapped while the plan runs | the existing re-association locks per board and `PeopleMappingService::resume()` after each board run |
+| Token replaced while running | the next slice resolves it through `credentialFor()`; nothing is cached |
+| Shared request budget | read-modify-write per one-minute window in a PSR-6 pool: two processes may both take the last request; the 10 % margin and the 429 handling cover it |
+
+Tests: `ImportPlanRunnerTest` (lock, claim, adoption, busy board, cancel), `ImportPlanFencingTest` (takeover, cancel
+and resume against a claim, step transaction, and with a second database connection on MySQL / MariaDB / PostgreSQL:
+claim, workspace lock, cancel, a pause refused after the cancel, a paused plan cancelled), `ImportPlanFlowTest` (stale and
+forged steps).
+
+Known limit (audit ZBYv-I1, planned for 3.2.x): item rows are still written through the ORM without the run token, so a
+slice that was taken over may write its current item's status once more before its next fenced write stops it. The
+board's run lock makes the live slice's item `busy` meanwhile, so no task is imported twice; at worst an item shows a
+stale status until the live slice reaches it.

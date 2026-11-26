@@ -15,6 +15,7 @@ use Nowo\TaskBoardBundle\Sync\Field\SyncFieldType;
 use Nowo\TaskBoardBundle\Sync\Http\ProviderHttpClient;
 use Nowo\TaskBoardBundle\Sync\Provider\ContainerPage;
 use Nowo\TaskBoardBundle\Sync\Provider\ContainerType;
+use Nowo\TaskBoardBundle\Sync\Provider\CustomFieldListProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\FieldCoverageProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\PeopleProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\ProviderApiGapsInterface;
@@ -50,6 +51,7 @@ use Nowo\TaskBoardBundle\Sync\Provider\TimeAccess;
 use Nowo\TaskBoardBundle\Sync\Provider\TimeAccessMode;
 use Nowo\TaskBoardBundle\Sync\Provider\TimeEntryProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\TimeEntryQuery;
+use Nowo\TaskBoardBundle\Sync\Provider\WorkspaceScopeProviderInterface;
 use Psr\Cache\CacheItemInterface;
 use Psr\Cache\CacheItemPoolInterface;
 use Psr\Log\LoggerInterface;
@@ -88,6 +90,7 @@ use function parse_url;
 use function preg_match;
 use function preg_match_all;
 use function preg_replace;
+use function rawurlencode;
 use function sprintf;
 use function str_contains;
 use function str_replace;
@@ -108,7 +111,7 @@ use const JSON_UNESCAPED_UNICODE;
  * {@see ProviderHttpClient}. Tree ids carry their level: "w:<workspace>", "s:<space>", "f:<folder>"; a list is its
  * plain ClickUp id.
  */
-final readonly class ClickUpTaskProvider implements TaskProviderInterface, ThreadedCommentProviderInterface, PeopleProviderInterface, TimeEntryProviderInterface, SourceProviderInterface, TaskDetailProviderInterface, StatusHistoryProviderInterface, FieldCoverageProviderInterface, ProviderApiGapsInterface, TaskTypeProviderInterface
+final readonly class ClickUpTaskProvider implements TaskProviderInterface, ThreadedCommentProviderInterface, CustomFieldListProviderInterface, PeopleProviderInterface, TimeEntryProviderInterface, SourceProviderInterface, TaskDetailProviderInterface, StatusHistoryProviderInterface, FieldCoverageProviderInterface, ProviderApiGapsInterface, TaskTypeProviderInterface, WorkspaceScopeProviderInterface
 {
     public const BASE_URI = 'https://api.clickup.com/api/v2/';
 
@@ -468,6 +471,39 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Threa
     }
 
     /**
+     * Since 3.2.0 (audit ZBYv-L1): the chosen containers outside the workspace — its spaces are read once, then one
+     * call per list or folder (a space costs nothing); a missing list or folder is foreign.
+     *
+     * @param list<string> $containerIds
+     *
+     * @return list<string>
+     */
+    public function foreignContainers(ProviderCredential $credential, string $workspaceId, array $containerIds): array
+    {
+        $spaces = [];
+        foreach ($this->items($this->get($credential, sprintf('team/%s/space', rawurlencode($workspaceId)), ['archived' => 'false']), 'spaces') as $space) {
+            $spaces[$this->itemId($space)] = true;
+        }
+        unset($spaces['']);
+        $foreign = [];
+        foreach ($containerIds as $containerId) {
+            $location = RemoteLocation::fromContainerId($containerId);
+            $spaceId  = '';
+            if ($location instanceof RemoteLocation && $location->kind === RemoteLocationKind::Space) {
+                $spaceId = $location->id;
+            } elseif ($location instanceof RemoteLocation) {
+                $data    = $this->getOrNull($credential, sprintf('%s/%s', $location->kind === RemoteLocationKind::List ? 'list' : 'folder', $location->id));
+                $spaceId = $this->itemId(is_array($data['space'] ?? null) ? $data['space'] : []);
+            }
+            if (!isset($spaces[$spaceId])) {
+                $foreign[] = $containerId;
+            }
+        }
+
+        return $foreign;
+    }
+
+    /**
      * Since 1.25 (E1): the members of a workspace (one answer, no paging). Roles 1–4 are owner, admin, member and
      * guest; the role is read on the user, else on the member. A workspace the token cannot see is an empty page.
      */
@@ -687,6 +723,17 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Threa
         }
 
         return array_values($union);
+    }
+
+    /**
+     * Since 3.2.0 (CU-2): the custom field definitions of a source — `GET list/{id}/field`, `folder/{id}/field` or
+     * `space/{id}/field` (one call), parsed like a task's fields, without values.
+     */
+    public function listCustomFields(ProviderCredential $credential, RemoteSource $source): array
+    {
+        $data = $this->get($credential, sprintf('%s/%s/field', $source->location->kind->value, $this->checkId($source->location->id)));
+
+        return $this->fieldParser->parse($data['fields'] ?? null);
     }
 
     /**
@@ -1237,7 +1284,8 @@ final readonly class ClickUpTaskProvider implements TaskProviderInterface, Threa
      */
     private function get(ProviderCredential $credential, string $path, array $query = []): array
     {
-        return $this->http->getJson(self::BASE_URI . $path, $query, ['Authorization' => ClickUpAuthorization::header($credential)]);
+        // Since 3.2.0 (CU-2): every call of a token takes from its shared budget (keyed by the reference, never the token).
+        return $this->http->getJson(self::BASE_URI . $path, $query, ['Authorization' => ClickUpAuthorization::header($credential)], self::ID . ':' . $credential->connectionRef);
     }
 
     /**

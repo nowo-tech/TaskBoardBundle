@@ -16,6 +16,12 @@ mapping of the sync tables and no header change.
   - [Host recipe: start and callback routes](#host-recipe-start-and-callback-routes)
   - [Storing the token and the app credentials](#storing-the-token-and-the-app-credentials)
   - [Security notes and residual risk](#security-notes-and-residual-risk)
+- [Guided import from ClickUp: import plans (since 3.2.0)](#guided-import-from-clickup-import-plans-since-320)
+  - [Turning it on](#turning-it-on)
+  - [The steps](#the-steps)
+  - [How a plan runs](#how-a-plan-runs)
+  - [Shared request budget per token](#shared-request-budget-per-token)
+  - [Host checklist](#host-checklist)
 - [How a run works](#how-a-run-works)
 - [Field rules and conflicts](#field-rules-and-conflicts)
 - [Deletions and the mass-archive guard](#deletions-and-the-mass-archive-guard)
@@ -292,6 +298,124 @@ under ClickUp's *Settings → Apps*.
 - **Worker mode**: the helper and the value objects keep no state between requests (FrankenPHP worker with and
   without kernel reset); no write happens in the bundle, so CU-1 adds no lock or race (REQ-RUNTIME-003).
 - Shared per-token rate budget (100 requests / minute on most plans) comes with the guided import (CU-2).
+
+## Guided import from ClickUp: import plans (since 3.2.0)
+
+Phase CU-2 of [design/CLICKUP_IMPORT.md](design/CLICKUP_IMPORT.md). An **import plan** brings several ClickUp lists of
+one workspace into boards of one tenant in one resumable background job. Each plan item is an ordinary board
+connection once linked, so everything above (runs, history, People page, completeness report, unlink) applies to it.
+
+### Turning it on
+
+```yaml
+nowo_task_board:
+    sync:
+        enabled: true
+        credential_resolver: App\Tasks\ProviderTokens   # also implements TenantCredentialSourceInterface
+        plans:
+            enabled: true                 # routes import_plans, import_plan, … and "Import from ClickUp" on the index
+            # runner: app.my_plan_runner  # a Sync\Plan\ImportPlanRunnerInterface; default inline (or Messenger below)
+            messenger:
+                enabled: false            # true = RunImportPlanSlice messages (route them to an async transport)
+                slice_seconds: 120
+            inline_slice_seconds: 20
+            keep_days: 90                 # finished plans and abandoned drafts are pruned after this
+            preview_max_pages: 3
+            max_items: 200
+        rate_limit:
+            enabled: true
+            storage: null                 # a PSR-6 pool shared by web and worker processes; null = cache.app
+            default_limit: 100
+            margin: 0.1
+```
+
+- **Tenant connections.** The wizard starts from a tenant before any of its boards exists, so the
+  `credential_resolver` service also implements `Sync\Hook\TenantCredentialSourceInterface`:
+  `tenantConnectionsFor(TenantRef, user, provider)`, `tenantCredentialFor(TenantRef, ref)`,
+  `tenantCredentialFormUrl()` and `tenantConnectUrl(TenantRef, provider, returnTo)` (the OAuth start; `returnTo` is
+  the plan's Connect step, a same-origin path — check it with `OAuthReturnPath::isSafe()`). A reference given here must
+  work in `credentialFor()` for every board of that tenant: the runner asks it per board. Without the interface the
+  plan pages answer 404.
+- **Who may import** (Q-CU-10): the tenant action `import_plan` — event `TenantAccessCheckEvent` on
+  `TaskBoardEvents::TENANT_ACCESS_CHECK`. Denied by default except to `security.manage_roles` holders; a listener
+  calls `grant()` (Beacon: project managers and organisation admins) or `deny()`. Every plan route answers 404 when it
+  is denied, and for a plan of another tenant. Creating boards also needs the board-create right and the host's
+  `TaskBoardQuotaCheckEvent::ACTION_BOARD_CREATE`; filling an existing board needs `canManageBoardConnection()` and
+  `canImportTasks()` on it.
+
+### The steps
+
+| Step | What the user does | Notes |
+| --- | --- | --- |
+| Connect | Picks a connection of the tenant (*Connect to ClickUp* / *Paste a token* link the host's pages) | Says what is read and copied, that nothing is written back, and where to revoke the app |
+| Workspace | One workspace per plan | Only the workspaces the connection was authorised for (`ConnectionChoice::$workspaceIds`) |
+| Tree | Ticks spaces, folders or lists; picks the layout and options | A ticked space or folder means "its lists now". A level opens by a POST (no provider call on a GET). At most `max_items` ticks; each must lie in the plan's workspace (ClickUp: the workspace's spaces once, then one request per ticked list or folder, from the token's budget) |
+| Boards | Per item: *New board* (name) or an existing board of the tenant | A board linked to another source is not offered; a board is used once |
+| Statuses | One table per status set: each status → a column, *Create a column*, *Do not import* | Same-named columns preselected (case, accents, spaces ignored) |
+| Fields | Untick the fields not to import | The others are synced read-only fields; native fields come with CU-3 |
+| People | Counts of the tenant's directory; *Stop after the first board is linked* | One directory per tenant and workspace (scope `tenant:<hash>`) |
+| Preview | Counts from ClickUp, requests and minutes, warnings, the host's quota, the re-import mode | *Start import* behind a confirm dialog |
+| Run / summary | Progress (polled every 5 s), Cancel, Resume; then counts, failed lists, *Re-import now*, *Retry the failed lists*, *Download report (JSON)*, Delete | The page can be left: the plan goes on |
+
+Layouts (Q-CU-5): **one board per list** (default; a ticked folder or space brings its lists), **one board per
+folder** (each folder one board, its lists as `list:<name>` tags with `sync.list_as_tag`; a list outside a ticked
+folder stays a board), **one board for everything** (exactly one ticked space, folder or list: a board follows one
+source). Options: comments, attachments, checklists, tracked time (only when `sync.time_entries.sink` is set; a member
+token imports only its own time and the preview says so, Q-CU-15), and deleting the empty unused columns after the
+first import. Recurrence stays read-only text (Q-CU-11).
+
+Re-import modes (Q-CU-8): **Update changed tasks** (the field-hash rule: a local edit wins) and **Only add new
+tasks** (`SyncOptions::$createOnly`: imported tasks untouched, deletions not archived). There is no overwrite mode.
+
+### How a plan runs
+
+1. **Start** checks the actor, the host's board quota and the connection, takes the workspace lock (one active plan
+   per tenant, provider and workspace; a second start is refused) and creates the new boards — each in one
+   transaction with its item, so a crash never creates a second board — then dispatches the runner.
+2. **Each slice** claims the plan (one worker; a heartbeat older than ten minutes is taken over) and gets a token
+   every later write of the slice is conditional on (a slice that was taken over writes nothing more). It always runs
+   as the user who **started** the plan — never as whoever polls or resumes it — and re-checks that user at each board
+   (`SyncActorProviderInterface`, `import_plan` in the tenant, connect and import rights on the board); a refused
+   starter fails the plan as `actor`. Then for each item in order links the
+   board to its source with the plan's status map, options, excluded fields and directory, and runs its connection
+   through `runLinked()` until the slice's time is used.
+3. **Endings of a slice**: time used or the board's run paused (due now), the token's budget or ClickUp's 429
+   (`rate_limited`, due after the wait plus 0–20 % jitter), an outage (`paused`, due after 1, 2, 4, 8, 15 minutes,
+   five times, then the list fails), the People wait (`paused` until *Resume*), a connection that no longer works
+   (`failed`, code `credential`: reconnect under the same reference and re-import — it continues where it stopped).
+   A failed list never stops the others; the summary offers to retry it.
+4. **End**: `SYNC_IMPORT_PLAN_FINISHED` (succeeded or cancelled) or `SYNC_IMPORT_PLAN_FAILED`, with ids and counts only,
+   for the host to notify the actor. Plans older than `keep_days` are pruned then.
+
+With the inline runner the progress endpoint (a GET, like the board connection's progress since 1.23) advances a due
+plan by one slice per poll, as the starter. The Statuses step's GET stores each source's statuses on its draft item
+(a cache of the draft, nothing else). With
+`sync.plans.messenger.enabled` the handler queues the next message with a `DelayStamp`; route `RunImportPlanSlice`
+to an async transport (a sync transport ignores the delay). A host runner implements `ImportPlanRunnerInterface`
+and calls `ImportPlanRunner::runSlice($planId, $seconds)` (the slice always acts as the starter); it returns null when
+nothing ran. *Cancel* ends a waiting plan at once; a running one ends `cancelled` before its next board or instead of
+pausing.
+
+### Shared request budget per token
+
+ClickUp limits requests **per token** (100 a minute on most plans). Several plan items, a list sync of another board
+and the People scan may use one token at once, so `ProviderRateBudget` counts the requests of each token in one-minute
+windows in `sync.rate_limit.storage` and stops at the last `X-RateLimit-Limit` seen less `margin`. It is on for every
+ClickUp sync, not only plans, and it is per connection **reference**: keep references globally unique. A full window waits
+inline when it ends within `sync.http.max_inline_wait`, otherwise the slice ends `rate_limited`. The key is an HMAC of
+`clickup:<connection ref>` with `kernel.secret`; the token never reaches the pool. Use a pool every process shares
+(Redis): `cache.app` is shared by the processes of one server only, and an APCu or array pool counts per process. The count is read-modify-write, so two processes
+may both take a window's last request; the margin and ClickUp's own 429 handling cover it. A failing pool lets the
+request go.
+
+### Host checklist
+
+- Implement `TenantCredentialSourceInterface` on the credential source; keep tokens encrypted (see OAuth above).
+- Grant `import_plan` in a `TENANT_ACCESS_CHECK` listener to the roles that may import.
+- Turn on `sync.plans.enabled`; pick the runner (inline, the bundle's Messenger runner, or yours).
+- Apply the schema change of UPGRADING "To 3.2.0".
+- Notify the actor on `SYNC_IMPORT_PLAN_FINISHED` / `_FAILED` if you want to.
+- Erasure: `TaskSyncPeopleReassigner::detachUser()` clears the user's id from plans; your erasure keeps calling it.
 
 ## How a run works
 

@@ -15,6 +15,7 @@ use Nowo\TaskBoardBundle\Event\BoardListQueryEvent;
 use Nowo\TaskBoardBundle\Event\ColumnSetAccessCheckEvent;
 use Nowo\TaskBoardBundle\Event\TaskAccessCheckEvent;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
+use Nowo\TaskBoardBundle\Event\TenantAccessCheckEvent;
 use Nowo\TaskBoardBundle\Question\Entity\TaskQuestion;
 use Nowo\TaskBoardBundle\Question\Entity\TaskQuestionRecipient;
 use Nowo\TaskBoardBundle\Repository\TeamMemberRepositoryInterface;
@@ -176,6 +177,19 @@ final readonly class TaskBoardResourceAccessChecker
     public function canManageTenantTemplates(object $user, ?string $tenantKey): bool
     {
         return !$this->scopingEnabled || $this->hasManageRole($user);
+    }
+
+    /**
+     * Since 3.2.0 (CU-2, Q-CU-10): whether the user may create, run and follow import plans in the tenant — denied by
+     * default: only a holder of `security.manage_roles`, unless a TENANT_ACCESS_CHECK listener grants or denies
+     * ({@see TenantAccessCheckEvent::ACTION_IMPORT_PLAN}).
+     */
+    public function canImportPlan(object $user, ?string $tenantKey): bool
+    {
+        $event = new TenantAccessCheckEvent($user, $tenantKey, $this->hasManageRole($user), TenantAccessCheckEvent::ACTION_IMPORT_PLAN);
+        $this->eventDispatcher?->dispatch($event, TaskBoardEvents::TENANT_ACCESS_CHECK);
+
+        return $event->isAllowed();
     }
 
     public function canViewTask(object $user, Task $task): bool

@@ -139,6 +139,26 @@ final class ClickUpPeopleTimeProviderTest extends TestCase
         $provider->workspaceOf($this->credential, 'L');
     }
 
+    public function testForeignContainersCostOneCallForTheWorkspacePlusOnePerListOrFolder(): void
+    {
+        // Audit ZBYv-L1: 30 lists in one workspace = 31 calls (was 3 per list), whatever the number of workspaces.
+        $routes = ['team/9000001/space' => new MockResponse('{"spaces": [{"id": "90001"}, {"id": "bad id!"}]}'), 'folder/90002' => 'folder_90002.json', 'list/900999' => new MockResponse('{"id": "900999", "space": {}}'), 'list/900888' => new MockResponse('{"id": "900888", "space": {"id": "70001"}}')];
+        $ids    = [];
+        for ($i = 0; $i < 30; ++$i) {
+            $id                    = (string) (910000 + $i);
+            $ids[]                 = $id;
+            $routes['list/' . $id] = 'list_900200.json';
+        }
+        $provider = $this->provider($routes);
+        self::assertSame([], $provider->foreignContainers($this->credential, '9000001', $ids));
+        self::assertCount(31, $this->requests);
+        self::assertSame('team/9000001/space', $this->requests[0]['path']);
+
+        $this->requests = [];
+        self::assertSame(['s:70001', '900999', '900888', '404404', 'w:9000001'], $provider->foreignContainers($this->credential, '9000001', ['s:90001', 'f:90002', 's:70001', '900999', '900888', '404404', 'w:9000001']));
+        self::assertCount(5, $this->requests, 'spaces once, no call for a space or a non-source');
+    }
+
     public function testAdminTimeEntriesAreReadPerWindowAndChunk(): void
     {
         $provider = $this->provider(['team/9000001/time_entries' => 'team_9000001_time_entries_admin.json']);

@@ -34,6 +34,7 @@ use Nowo\TaskBoardBundle\Port\ImportedTimeEntryReceiverGate;
 use Nowo\TaskBoardBundle\Port\Internal\AttributionOnlyResolverInterface;
 use Nowo\TaskBoardBundle\Port\Internal\OAuthConnectionStarterInterface;
 use Nowo\TaskBoardBundle\Port\Internal\OwnerlessTimeEntrySinkInterface;
+use Nowo\TaskBoardBundle\Port\Internal\TenantCredentialResolverInterface;
 use Nowo\TaskBoardBundle\Port\OwnerlessTimeEntryReceiverGate;
 use Nowo\TaskBoardBundle\Port\Ports;
 use Nowo\TaskBoardBundle\Port\SyncPersonDirectoryGate;
@@ -56,6 +57,7 @@ use Nowo\TaskBoardBundle\Sync\Hook\SyncedImageRewriterInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncPersonDirectoryInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncPersonMatch;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncQuotaPolicyInterface;
+use Nowo\TaskBoardBundle\Sync\Hook\TenantCredentialSourceInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\ProviderCredential;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteAttachment;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteLocation;
@@ -71,6 +73,7 @@ use Nowo\TaskBoardBundle\ValueObject\TaskChangeSnapshot;
 use Nowo\TaskBoardBundle\ValueObject\TaskCommentSnapshot;
 use Nowo\TaskBoardBundle\ValueObject\TaskSnapshot;
 use Nowo\TaskBoardBundle\ValueObject\TaskSyncDirectorySnapshot;
+use Nowo\TaskBoardBundle\ValueObject\TenantRef;
 use Nowo\TaskBoardBundle\View\TaskBoardDefaultViewPolicyInterface;
 use PHPUnit\Framework\TestCase;
 use stdClass;
@@ -497,6 +500,59 @@ final class PortGatesTest extends TestCase
         $oauthResolver = Ports::credentialResolver($oauthSource);
         self::assertInstanceOf(OAuthConnectionStarterInterface::class, $oauthResolver);
         self::assertSame('/oauth/acme/clickup?returnTo=/back', $oauthResolver->connectUrl($board, 'clickup', '/back'));
+
+        // Since 3.2.0: tenant connections (import plans) only when the host's source implements them.
+        $tenant = new TenantRef('acme', 'acme');
+        self::assertInstanceOf(TenantCredentialResolverInterface::class, $resolver);
+        self::assertFalse($resolver->supportsTenants());
+        self::assertSame([[], null, null, null], [$resolver->tenantConnectionsFor($tenant, $actor, 'clickup'), $resolver->tenantCredentialFor($tenant, 'c-1'), $resolver->tenantCredentialFormUrl($tenant, 'clickup'), $resolver->tenantConnectUrl($tenant, 'clickup', '/back')]);
+        $tenantSource = new class($credential) implements ProviderCredentialSourceInterface, TenantCredentialSourceInterface {
+            public function __construct(private readonly ProviderCredential $credential)
+            {
+            }
+
+            public function connectionsFor(TaskBoardSnapshot $board, object $user, string $provider): array
+            {
+                return [];
+            }
+
+            public function credentialFor(TaskBoardSnapshot $board, string $connectionRef): ?ProviderCredential
+            {
+                return null;
+            }
+
+            public function credentialFormUrl(TaskBoardSnapshot $board, string $provider): ?string
+            {
+                return null;
+            }
+
+            public function tenantConnectionsFor(TenantRef $tenant, object $user, string $provider): array
+            {
+                return [new ConnectionChoice((string) $tenant->key, $provider, '1234')];
+            }
+
+            public function tenantCredentialFor(TenantRef $tenant, string $connectionRef): ?ProviderCredential
+            {
+                return $connectionRef === 'c-1' ? $this->credential : null;
+            }
+
+            public function tenantCredentialFormUrl(TenantRef $tenant, string $provider): string
+            {
+                return '/tokens/' . $tenant->key;
+            }
+
+            public function tenantConnectUrl(TenantRef $tenant, string $provider, string $returnTo): string
+            {
+                return '/oauth/' . $tenant->key . '?returnTo=' . $returnTo;
+            }
+        };
+        $tenantResolver = Ports::credentialResolver($tenantSource);
+        self::assertInstanceOf(TenantCredentialResolverInterface::class, $tenantResolver);
+        self::assertTrue($tenantResolver->supportsTenants());
+        self::assertSame('acme', $tenantResolver->tenantConnectionsFor($tenant, $actor, 'clickup')[0]->ref);
+        self::assertSame($credential, $tenantResolver->tenantCredentialFor($tenant, 'c-1'));
+        self::assertSame('/tokens/acme', $tenantResolver->tenantCredentialFormUrl($tenant, 'clickup'));
+        self::assertSame('/oauth/acme?returnTo=/back', $tenantResolver->tenantConnectUrl($tenant, 'clickup', '/back'));
 
         $actors = new class($actor) implements SyncActorProviderInterface {
             public function __construct(private readonly object $actor)

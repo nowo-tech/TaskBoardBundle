@@ -773,6 +773,77 @@ final class Configuration implements ConfigurationInterface
                         ->scalarNode('name')->defaultValue('nowo_task_board_board_connection_people_former')->end()
                     ->end()
                 ->end()
+                // Since 3.2.0 (CU-2): the guided import (with sync.plans.enabled).
+                ->arrayNode('import_plans')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/import-plans')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_import_plans')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('import_plan_new')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/import-plans/new')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_import_plan_new')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('import_plan')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/import-plans/{planId}')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_import_plan')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('import_plan_step')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/import-plans/{planId}/step/{step}')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_import_plan_step')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('import_plan_start')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/import-plans/{planId}/start')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_import_plan_start')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('import_plan_progress')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/import-plans/{planId}/progress')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_import_plan_progress')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('import_plan_cancel')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/import-plans/{planId}/cancel')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_import_plan_cancel')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('import_plan_resume')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/import-plans/{planId}/resume')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_import_plan_resume')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('import_plan_delete')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/import-plans/{planId}/delete')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_import_plan_delete')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('import_plan_report')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('path')->defaultValue('/tools/task-board/import-plans/{planId}/report')->end()
+                        ->scalarNode('name')->defaultValue('nowo_task_board_import_plan_report')->end()
+                    ->end()
+                ->end()
             ->end();
     }
 
@@ -863,6 +934,9 @@ final class Configuration implements ConfigurationInterface
                         // Since 1.27.0 (TB-SYNC-2): the People page and the People summary of the connection page.
                         ->scalarNode('connection_people')->defaultValue('@NowoTaskBoardBundle/manage/connection_people.html.twig')->end()
                         ->scalarNode('connection_people_summary')->defaultValue('@NowoTaskBoardBundle/manage/_connection_people_summary.html.twig')->end()
+                        // Since 3.2.0 (CU-2): the guided import pages (sync.plans.enabled).
+                        ->scalarNode('import_plans')->defaultValue('@NowoTaskBoardBundle/manage/import_plans.html.twig')->end()
+                        ->scalarNode('import_plan')->defaultValue('@NowoTaskBoardBundle/manage/import_plan.html.twig')->end()
                         ->booleanNode('page_header')->defaultTrue()->info('Since 2.0.0: false leaves the page header out of the board, list, Gantt and import pages, for a host that draws its own.')->end()
                         ->scalarNode('task_time_before')
                             ->defaultNull()
@@ -1636,6 +1710,47 @@ final class Configuration implements ConfigurationInterface
     }
 
     /**
+     * Since 3.2.0 (CU-2): `sync.plans` (the guided import) and `sync.rate_limit` (the per-token budget).
+     */
+    private function addSyncPlansSection(ArrayNodeDefinition $sync): void
+    {
+        $sync
+            ->children()
+                ->arrayNode('plans')
+                    ->addDefaultsIfNotSet()
+                    ->info('Since 3.2.0 (CU-2): the guided import from ClickUp (import plans: several boards in one resumable job). Needs a sync.credential_resolver that also implements Sync\\Hook\\TenantCredentialSourceInterface; only users granted import_plan (TENANT_ACCESS_CHECK, default: security.manage_roles) see it.')
+                    ->children()
+                        ->booleanNode('enabled')->defaultFalse()->info('true = the import plan routes and the index page\'s "Import from ClickUp". The tables exist with sync.enabled either way.')->end()
+                        ->scalarNode('runner')->defaultNull()->info('Service id of a Nowo\\TaskBoardBundle\\Sync\\Plan\\ImportPlanRunnerInterface. null = the Messenger runner when messenger.enabled, else InlinePlanRunner (one slice per request; the progress page advances the plan).')->end()
+                        ->integerNode('inline_slice_seconds')->defaultValue(20)->min(1)->max(300)->info('Seconds one inline slice may take (keep it below max_execution_time).')->end()
+                        ->arrayNode('messenger')
+                            ->addDefaultsIfNotSet()
+                            ->children()
+                                ->booleanNode('enabled')->defaultFalse()->info('Q-CU-9: true = RunImportPlanSlice messages on the host\'s bus (route them to an async transport); needs symfony/messenger.')->end()
+                                ->integerNode('slice_seconds')->defaultValue(120)->min(1)->max(300)->info('Seconds one queued slice may take (below the worker\'s time limit and the transport\'s redelivery; at most 300, half the 10-minute takeover window, audit ZBY-L2).')->end()
+                            ->end()
+                        ->end()
+                        ->integerNode('keep_days')->defaultValue(90)->min(1)->info('Q-CU-13: finished plans (summary, report) and abandoned drafts are deleted after this many days, pruned when a plan ends or is created.')->end()
+                        ->integerNode('preview_max_pages')->defaultValue(3)->min(1)->max(20)->info('Task pages the preview reads per board; beyond them the counts are estimated.')->end()
+                        ->integerNode('preview_max_requests')->defaultValue(60)->min(1)->max(1000)->info('Since the audit ZBY-L4: provider requests one preview page view may make; the boards past it are shown unread.')->end()
+                        ->integerNode('preview_seconds')->defaultValue(15)->min(1)->max(120)->info('Seconds one preview page view may read from the provider; the boards past it are shown unread.')->end()
+                        ->integerNode('max_items')->defaultValue(200)->min(1)->max(1000)->info('The most boards one plan may fill.')->end()
+                    ->end()
+                ->end()
+                ->arrayNode('rate_limit')
+                    ->addDefaultsIfNotSet()
+                    ->info('Since 3.2.0 (CU-2): the request budget per provider token shared by every process (ClickUp: per token, 100 a minute on most plans).')
+                    ->children()
+                        ->booleanNode('enabled')->defaultTrue()->info('false = no shared budget (429 answers are still handled).')->end()
+                        ->scalarNode('storage')->defaultNull()->info('Service id of a PSR-6 pool shared by the web and worker processes. null = cache.app.')->end()
+                        ->integerNode('default_limit')->defaultValue(100)->min(1)->info('Requests a minute until the provider\'s X-RateLimit-Limit is seen.')->end()
+                        ->floatNode('margin')->defaultValue(0.1)->min(0.0)->max(0.9)->info('Share of the limit left unused (other clients of the same token, races between processes).')->end()
+                    ->end()
+                ->end()
+            ->end();
+    }
+
+    /**
      * Adds the `sync` section; its large children have their own methods.
      */
     private function addSyncSection(ArrayNodeDefinition $rootNode): void
@@ -1649,5 +1764,6 @@ final class Configuration implements ConfigurationInterface
         $this->addSyncStatusHistoryAndFollowingSections($sync);
         $this->addSyncPeopleToChecklistsSections($sync);
         $this->addSyncTimeEntriesSection($sync);
+        $this->addSyncPlansSection($sync);
     }
 }

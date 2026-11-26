@@ -1,2 +1,3 @@
 task_board.import.form.file_invalid: Upload a valid CSV or JSON export (max 20 MB).
 task_board.sync.browser.pick_list: "Choose a list."
+task_board.import_plan.error.pick_one: "Choose one."

@@ -135,6 +135,100 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Import plans and the guided import from ClickUp, phase CU-2 of [design/CLICKUP_IMPORT.md](design/CLICKUP_IMPORT.md)
+(Beacon D-20261124-07; owner decisions Q-CU-1 … Q-CU-16 of 2026-11-25), and a request budget per provider token.
+**Schema change for hosts with `sync.enabled`** (two new tables): see UPGRADING "To 3.2.0". Opt-in pages
+(`sync.plans.enabled: false` by default); see [sync.md](sync.md#guided-import-from-clickup-import-plans-since-320).
+
+### Added
+
+- Import plans (`Sync\Plan`): several boards from one ClickUp workspace in one resumable job. Tables
+  `task_board_sync_import_plans` and `task_board_sync_import_plan_items` (`TaskSyncImportPlan`,
+  `TaskSyncImportPlanItem`; attribute and XML mapping). Each item, once linked, is an ordinary board connection
+  (badge, history, People page, completeness report, unlink).
+- The guided import (`TaskSyncImportPlanController`, templates `import_plans` / `import_plan`, UiKit steps, dialogs
+  and progress, FormKit `ImportPlanStepFormType`): connect → workspace → tree → boards → statuses → fields → people →
+  preview → run → summary. Every step works without JavaScript, has its own CSRF token and checks the plan's
+  `version` (a stale step is refused). The index page shows *Import from ClickUp* to users allowed to import.
+- Board layouts (Q-CU-5): one board per list (default), one per folder (its lists as tags), or one board for the one
+  chosen space, folder or list. New boards are created when the plan starts, each in one transaction with its item;
+  existing boards of the tenant can be filled instead.
+- One people directory per tenant and workspace for every plan board (Q-CU-6,
+  `TaskSyncPeopleDirectoryService::directoryForTenant()`), and the option to stop after the first board is linked so
+  people are mapped before tasks are imported.
+- Re-import modes (Q-CU-8): *Update changed tasks* (default, the field-hash rule) and *Only add new tasks*
+  (`SyncOptions::$createOnly`: imported tasks untouched, deletions not archived). No overwrite mode. *Re-import now*,
+  *Retry the failed lists* and *Download report (JSON)* (ids and counts only) on the summary.
+- Fields step: the provider fields of the chosen lists can be left out (`TaskBoardConnection::excludedFields()`,
+  connection option `excludedFields`); the others are imported as synced read-only fields (native fields: CU-3).
+  New optional `Sync\Provider\CustomFieldListProviderInterface` (ClickUp: `GET list|folder|space/{id}/field`).
+- Preview (dry run from the provider, no write): tasks, subtasks, closed, archived, files, new columns per board
+  (estimated beyond `sync.plans.preview_max_pages`), the requests and minutes at the token's rate, the host's board
+  quota, and warnings: member token imports only its own time (Q-CU-15), workspace already imported by the tenant
+  (Q-CU-12), another import of it running, people still to map.
+- Plan runners (`Sync\Plan\ImportPlanRunnerInterface`): `InlinePlanRunner` (default; one slice per request, the
+  progress page advances it) and the optional Messenger runner (`sync.plans.messenger.enabled`, off by default,
+  Q-CU-9): message `RunImportPlanSlice` (ids only), handler `RunImportPlanSliceHandler` (re-queues itself with a
+  delay while the plan is due). `sync.plans.runner` takes a host runner.
+- `Sync\Http\ProviderRateBudget`: a shared request budget per provider token (`sync.rate_limit`, on by default):
+  one-minute windows in a PSR-6 pool (default `cache.app`), sized from the last `X-RateLimit-Limit` (default 100) less
+  a 10 % margin, keyed by an HMAC of the connection reference (never the token). `ProviderHttpClient::getJson()` takes
+  an optional budget key; the ClickUp adapter passes `clickup:<connection ref>`.
+- Tenant-level access check: event `TenantAccessCheckEvent` on `TaskBoardEvents::TENANT_ACCESS_CHECK`, action
+  `import_plan`, and `TaskBoardResourceAccessChecker::canImportPlan()` — deny by default, granted to
+  `security.manage_roles` holders (Q-CU-10).
+- Optional host port `Sync\Hook\TenantCredentialSourceInterface` (on the `credential_resolver` service) and value
+  object `ValueObject\TenantRef`: the connections, credential, token page and OAuth start of a tenant, before any of
+  its boards exists. Without it the plan pages answer 404.
+- Events `SYNC_IMPORT_PLAN_STARTED`, `SYNC_IMPORT_PLAN_FINISHED` and `SYNC_IMPORT_PLAN_FAILED` (`ImportPlanEvent`: ids
+  and counts only).
+- Configuration `sync.plans.*` (`enabled`, `runner`, `inline_slice_seconds`, `messenger.enabled`,
+  `messenger.slice_seconds`, `keep_days`, `preview_max_pages`, `preview_max_requests`, `preview_seconds`, `max_items`), `sync.rate_limit.*` (`enabled`,
+  `storage`, `default_limit`, `margin`), ten `routes.import_plan*` entries and `templates.import_plans` /
+  `templates.import_plan`.
+- `InMemoryTaskProvider::withFieldDefinitions()` and `failOn()` (tests and demos).
+- Translations of the wizard in the seven locales.
+
+### Changed
+
+- Retention (Q-CU-13): finished plans and abandoned drafts are deleted after `sync.plans.keep_days` (90), pruned when
+  a plan ends or a draft is created; the imported boards and tasks stay.
+- Erasing a user (`TaskSyncPeopleReassigner::detachUser()`) also clears `created_by_id` / `started_by_id` of their
+  plans; `ImportPlanStore::exportFor($userId)` lists them for an access request (ids, dates, states).
+
+### Security
+
+- REQ-RUNTIME-003: one active plan per tenant, provider and workspace (a unique lock key, taken in one
+  compare-and-set with the plan's version); one worker per plan (a compare-and-set claim with a heartbeat, taken over
+  after ten minutes); every wizard step is a compare-and-set on the plan's version; board creation and the item update
+  share one transaction. Plans never hold a credential: the runner resolves it per slice through the host.
+- The slices always run as the user who started the plan (`started_by_id`), never as whoever polls the progress
+  page or presses *Resume* (audit ZBY-M1). At every board the runner checks again that this user exists, is enabled,
+  still holds `import_plan` in the tenant and may connect and import into the board; otherwise the plan ends
+  `failed` with code `actor` — no other user is ever substituted. `PlanRunRequest` and `RunImportPlanSlice` carry
+  the plan id only.
+- Fencing (audit ZBY-L2): the claim hands each slice a token (`run_token` column); heartbeat, report, hold and end
+  are conditional on it, so a slice that was taken over cannot overwrite the plan or free the workspace lock. On MySQL
+  and MariaDB, which count changed rather than matched rows, a write that leaves the row unchanged still counts as
+  held (the guard is re-checked) — only for writes that can leave the row as it was, never for a status change.
+  Cancel is one decision under the row lock (a waiting plan ends, a running one is asked), and a slice can no longer
+  pause past a cancel: it ends the plan `cancelled` instead (audit ZBYv-L2). *Resume* is a compare-and-set on the
+  status. `sync.plans.messenger.slice_seconds` is at most 300 (half the
+  10-minute takeover window). Each wizard step is one transaction.
+- The Tree step opens only levels listed from the plan's workspace, and the chosen containers are checked to belong
+  to it (audit ZBY-L1): more containers than `sync.plans.max_items` are refused before any call, and the new optional
+  `WorkspaceScopeProviderInterface` checks them in bounded calls — ClickUp reads the workspace's spaces once, then one
+  call per list or folder (was three or more each, audit ZBYv-L1); other providers fall back to
+  `PeopleProviderInterface::workspaceOf()`. The board quota is asked again for each board right
+  before it is created (ZBY-L3). Provider errors of the Workspace and Fields steps are messages, and the preview reads
+  at most `sync.plans.preview_max_requests` requests for `sync.plans.preview_seconds` (ZBY-L4). A re-import leaves a
+  board linked again elsewhere alone, and adopts only a link made since the plan started (ZBY-I1). Starting a plan
+  needs a connection the host offers to the starter (ZBY-I3). A connection that no longer works stops the plan
+  (`failed: credential`); an outage pauses it (1, 2, 4, 8 then 15 minutes); a failed list never stops the others.
+- Known limit (audit ZBYv-I1, fix planned for 3.2.x): plan item rows are not yet fenced by the run token; a slice that
+  was taken over may write its current item's status once more. No task is imported twice (the board's run lock); see
+  `docs/CONCURRENCY.md`.
+
 ## [3.1.0] - 2026-11-25
 
 ClickUp OAuth connection, phase CU-1 of [design/CLICKUP_IMPORT.md](design/CLICKUP_IMPORT.md) (Beacon D-20261124-07;

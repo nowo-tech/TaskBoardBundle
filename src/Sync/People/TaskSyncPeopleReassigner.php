@@ -30,6 +30,7 @@ use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncRun;
 use Nowo\TaskBoardBundle\Sync\Event\SyncPeopleReprojectedEvent;
 use Nowo\TaskBoardBundle\Sync\Event\SyncPersonMappedEvent;
 use Nowo\TaskBoardBundle\Sync\Event\SyncPersonReassignedEvent;
+use Nowo\TaskBoardBundle\Sync\Repository\ImportPlanStore;
 use Nowo\TaskBoardBundle\Sync\Repository\SyncStore;
 use Nowo\TaskBoardBundle\User\TaskBoardUsers;
 use Psr\Clock\ClockInterface;
@@ -73,6 +74,8 @@ final readonly class TaskSyncPeopleReassigner
         // Since 3.0.0 (audit ZAS-W1): TaskBoard rows the application's manager holds are read again by id at each write
         // entry (none: a service built by hand works on the rows it is given, as in 2.x).
         private ?TaskBoardEntityManager $rows = null,
+        // Since 3.2.0 (CU-2): the import plans the user created or started lose the user's id.
+        private ?ImportPlanStore $plans = null,
     ) {
         $this->timeEntries = $timeEntries ?? new TaskTimeEntrySnapshotPurger($entityManager);
     }
@@ -204,6 +207,11 @@ final readonly class TaskSyncPeopleReassigner
         // Since 2.23.0 (audit TE-L2): the questions they asked, answered or withdrew keep their content and lose the user;
         // with `$anonymise` their name goes from those rows and from the recipient rows of their subject ids.
         $this->questions?->detachUser($user, $anonymise);
+        // Since 3.2.0 (CU-2, design §16): created_by_id / started_by_id of import plans go.
+        $userId = SyncUser::id($user);
+        if ($userId !== null) {
+            $this->plans?->forgetUser($userId);
+        }
 
         return $total->plus($this->detachContent($user, $anonymise))
             // Owner rule (audit GWd-M2): the user's manual time stays, with their name unless it is forgotten.

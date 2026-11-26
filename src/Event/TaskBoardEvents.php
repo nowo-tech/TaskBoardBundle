@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Event;
 
 use Nowo\TaskBoardBundle\Sync\Event\BoardConnectionEvent;
+use Nowo\TaskBoardBundle\Sync\Event\ImportPlanEvent;
 use Nowo\TaskBoardBundle\Sync\Event\PeopleMappingChangedEvent;
 use Nowo\TaskBoardBundle\Sync\Event\SyncFailedEvent;
 use Nowo\TaskBoardBundle\Sync\Event\SyncFinishedEvent;
@@ -215,4 +216,19 @@ final class TaskBoardEvents
      * bundle applies every restriction in SQL, before the rows are cut, and can only narrow.
      */
     public const SEARCH_SCOPE = 'nowo_task_board.search_scope';
+
+    /**
+     * Since 3.2.0 (CU-2): {@see TenantAccessCheckEvent}, before a tenant-level action (`import_plan`). Default: a holder of
+     * `security.manage_roles`; a listener grants or denies.
+     */
+    public const TENANT_ACCESS_CHECK = 'nowo_task_board.tenant_access_check';
+
+    /** Since 3.2.0 (CU-2): {@see ImportPlanEvent} when an import plan starts (ids and counts only). */
+    public const SYNC_IMPORT_PLAN_STARTED = 'nowo_task_board.sync_import_plan_started';
+
+    /** Since 3.2.0 (CU-2): {@see ImportPlanEvent} when an import plan ends succeeded or cancelled. */
+    public const SYNC_IMPORT_PLAN_FINISHED = 'nowo_task_board.sync_import_plan_finished';
+
+    /** Since 3.2.0 (CU-2): {@see ImportPlanEvent} when an import plan fails (a connection or actor failure). */
+    public const SYNC_IMPORT_PLAN_FAILED = 'nowo_task_board.sync_import_plan_failed';
 }

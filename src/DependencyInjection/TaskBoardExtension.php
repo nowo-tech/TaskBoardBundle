@@ -50,6 +50,7 @@ use Nowo\TaskBoardBundle\Calendar\CalendarEventSourceInterface;
 use Nowo\TaskBoardBundle\Comment\DefaultTaskMentionCandidatesResolver;
 use Nowo\TaskBoardBundle\Controller\TaskBoardManageController;
 use Nowo\TaskBoardBundle\Controller\TaskCopyController;
+use Nowo\TaskBoardBundle\Controller\TaskSyncImportPlanController;
 use Nowo\TaskBoardBundle\Copy\TaskCopier;
 use Nowo\TaskBoardBundle\DependencyInjection\Compiler\PrivateEntityManagerPass;
 use Nowo\TaskBoardBundle\DependencyInjection\Compiler\PrivateEntityManagerReferencesPass;
@@ -172,12 +173,23 @@ use Nowo\TaskBoardBundle\Sync\Hook\NullSyncLimitChecker;
 use Nowo\TaskBoardBundle\Sync\Hook\NullTaskAttachmentStorage;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncActorProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Hook\SyncRunnerInterface;
+use Nowo\TaskBoardBundle\Sync\Http\ProviderHttpClient;
+use Nowo\TaskBoardBundle\Sync\Http\ProviderRateBudget;
 use Nowo\TaskBoardBundle\Sync\OAuth\ClickUpOAuthClient;
 use Nowo\TaskBoardBundle\Sync\People\PeopleMappingService;
 use Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleReassigner;
 use Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleScanner;
+use Nowo\TaskBoardBundle\Sync\Plan\ImportPlanPreviewer;
+use Nowo\TaskBoardBundle\Sync\Plan\ImportPlanRunner;
+use Nowo\TaskBoardBundle\Sync\Plan\ImportPlanRunnerInterface;
+use Nowo\TaskBoardBundle\Sync\Plan\ImportPlanService;
+use Nowo\TaskBoardBundle\Sync\Plan\InlinePlanRunner;
+use Nowo\TaskBoardBundle\Sync\Plan\MessengerPlanRunner;
+use Nowo\TaskBoardBundle\Sync\Plan\RunImportPlanSlice;
+use Nowo\TaskBoardBundle\Sync\Plan\RunImportPlanSliceHandler;
 use Nowo\TaskBoardBundle\Sync\Provider\ClickUp\ClickUpTaskProvider;
 use Nowo\TaskBoardBundle\Sync\Provider\TaskProviderInterface as SyncTaskProviderInterface;
+use Nowo\TaskBoardBundle\Sync\Repository\ImportPlanStore;
 use Nowo\TaskBoardBundle\Sync\SyncChecklistWriter;
 use Nowo\TaskBoardBundle\Sync\SyncTaskDetailsWriter;
 use Nowo\TaskBoardBundle\Sync\SyncTaskWriter;
@@ -220,12 +232,14 @@ use Symfony\Component\DependencyInjection\Extension\Extension;
 use Symfony\Component\DependencyInjection\Extension\PrependExtensionInterface;
 use Symfony\Component\DependencyInjection\Loader\YamlFileLoader;
 use Symfony\Component\DependencyInjection\Reference;
+use Symfony\Component\Messenger\MessageBusInterface;
 
 use function array_column;
 use function array_key_exists;
 use function class_exists;
 use function defined;
 use function in_array;
+use function interface_exists;
 use function is_array;
 use function is_string;
 use function rtrim;
@@ -913,9 +927,72 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
                 ->setArgument('$allowLoopbackRedirect', '%kernel.debug%'));
         }
         $this->registerSyncPeople($container, $sync);
+        $this->registerSyncPlans($container, $sync);
         $container->getDefinition(TaskBoardTwigExtension::class)
             ->setArgument('$connectionBadges', new Reference(ConnectionBadgeProvider::class));
         $container->getDefinition(TaskBoardRouteLoader::class)->setArgument('$syncEnabled', true);
+    }
+
+    /**
+     * Since 3.2.0 (CU-2): the shared per-token budget (`sync.rate_limit`) and the import plans (`sync.plans`): the plan
+     * services always (a host may drive them), the routes and the index entry with `sync.plans.enabled`, the runner
+     * (inline, the optional Messenger runner, or the host's).
+     *
+     * @param array<string, mixed> $sync
+     */
+    private function registerSyncPlans(ContainerBuilder $container, array $sync): void
+    {
+        /** @var array{enabled: bool, storage: string|null, default_limit: int, margin: float} $rate */
+        $rate = $sync['rate_limit'];
+        if ($rate['enabled']) {
+            $container->setDefinition(ProviderRateBudget::class, (new Definition(ProviderRateBudget::class))
+                ->setArgument('$pool', new Reference($this->serviceOr($rate['storage'], 'cache.app')))
+                ->setArgument('$secret', '%kernel.secret%')
+                ->setArgument('$defaultLimit', $rate['default_limit'])
+                ->setArgument('$margin', (float) $rate['margin']));
+            $container->getDefinition(ProviderHttpClient::class)->setArgument('$budget', new Reference(ProviderRateBudget::class));
+            $container->getDefinition(ImportPlanPreviewer::class)->setArgument('$budget', new Reference(ProviderRateBudget::class));
+        }
+        /** @var array{enabled: bool, runner: string|null, inline_slice_seconds: int, messenger: array{enabled: bool, slice_seconds: int}, keep_days: int, preview_max_pages: int, preview_max_requests: int, preview_seconds: int, max_items: int} $plans */
+        $plans    = $sync['plans'];
+        $timeSink = is_string($sync['time_entries']['sink']) && $sync['time_entries']['sink'] !== '';
+        $container->getDefinition(ImportPlanService::class)
+            ->setArgument('$maxItems', $plans['max_items'])
+            ->setArgument('$keepDays', $plans['keep_days']);
+        $container->getDefinition(ImportPlanRunner::class)
+            ->setArgument('$timeSink', $timeSink)
+            ->setArgument('$keepDays', $plans['keep_days']);
+        $container->getDefinition(ImportPlanPreviewer::class)
+            ->setArgument('$timeSink', $timeSink)
+            ->setArgument('$previewMaxPages', $plans['preview_max_pages'])
+            ->setArgument('$maxRequests', $plans['preview_max_requests'])
+            ->setArgument('$maxSeconds', $plans['preview_seconds']);
+        $container->getDefinition(InlinePlanRunner::class)->setArgument('$sliceSeconds', $plans['inline_slice_seconds']);
+        $runner = InlinePlanRunner::class;
+        if ($plans['messenger']['enabled']) {
+            // symfony/messenger is installed for the tests.
+            // @codeCoverageIgnoreStart
+            if (!interface_exists(MessageBusInterface::class)) {
+                throw new LogicException('nowo_task_board.sync.plans.messenger.enabled needs symfony/messenger.');
+            }
+            // @codeCoverageIgnoreEnd
+            $container->setDefinition(MessengerPlanRunner::class, (new Definition(MessengerPlanRunner::class))->setArgument('$bus', new Reference('messenger.default_bus')));
+            $container->setDefinition(RunImportPlanSliceHandler::class, (new Definition(RunImportPlanSliceHandler::class))
+                ->setAutowired(true)
+                ->setArgument('$sliceSeconds', $plans['messenger']['slice_seconds'])
+                ->addTag('messenger.message_handler', ['handles' => RunImportPlanSlice::class]));
+            $runner = MessengerPlanRunner::class;
+        }
+        $container->setAlias(ImportPlanRunnerInterface::class, $this->serviceOr($plans['runner'], $runner));
+        $container->getDefinition(TaskSyncImportPlanController::class)
+            ->setArgument('$timeSink', $timeSink);
+        $container->getDefinition(TaskSyncPeopleReassigner::class)->setArgument('$plans', new Reference(ImportPlanStore::class));
+        if ($plans['enabled']) {
+            $container->getDefinition(TaskBoardRouteLoader::class)->setArgument('$importPlansEnabled', true);
+            /** @var array{import_plans: array{name: string}} $routes */
+            $routes = $container->getParameter('nowo_task_board.routes');
+            $container->getDefinition(TaskBoardManageController::class)->setArgument('$importPlansRoute', $routes['import_plans']['name']);
+        }
     }
 
     /**

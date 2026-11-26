@@ -226,7 +226,7 @@ final class FunctionalKernel extends Kernel
         foreach (is_array($this->taskBoard['__register'] ?? null) ? $this->taskBoard['__register'] : [] as $class) {
             $container->services()->set((string) $class, (string) $class);
         }
-        $taskBoard = PrivateEntityManagerReplay::configure(array_diff_key($this->taskBoard, ['__ui_kit' => true, '__worker' => true, '__timer' => true, '__search_kit_counter' => true, '__autodiscover' => true, '__register' => true]));
+        $taskBoard = PrivateEntityManagerReplay::configure(array_diff_key($this->taskBoard, ['__ui_kit' => true, '__worker' => true, '__timer' => true, '__search_kit_counter' => true, '__autodiscover' => true, '__register' => true, '__plain_provider' => true]));
         PrivateEntityManagerReplay::alias($container);
         // Since 2.15.0: TASK_BOARD_TEST_PORTS=twin runs the suite through the framework-free twins of the host ports.
         $container->extension('nowo_task_board', ['user_class' => AppUser::class] + (TwinPortAdapters::enabled() ? TwinPortAdapters::rewrite($taskBoard) : $taskBoard));
@@ -268,6 +268,11 @@ final class FunctionalKernel extends Kernel
             $services->set('app.people_inviter', RecordingPeopleInviter::class)->autowire()->public();
             // Since 1.28.0: a sink that keeps ownerless time, and a resolver that flags attribution-only users.
             $services->set('app.time_sink_ownerless', RecordingOwnerlessTimeSink::class)->public();
+            // Since 3.2.0: a plan runner that records (used when a test sets sync.plans.runner).
+            $services->set('app.plan_runner', RecordingPlanRunner::class)->public();
+            if (($this->taskBoard['__plain_provider'] ?? false) === true) {
+                $services->set('app.plain_provider', PlainTaskProvider::class)->args([new ReferenceConfigurator('app.memory_provider')])->public()->tag('nowo_task_board.task_provider');
+            }
             $services->set('app.people_resolver_attribution', AttributionPeopleResolver::class)->autowire()->public();
             if (!$this->realHttpClient) {
                 $services->set('nowo_task_board.sync.http_client', FixtureHttpClient::class)->public();

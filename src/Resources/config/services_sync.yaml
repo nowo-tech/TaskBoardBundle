@@ -179,3 +179,39 @@ services:
             $translator: '@?translator'
             $userClass: '%nowo_task_board.user_class%'
             $resolver: '@Nowo\TaskBoardBundle\Port\Internal\SyncPersonResolverInterface'
+
+    # Since 3.2.0 (CU-2): import plans (the guided import). Arguments from sync.plans / sync.rate_limit come from the
+    # extension (registerSyncPlans()); the runner alias too.
+    Nowo\TaskBoardBundle\Sync\Repository\ImportPlanStore:
+        public: true
+
+    Nowo\TaskBoardBundle\Sync\Plan\ImportPlanService:
+        public: true
+        arguments:
+            $eventDispatcher: '@?event_dispatcher'
+            $people: '@Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleDirectoryService'
+
+    Nowo\TaskBoardBundle\Sync\Plan\ImportPlanPreviewer:
+        public: true
+        arguments:
+            $people: '@Nowo\TaskBoardBundle\Sync\People\TaskSyncPersonRepository'
+            $defaultColumns: '%nowo_task_board.board.default_columns%'
+
+    Nowo\TaskBoardBundle\Sync\Plan\ImportPlanRunner:
+        public: true
+        arguments:
+            $eventDispatcher: '@?event_dispatcher'
+            $people: '@Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleDirectoryService'
+
+    Nowo\TaskBoardBundle\Sync\Plan\InlinePlanRunner: ~
+
+    Nowo\TaskBoardBundle\Controller\TaskSyncImportPlanController:
+        public: true
+        autoconfigure: false
+        tags: ['controller.service_arguments', 'container.service_subscriber']
+        arguments:
+            $routes: '%nowo_task_board.routes%'
+            $templates: '%nowo_task_board.templates%'
+            $dashboardRoute: '%nowo_task_board.dashboard_route%'
+            $pollInterval: '%nowo_task_board.sync.progress.poll_interval_ms%'
+            $peopleRepository: '@Nowo\TaskBoardBundle\Sync\People\TaskSyncPersonRepository'

@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Nowo\TaskBoardBundle\Sync\Exception\ProviderErrorCode;
 use Nowo\TaskBoardBundle\Sync\Exception\ProviderException;
 use Nowo\TaskBoardBundle\Sync\Provider\ContainerPage;
+use Nowo\TaskBoardBundle\Sync\Provider\CustomFieldListProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\FieldCoverageProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\PeopleProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\ProviderApiGapsInterface;
@@ -15,6 +16,7 @@ use Nowo\TaskBoardBundle\Sync\Provider\ProviderCapabilities;
 use Nowo\TaskBoardBundle\Sync\Provider\ProviderCredential;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteComment;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteContainer;
+use Nowo\TaskBoardBundle\Sync\Provider\RemoteCustomField;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteLocation;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteLocationKind;
 use Nowo\TaskBoardBundle\Sync\Provider\RemotePerson;
@@ -31,6 +33,7 @@ use Nowo\TaskBoardBundle\Sync\Provider\TimeAccess;
 use Nowo\TaskBoardBundle\Sync\Provider\TimeAccessMode;
 use Nowo\TaskBoardBundle\Sync\Provider\TimeEntryProviderInterface;
 use Nowo\TaskBoardBundle\Sync\Provider\TimeEntryQuery;
+use Nowo\TaskBoardBundle\Sync\Provider\WorkspaceScopeProviderInterface;
 
 use function array_filter;
 use function array_key_exists;
@@ -55,11 +58,12 @@ use function usort;
  * Since 1.25 it also scripts the people of a workspace ({@see self::withWorkspace()}), tracked time
  * ({@see self::withTimeEntries()}, {@see self::withTaskIntervals()}), folder / space sources ({@see self::addSource()})
  * and statuses ({@see self::withStatuses()}). The `people` / `timeEntries` capabilities are on only once a workspace
- * or time entries are set, so a 1.23 script keeps 1.23 behaviour.
+ * or time entries are set, so a 1.23 script keeps 1.23 behaviour. Since 3.2.0 it also scripts the custom field
+ * definitions of a source ({@see self::withFieldDefinitions()}).
  *
  * @final
  */
-class InMemoryTaskProvider implements TaskProviderInterface, PeopleProviderInterface, TimeEntryProviderInterface, SourceProviderInterface, ProviderApiGapsInterface, TaskTypeProviderInterface, FieldCoverageProviderInterface
+class InMemoryTaskProvider implements TaskProviderInterface, PeopleProviderInterface, TimeEntryProviderInterface, SourceProviderInterface, ProviderApiGapsInterface, TaskTypeProviderInterface, FieldCoverageProviderInterface, CustomFieldListProviderInterface, WorkspaceScopeProviderInterface
 {
     /** Since 1.25: the workspace every container belongs to (null = no people). */
     private ?string $workspaceId = null;
@@ -80,6 +84,12 @@ class InMemoryTaskProvider implements TaskProviderInterface, PeopleProviderInter
 
     /** @var array<string, list<RemoteStatus>> since 1.25: container id => statuses */
     private array $statuses = [];
+
+    /** @var array<string, list<RemoteCustomField>> */
+    private array $fieldDefinitions = [];
+
+    /** @var array<string, ProviderException> */
+    private array $failOn = [];
 
     /** @var array<string, list<RemoteContainer>> parent id ('' = top) => children */
     private array $containers = [];
@@ -186,6 +196,19 @@ class InMemoryTaskProvider implements TaskProviderInterface, PeopleProviderInter
         return $this;
     }
 
+    /**
+     * Since 3.2.0: the custom field definitions of a container ("<list id>", "f:<id>" or "s:<id>").
+     *
+     * @param list<RemoteCustomField> $fields
+     */
+    public function withFieldDefinitions(string $containerId, array $fields): self
+    {
+        // @igor-ignore - Test double: it records calls on purpose. No bundle code uses it; only tests and the demo do.
+        $this->fieldDefinitions[$containerId] = $fields;
+
+        return $this;
+    }
+
     public function addContainer(RemoteContainer $container): self
     {
         // @igor-ignore - Test double: it records calls on purpose. No bundle code uses it; only tests and the demo do.
@@ -277,6 +300,18 @@ class InMemoryTaskProvider implements TaskProviderInterface, PeopleProviderInter
     }
 
     /** The next call fails with `$failure` (queue several; null lets a call through). */
+    /**
+     * Since 3.2.0: `$failure` is thrown by the next call named `$call` (as {@see self::$calls} records it, e.g.
+     * "fetchTasks:L1"), once.
+     */
+    public function failOn(string $call, ProviderException $failure): self
+    {
+        // @igor-ignore - Test double: it records calls on purpose. No bundle code uses it; only tests and the demo do.
+        $this->failOn[$call] = $failure;
+
+        return $this;
+    }
+
     public function failNext(?ProviderException $failure): self
     {
         // @igor-ignore - Test double: it records calls on purpose. No bundle code uses it; only tests and the demo do.
@@ -363,6 +398,14 @@ class InMemoryTaskProvider implements TaskProviderInterface, PeopleProviderInter
         $this->enter($credential, 'workspaceOf:' . $containerId);
 
         return $this->workspaceId;
+    }
+
+    /** Since 3.2.0: every container is in the double's workspace, so all are foreign to any other (one call). */
+    public function foreignContainers(ProviderCredential $credential, string $workspaceId, array $containerIds): array
+    {
+        $this->enter($credential, 'foreignContainers:' . $workspaceId);
+
+        return $workspaceId === $this->workspaceId ? [] : $containerIds;
     }
 
     public function fetchPeople(ProviderCredential $credential, string $workspaceId, ?string $cursor = null): RemotePersonPage
@@ -454,6 +497,13 @@ class InMemoryTaskProvider implements TaskProviderInterface, PeopleProviderInter
         return $this->statuses[$source->location->containerId()] ?? [];
     }
 
+    public function listCustomFields(ProviderCredential $credential, RemoteSource $source): array
+    {
+        $this->enter($credential, 'listCustomFields:' . $source->location->containerId());
+
+        return $this->fieldDefinitions[$source->location->containerId()] ?? [];
+    }
+
     /** Since 1.25: "…/v/li/<id>" of any https address (the ClickUp adapter is stricter). */
     public function resolveListFromUrl(string $url): ?string
     {
@@ -487,6 +537,12 @@ class InMemoryTaskProvider implements TaskProviderInterface, PeopleProviderInter
     {
         // @igor-ignore - Test double: it records calls on purpose. No bundle code uses it; only tests and the demo do.
         $this->calls[] = $call;
+        $failure       = $this->failOn[$call] ?? null;
+        if ($failure !== null) {
+            unset($this->failOn[$call]);
+
+            throw $failure;
+        }
         if ($this->failures !== []) {
             $failure = array_shift($this->failures);
             if ($failure !== null) {

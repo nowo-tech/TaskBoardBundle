@@ -2,7 +2,7 @@
 
 **Baseline spec**: [`spec.md`](spec.md)  
 **Package**: `nowo-tech/task-board-bundle`  
-**Last audited**: 2026-11-25 (3.1.0: ClickUp OAuth, FR-SYNC-014); 2026-11-24 (3.0.0: every tracked file of `src/`, releases 1.10–3.0; 2026-11-22: v2.30.0)
+**Last audited**: 2026-11-25 (3.2.0: ClickUp import plans, FR-SYNC-015); 2026-11-25 (3.1.0: ClickUp OAuth, FR-SYNC-014); 2026-11-24 (3.0.0: every tracked file of `src/`, releases 1.10–3.0; 2026-11-22: v2.30.0)
 
 Production scope excludes Vitest sources (`*.test.ts`).
 
@@ -917,6 +917,8 @@ Grouped by feature; each row names the semantic requirement of [`spec.md`](spec.
 | `Sync/Provider/TimeAccessMode.php` | FR-SYNC-010 |
 | `Sync/Provider/TimeEntryProviderInterface.php` | FR-SYNC-010 |
 | `Sync/Provider/TimeEntryQuery.php` | FR-SYNC-010 |
+| `Sync/Provider/WorkspaceScope.php` | FR-SYNC-015 |
+| `Sync/Provider/WorkspaceScopeProviderInterface.php` | FR-SYNC-015 |
 | `Sync/Repository/SyncStore.php` | FR-SYNC-010 |
 | `Sync/SourceScanResult.php` | FR-SYNC-010 |
 | `Sync/Status/FirstImportFinisher.php` | FR-SYNC-013 |
@@ -1089,6 +1091,7 @@ Grouped by feature; each row names the semantic requirement of [`spec.md`](spec.
 | `Bridge/TimeTrack/TaskBoardTaskDirectory.php` | FR-TT-001 |
 | `Bridge/TimeTrack/TaskBoardTeamDirectory.php` | FR-TT-001 |
 | `Bridge/TimeTrack/TimeTrackScopeKeys.php` | FR-TT-001 |
+| `Controller/TaskSyncImportPlanController.php` | FR-SYNC-015 |
 | `ValueObject/UserRef.php` | FR-ID-001 |
 | `Service/TaskCommandsInterface.php` | FR-ID-001 |
 | `Service/TaskCommands.php` | FR-ID-001 |
@@ -1129,8 +1132,13 @@ removed (their rows are gone).
 | --- | --- |
 | `DependencyInjection/Compiler/RemovedPortsPass.php` | FR-ARCH-301 |
 | `DependencyInjection/Compiler/TimeTrackScopePortPass.php` | FR-ARCH-302 |
+| `Event/TenantAccessCheckEvent.php` | FR-SYNC-015 |
+| `Form/ImportPlanStepFormType.php` | FR-SYNC-015 |
+| `Port/Internal/TenantCredentialResolverInterface.php` | FR-SYNC-015 |
 | `Question/TaskQuestionCountsInterface.php` | FR-QUEST-003 |
 | `Resources/assets/src/logger.ts` | FR-ASSET-011 |
+| `Resources/config/doctrine-xml/sync/TaskSyncImportPlan.orm.xml` | FR-SYNC-015 |
+| `Resources/config/doctrine-xml/sync/TaskSyncImportPlanItem.orm.xml` | FR-SYNC-015 |
 | `Resources/translations/validators.de.yaml` | FR-VAL-001 |
 | `Resources/translations/validators.en.yaml` | FR-VAL-001 |
 | `Resources/translations/validators.es.yaml` | FR-VAL-001 |
@@ -1138,14 +1146,47 @@ removed (their rows are gone).
 | `Resources/translations/validators.it.yaml` | FR-VAL-001 |
 | `Resources/translations/validators.nl.yaml` | FR-VAL-001 |
 | `Resources/translations/validators.pt.yaml` | FR-VAL-001 |
+| `Resources/views/manage/_import_plan_code.html.twig` | FR-SYNC-015 |
+| `Resources/views/manage/_import_plan_form.html.twig` | FR-SYNC-015 |
+| `Resources/views/manage/_import_plan_next.html.twig` | FR-SYNC-015 |
+| `Resources/views/manage/_import_plan_preview.html.twig` | FR-SYNC-015 |
+| `Resources/views/manage/_import_plan_run.html.twig` | FR-SYNC-015 |
+| `Resources/views/manage/_import_plan_tree.html.twig` | FR-SYNC-015 |
 | `Resources/views/manage/_task_dependency_dialog.html.twig` | FR-UI-021 |
 | `Resources/views/manage/_task_question_dialog.html.twig` | FR-UI-021 |
 | `Resources/views/manage/_task_time_dialog.html.twig` | FR-UI-021 |
 | `Resources/views/manage/dialog/_cancel.html.twig` | FR-UI-021 |
 | `Resources/views/manage/dialog/fragment.html.twig` | FR-UI-021 |
 | `Resources/views/manage/dialog/page.html.twig` | FR-UI-021 |
+| `Resources/views/manage/import_plan.html.twig` | FR-SYNC-015 |
+| `Resources/views/manage/import_plans.html.twig` | FR-SYNC-015 |
 | `Service/TaskRevisionLockInterface.php` | FR-LOCK-002 |
 | `Support/TaskContentDigest.php` | FR-LOCK-002 |
+| `Sync/Entity/TaskSyncImportPlan.php` | FR-SYNC-015 |
+| `Sync/Entity/TaskSyncImportPlanItem.php` | FR-SYNC-015 |
+| `Sync/Event/ImportPlanEvent.php` | FR-SYNC-015 |
+| `Sync/Hook/TenantCredentialSourceInterface.php` | FR-SYNC-015 |
+| `Sync/Http/ProviderRateBudget.php` | FR-SYNC-015 |
+| `Sync/Plan/ImportPlanException.php` | FR-SYNC-015 |
+| `Sync/Plan/ImportPlanItemStatus.php` | FR-SYNC-015 |
+| `Sync/Plan/ImportPlanLayout.php` | FR-SYNC-015 |
+| `Sync/Plan/ImportPlanPhase.php` | FR-SYNC-015 |
+| `Sync/Plan/ImportPlanPreviewer.php` | FR-SYNC-015 |
+| `Sync/Plan/ImportPlanRunner.php` | FR-SYNC-015 |
+| `Sync/Plan/ImportPlanRunnerInterface.php` | FR-SYNC-015 |
+| `Sync/Plan/ImportPlanService.php` | FR-SYNC-015 |
+| `Sync/Plan/ImportPlanStatus.php` | FR-SYNC-015 |
+| `Sync/Plan/ImportPlanStep.php` | FR-SYNC-015 |
+| `Sync/Plan/InlinePlanRunner.php` | FR-SYNC-015 |
+| `Sync/Plan/MessengerPlanRunner.php` | FR-SYNC-015 |
+| `Sync/Plan/PlanPreview.php` | FR-SYNC-015 |
+| `Sync/Plan/PlanRunRequest.php` | FR-SYNC-015 |
+| `Sync/Plan/ReimportMode.php` | FR-SYNC-015 |
+| `Sync/Plan/RunImportPlanSlice.php` | FR-SYNC-015 |
+| `Sync/Plan/RunImportPlanSliceHandler.php` | FR-SYNC-015 |
+| `Sync/Provider/CustomFieldListProviderInterface.php` | FR-SYNC-015 |
+| `Sync/Repository/ImportPlanStore.php` | FR-SYNC-015 |
+| `ValueObject/TenantRef.php` | FR-SYNC-015 |
 
 ## Coverage summary
 

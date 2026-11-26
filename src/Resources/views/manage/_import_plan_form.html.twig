@@ -1,0 +1,6 @@
+{# Since 3.2.0 (CU-2): a simple step of the import plan — every field in order, then Next. Vars: form, plan, step. #}
+{{ form_start(form, {attr: {class: 'nowo-task-plan__form'}}) }}
+    {{ form_widget(form.version) }}
+    {% for child in form %}{% if not child.rendered and child.vars.name != '_token' %}{{ form_row(child) }}{% endif %}{% endfor %}
+    {{ include('@NowoTaskBoardBundle/manage/_import_plan_next.html.twig') }}
+{{ form_end(form) }}

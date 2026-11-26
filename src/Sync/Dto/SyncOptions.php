@@ -43,6 +43,11 @@ final readonly class SyncOptions
         public bool $watchers = true,
         /** Since 1.25: import checklists as subtasks in this run (also needs `sync.checklists.enabled`). */
         public bool $checklists = true,
+        /**
+         * Since 3.2.0 (CU-2, Q-CU-8 *Add new only*): only tasks not imported yet are created; tasks already imported are
+         * left untouched (counted as unchanged) and remote deletions are not archived.
+         */
+        public bool $createOnly = false,
     ) {
     }
 }

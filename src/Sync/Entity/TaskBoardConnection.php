@@ -48,6 +48,9 @@ class TaskBoardConnection
 
     private const OPTION_SOURCE_DESCRIPTION = 'sourceDescription';
 
+    /** Since 3.2.0 (CU-2): the provider custom fields the import plan's Fields step left out (ids, one per line). */
+    public const OPTION_EXCLUDED_FIELDS = 'excludedFields';
+
     #[ORM\Id]
     #[ORM\Column(type: 'string', length: 36)]
     private string $id;
@@ -262,6 +265,18 @@ class TaskBoardConnection
         $value = $this->options[$name] ?? null;
 
         return is_bool($value) ? $value : $default;
+    }
+
+    /**
+     * Since 3.2.0 (CU-2): the provider custom fields not imported (the import plan's Fields step).
+     *
+     * @return list<string>
+     */
+    public function excludedFields(): array
+    {
+        $value = $this->options[self::OPTION_EXCLUDED_FIELDS] ?? null;
+
+        return is_string($value) && $value !== '' ? explode("\n", $value) : [];
     }
 
     /** Since 1.28.0: `keep` (default, and for anything else) or `delete`: what the first import does with unmatched columns. */

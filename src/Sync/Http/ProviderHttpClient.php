@@ -36,6 +36,10 @@ use function trim;
  * - 5xx and transport errors: 3 retries after 1, 2 and 4 s (plus jitter);
  * - 401 / 403 / 404 / 3xx / other: {@see ProviderException} with a fixed message, never retried.
  *
+ * Since 3.2.0 a call that names a budget key (the adapter's connection reference) first takes a request of the token's
+ * shared {@see ProviderRateBudget}: an empty budget waits for the next window when that is at most `maxInlineWait`,
+ * else {@see RateLimitedException}; the `X-RateLimit-Limit` of each answer sizes the budget.
+ *
  * Exceptions never carry the request (headers, credential) nor the body.
  */
 final readonly class ProviderHttpClient
@@ -54,22 +58,26 @@ final readonly class ProviderHttpClient
         private int $maxInlineWait = 30,
         // Audit EG-I8: a response is weighed (the import budget) before json_decode().
         private JsonImportGuard $guard = new JsonImportGuard(),
+        // Since 3.2.0 (CU-2): the per-token request budget shared by every process (`sync.rate_limit`).
+        private ?ProviderRateBudget $budget = null,
     ) {
     }
 
     /**
      * @param array<string, scalar> $query
      * @param array<string, string> $headers
+     * @param string|null $budgetKey since 3.2.0: the token's budget key (never the token); null = no shared budget
      *
      * @throws ProviderException
      *
      * @return array<mixed>
      */
-    public function getJson(string $url, array $query, array $headers): array
+    public function getJson(string $url, array $query, array $headers, ?string $budgetKey = null): array
     {
         $rateRetries   = 0;
         $serverRetries = 0;
         while (true) {
+            $this->takeBudget($budgetKey);
             try {
                 $response = $this->client->request('GET', $url, [
                     'query'         => $query,
@@ -116,6 +124,10 @@ final readonly class ProviderHttpClient
                 });
             }
 
+            $limit = $responseHeaders['x-ratelimit-limit'][0] ?? '';
+            if ($budgetKey !== null && ctype_digit($limit)) {
+                $this->budget?->observeLimit($budgetKey, (int) $limit);
+            }
             $data = $this->decode($this->body($response, $responseHeaders));
             if (($responseHeaders['x-ratelimit-remaining'][0] ?? null) === '0') {
                 $wait = $this->secondsUntilReset($responseHeaders);
@@ -125,6 +137,24 @@ final readonly class ProviderHttpClient
             }
 
             return $data;
+        }
+    }
+
+    /**
+     * Since 3.2.0: one request of the shared budget, waiting inline for the next window when that is short enough.
+     *
+     * @throws RateLimitedException
+     */
+    private function takeBudget(?string $budgetKey): void
+    {
+        if ($budgetKey === null || !$this->budget instanceof ProviderRateBudget) {
+            return;
+        }
+        for ($tries = 0; ($wait = $this->budget->reserve($budgetKey)) > 0; ++$tries) {
+            if ($wait > $this->maxInlineWait || $tries >= self::MAX_RATE_RETRIES) {
+                throw new RateLimitedException($wait);
+            }
+            $this->sleeper->sleep($wait);
         }
     }
 

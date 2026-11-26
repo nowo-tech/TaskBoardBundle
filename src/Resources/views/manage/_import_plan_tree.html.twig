@@ -1,0 +1,39 @@
+{#
+    Since 3.2.0 (CU-2): one level of the import plan's tree (APG disclosure + checkbox group, not role=tree). Every node
+    has a checkbox (a checked space or folder means "its lists now"); spaces and folders have a disclosure button — a
+    POST answered with the page with that level open (no provider call on a GET). Vars: tree (parent id => nodes),
+    parent ('' = the workspace), depth, form.
+#}
+{% set _nodes = tree[parent] ?? [] %}
+{% if _nodes is empty %}
+    <p class="{{ nowo_ui_class('muted', 'NowoTaskBoardBundle') }} nowo-task-small nowo-task-mb-0" data-testid="nowo-task-plan-tree-empty">{{ 'task_board.sync.browser.empty'|trans({}, 'NowoTaskBoardBundle') }}</p>
+{% else %}
+    <ul class="nowo-task-tree__group nowo-task-plain-list" data-depth="{{ depth }}">
+        {% for node in _nodes %}
+            {% set _name = 'c_' ~ node.id|replace({':': '_'}) %}
+            {% set _open = tree[node.id] is defined %}
+            {% set _groupId = 'nowo-task-plan-tree-' ~ node.id|replace({':': '-'}) %}
+            <li class="nowo-task-tree__node form-check" data-testid="nowo-task-plan-node">
+                {% if form.containers[_name] is defined %}
+                    {{ form_widget(form.containers[_name], {attr: {class: 'form-check-input', 'data-testid': 'nowo-task-plan-node-check'}}) }}
+                    {{ form_label(form.containers[_name], node.name ~ ' (' ~ ('task_board.sync.browser.type.' ~ node.type.value)|trans({}, 'NowoTaskBoardBundle') ~ ')', {label_attr: {class: 'form-check-label'}}) }}
+                {% else %}
+                    <span>{{ node.name }}</span>
+                {% endif %}
+                {% if node.type.value != 'list' %}
+                    <button type="submit" class="{{ nowo_ui_class('btn_link', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }} nowo-task-tree__toggle"
+                        name="open" value="{{ node.id }}" formnovalidate
+                        aria-expanded="{{ _open ? 'true' : 'false' }}" aria-controls="{{ _groupId }}"
+                        {% if _open %}disabled{% endif %} data-testid="nowo-task-plan-node-open">
+                        {{ (_open ? 'task_board.import_plan.tree.opened' : 'task_board.import_plan.tree.open')|trans({'%name%': node.name}, 'NowoTaskBoardBundle') }}
+                    </button>
+                    <div id="{{ _groupId }}" class="nowo-task-tree__children"{% if not _open %} hidden{% endif %}>
+                        {% if _open %}
+                            {{ include('@NowoTaskBoardBundle/manage/_import_plan_tree.html.twig', {tree: tree, parent: node.id, depth: depth + 1, form: form}) }}
+                        {% endif %}
+                    </div>
+                {% endif %}
+            </li>
+        {% endfor %}
+    </ul>
+{% endif %}

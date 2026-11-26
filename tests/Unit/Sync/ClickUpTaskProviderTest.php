@@ -14,6 +14,9 @@ use Nowo\TaskBoardBundle\Sync\Provider\ClickUp\ClickUpTaskProvider;
 use Nowo\TaskBoardBundle\Sync\Provider\ContainerType;
 use Nowo\TaskBoardBundle\Sync\Provider\ProviderCredential;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteComment;
+use Nowo\TaskBoardBundle\Sync\Provider\RemoteLocation;
+use Nowo\TaskBoardBundle\Sync\Provider\RemoteLocationKind;
+use Nowo\TaskBoardBundle\Sync\Provider\RemoteSource;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteStatusTime;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteTaskDetails;
 use Nowo\TaskBoardBundle\Sync\Provider\ReplyBudget;
@@ -43,6 +46,19 @@ final class ClickUpTaskProviderTest extends TestCase
 
     /** @var array<string, MockResponse|string> path => response or fixture file */
     private array $routes = [];
+
+    public function testTheCustomFieldsOfASource(): void
+    {
+        $provider = $this->provider([
+            'folder/F1/field' => new MockResponse('{"fields": [{"id": "fa", "name": "Size", "type": "short_text"}, {"id": "fb", "name": "Stage", "type": "drop_down", "type_config": {"options": [{"id": "o1", "name": "Early", "color": "#fff"}]}}, {"id": "bad id!", "name": "X"}]}'),
+            'list/L1/field'   => new MockResponse('{}'),
+        ]);
+        $credential = new ProviderCredential('pk_test_token', 'conn-1');
+        $fields     = $provider->listCustomFields($credential, new RemoteSource(new RemoteLocation(RemoteLocationKind::Folder, 'F1'), 'Roadmap'));
+        self::assertSame(['fa', 'fb'], [$fields[0]->id, $fields[1]->id]);
+        self::assertNull($fields[0]->value);
+        self::assertSame([], $provider->listCustomFields($credential, new RemoteSource(RemoteLocation::list('L1'), 'Backlog')));
+    }
 
     public function testTheTreeLevelByLevel(): void
     {

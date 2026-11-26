@@ -29,6 +29,7 @@
 - [Task templates (2.16.0)](#task-templates-2160)
 - [Host ports by id (2.29.0)](#host-ports-by-id-2290)
 - [ClickUp OAuth (3.1.0)](#clickup-oauth-310)
+- [ClickUp import plans (3.2.0)](#clickup-import-plans-320)
 - [Findings](#findings)
   - [W-01 — Unique-constraint violations close the EntityManager (Medium)](#w-01--unique-constraint-violations-close-the-entitymanager-medium)
   - [W-02 — Doctrine identity map is never cleared by the bundle (Medium)](#w-02--doctrine-identity-map-is-never-cleared-by-the-bundle-medium)
@@ -268,3 +269,12 @@ No other findings. The bundle holds no per-user state in services, so there is n
 ## Re-audit triggers
 
 Re-run this audit when a change adds: mutable properties to any service or repository, a cache of boards, tasks or memberships, an event listener or subscriber that buffers data, a new unique constraint without a matching validation, a new HTTP client or external call in importers, or any use of `$_SERVER` / `$_ENV` at runtime.
+
+## ClickUp import plans (3.2.0)
+
+`ImportPlanService`, `ImportPlanPreviewer`, `ImportPlanRunner`, `ImportPlanStore`, the plan runners and
+`RunImportPlanSliceHandler` are `final readonly` services holding only other services and scalars; every call reads
+the plan and its items again by id (a copy detached by a clear is never written), and the runner clears the private
+manager between items (the board runs clear it after each page). `ProviderRateBudget` keeps no counter in memory: the
+windows live in the configured PSR-6 pool. Messages carry ids only; no `ProviderCredential` outlives a slice. Safe in a
+worker with and without kernel reset.

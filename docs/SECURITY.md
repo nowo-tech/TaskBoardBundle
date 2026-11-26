@@ -7,6 +7,7 @@
 - [Access control model](#access-control-model)
 - [Provider sync: host duties and known limits](#provider-sync-host-duties-and-known-limits)
 - [ClickUp OAuth connection (since 3.1.0)](#clickup-oauth-connection-since-310)
+- [ClickUp import plans (since 3.2.0)](#clickup-import-plans-since-320)
 - [Sync writes by e-mail (fixed in 1.28.0)](#sync-writes-by-e-mail-fixed-in-1280)
 - [New board scope step (since 1.30)](#new-board-scope-step-since-130)
 - [Unmatched columns (since 1.28.0)](#unmatched-columns-since-1280)
@@ -505,3 +506,23 @@ See [.github/SECURITY.md](../.github/SECURITY.md) for coordinated disclosure.
 - [ ] CSRF on all session mutations (forms + bare POSTs / kanban `fetch`) — REQ-SEC-005
 - [ ] No secrets in logs
 - [ ] AI security audit grade recorded (see `BUNDLES_SECURITY_ANALYSIS.md` — REQ-SEC-004)
+
+## ClickUp import plans (since 3.2.0)
+
+- Deny by default: the tenant action `import_plan` (`TENANT_ACCESS_CHECK`) is granted only to `security.manage_roles`
+  holders unless a listener decides; every plan route answers 404 when denied and for a plan of another tenant (the
+  tenant key compared exactly). Creating boards asks the board-create right and the host's quota; filling an existing
+  board asks `canManageBoardConnection()` and `canImportTasks()`, at the Boards step and again at start.
+- Every step is a POST with its own CSRF token (`task_board_import_plan_<step>`) and the plan's version; only offered
+  values are accepted; a tree level opens by a POST (no provider call on a GET).
+- Plans, their items, events, Messenger messages, the progress JSON and the downloadable report hold ids and counts
+  only — no token, no names or e-mails. The credential is resolved per slice through the host and never stored.
+- The worker always acts as the plan's starter (never the user polling or resuming) and re-checks at each board that
+  they exist, are enabled, hold `import_plan` and may connect and import into the board; otherwise the plan fails
+  (`actor`) — no other user is substituted. A credential failure stops the plan.
+- Starting a plan needs a connection the host offers to the starter; chosen containers must belong to the plan's
+  workspace; the board quota is asked per board at creation.
+- The rate budget's cache key is an HMAC of the connection reference with `kernel.secret`.
+- Personal data: the people directory of the tenant and workspace holds ClickUp names and e-mails, as before;
+  `TaskSyncPeopleReassigner::detachUser()` also clears the user's id from plans (string ids: no database cascade);
+  `ImportPlanStore::exportFor()` lists a user's plans for an access request; plans are pruned after `keep_days`.

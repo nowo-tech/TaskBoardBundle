@@ -1,2 +1,3 @@
 task_board.import.form.file_invalid: "Laden Sie einen gültigen CSV- oder JSON-Export hoch (max. 20 MB)."
 task_board.sync.browser.pick_list: "Wähle eine Liste."
+task_board.import_plan.error.pick_one: "Bitte eine Option wählen."

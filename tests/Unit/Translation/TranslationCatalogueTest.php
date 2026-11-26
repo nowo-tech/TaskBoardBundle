@@ -39,6 +39,20 @@ final class TranslationCatalogueTest extends TestCase
      */
     private const ALLOWED_IDENTICAL = [
         'de' => [
+            'task_board.import_plan.subtitle_workspace',
+            'task_board.import_plan.list.workspace',
+            'task_board.import_plan.list.status',
+            'task_board.import_plan.step.workspace',
+            'task_board.import_plan.step.boards',
+            'task_board.import_plan.step.run',
+            'task_board.import_plan.connect.kind.oauth',
+            'task_board.import_plan.workspace.legend',
+            'task_board.import_plan.layout.legend',
+            'task_board.import_plan.boards.title',
+            'task_board.import_plan.boards.target',
+            'task_board.import_plan.statuses.boards',
+            'task_board.import_plan.preview.board',
+            'task_board.import_plan.run.title',
             'task_board.sync.connect.kind_oauth',
             'nav.brand',
             'task_board.board.title',
@@ -78,6 +92,7 @@ final class TranslationCatalogueTest extends TestCase
             'task_board.task.workflow',
         ],
         'es' => [
+            'task_board.import_plan.connect.kind.oauth',
             'task_board.sync.connect.kind_oauth',
             'nav.brand',
             'task_board.form.board.slug',
@@ -99,6 +114,7 @@ final class TranslationCatalogueTest extends TestCase
             'task_board.sync.trigger.manual',
         ],
         'fr' => [
+            'task_board.import_plan.connect.kind.oauth',
             'task_board.sync.connect.kind_oauth',
             'nav.brand',
             'task_board.custom_field.filter.operator',
@@ -139,6 +155,11 @@ final class TranslationCatalogueTest extends TestCase
             'task_board.time.form.note',
         ],
         'it' => [
+            'task_board.import_plan.subtitle_workspace',
+            'task_board.import_plan.list.workspace',
+            'task_board.import_plan.step.workspace',
+            'task_board.import_plan.connect.kind.oauth',
+            'task_board.import_plan.workspace.legend',
             'task_board.sync.connect.kind_oauth',
             'nav.brand',
             'task_board.form.board.slug',
@@ -167,6 +188,12 @@ final class TranslationCatalogueTest extends TestCase
             'task_board.sync.trigger.console',
         ],
         'nl' => [
+            'task_board.import_plan.list.heading',
+            'task_board.import_plan.list.status',
+            'task_board.import_plan.step.run',
+            'task_board.import_plan.connect.kind.oauth',
+            'task_board.import_plan.statuses.type.open',
+            'task_board.import_plan.run.title',
             'task_board.sync.connect.kind_oauth',
             'nav.brand',
             'task_board.calendar.mode_week',
@@ -217,6 +244,7 @@ final class TranslationCatalogueTest extends TestCase
             'task_board.task.workflow',
         ],
         'pt' => [
+            'task_board.import_plan.connect.kind.oauth',
             'task_board.sync.connect.kind_oauth',
             'nav.brand',
             'task_board.form.board.slug',
@@ -253,6 +281,8 @@ final class TranslationCatalogueTest extends TestCase
             'task_board.import.help.col_priority',
         ],
         'pt' => [
+            'task_board.import_plan.fields.title',
+            'task_board.import_plan.statuses.type.custom',
             'task_board.board.show_less',
             'task_board.calendar.sr_moved',
             'task_board.dependency.relation.blocked_by',

@@ -1,0 +1,114 @@
+{#
+    Since 3.2.0 (CU-2, design §8.8 and §8.9): a started plan — the overall <progress> and a polite live region (polled by
+    nowo-task-board-sync-progress while the plan is active), one row per board with its state, Cancel / Resume, and once
+    it ended the summary: counts, failed lists with *Retry failed lists*, *Re-import now* (update changed / add new
+    only), *Download report (JSON)*, *Map people* and Delete. Vars: plan, items, progress, progressUrl, pollInterval,
+    cancelForm, resumeForm, deleteForm, restartForm, peopleUrl, failedItems.
+#}
+{% set _b = 'NowoTaskBoardBundle' %}
+{% if progressUrl %}
+    <section class="nowo-task-sync__progress nowo-task-mb-3" aria-labelledby="nowo-task-plan-progress-title"
+        data-controller="nowo-task-board-sync-progress"
+        data-nowo-task-board-sync-progress-url-value="{{ progressUrl }}"
+        data-nowo-task-board-sync-progress-interval-value="{{ max(pollInterval, 5000) }}"
+        data-testid="nowo-task-plan-progress">
+        <h3 class="h4" id="nowo-task-plan-progress-title">{{ 'task_board.import_plan.run.progress'|trans({}, _b) }}</h3>
+        <progress class="nowo-task-sync__bar" max="{{ max(progress.total, 1) }}" value="{{ min(progress.processed, progress.total) }}" aria-labelledby="nowo-task-plan-progress-title" data-nowo-task-board-sync-progress-target="bar"></progress>
+        <p role="status" aria-live="polite" aria-atomic="true" class="nowo-task-mb-2" data-nowo-task-board-sync-progress-target="status">{{ progress.summary }}</p>
+        <p class="nowo-task-mb-2" hidden data-nowo-task-board-sync-progress-target="done">
+            <a href="{{ path(nowo_task_board_route('import_plan'), {planId: plan.id}) }}">{{ 'task_board.import_plan.run.show_summary'|trans({}, _b) }}</a>
+        </p>
+        <p class="{{ nowo_ui_class('muted', _b) }} nowo-task-small">{{ 'task_board.import_plan.run.leave'|trans({}, _b) }}</p>
+        {% if cancelForm %}
+            {{ form_start(cancelForm, {action: path(nowo_task_board_route('import_plan_cancel'), {planId: plan.id}), method: 'POST', attr: {class: 'd-inline'}}) }}
+                <button type="submit" class="{{ nowo_ui_class('btn_danger', _b) }} {{ nowo_ui_class('btn_sm', _b) }}" data-nowo-task-board-sync-progress-target="cancel" data-testid="nowo-task-plan-cancel">{{ 'task_board.import_plan.run.cancel'|trans({}, _b) }}</button>
+            {{ form_end(cancelForm) }}
+        {% endif %}
+    </section>
+{% else %}
+    <p class="nowo-task-mb-3" data-testid="nowo-task-plan-summary">{{ progress.summary }}</p>
+{% endif %}
+
+{% if plan.errorCode %}
+    <p class="{{ nowo_ui_class(plan.status.value == 'failed' ? 'flash_error' : 'flash_warning', _b) }}" role="status" data-testid="nowo-task-plan-code">{{ include('@NowoTaskBoardBundle/manage/_import_plan_code.html.twig', {code: plan.errorCode}) }}</p>
+{% endif %}
+{% if peopleUrl and plan.status.value == 'paused' and plan.errorCode == 'people_mapping_required' %}
+    <p><a class="{{ nowo_ui_class('btn_secondary', _b) }}" href="{{ peopleUrl }}" data-testid="nowo-task-plan-map-people">{{ 'task_board.import_plan.run.map_people'|trans({}, _b) }}</a></p>
+{% endif %}
+{% if resumeForm %}
+    {{ form_start(resumeForm, {action: path(nowo_task_board_route('import_plan_resume'), {planId: plan.id}), method: 'POST', attr: {class: 'nowo-task-mb-3'}}) }}
+        <button type="submit" class="{{ nowo_ui_class('btn_primary', _b) }}" data-testid="nowo-task-plan-resume">{{ 'task_board.import_plan.run.resume'|trans({}, _b) }}</button>
+    {{ form_end(resumeForm) }}
+{% endif %}
+
+<div class="{{ nowo_ui_class('table_wrap', _b) }} nowo-task-mb-3">
+    <table class="{{ nowo_ui_class('table', _b) }}" data-testid="nowo-task-plan-items">
+        <caption class="visually-hidden">{{ 'task_board.import_plan.run.boards'|trans({}, _b) }}</caption>
+        <thead>
+            <tr>
+                <th scope="col">{{ 'task_board.import_plan.preview.board'|trans({}, _b) }}</th>
+                <th scope="col">{{ 'task_board.import_plan.list.status'|trans({}, _b) }}</th>
+                <th scope="col">{{ 'task_board.import_plan.run.created'|trans({}, _b) }}</th>
+                <th scope="col">{{ 'task_board.import_plan.run.updated'|trans({}, _b) }}</th>
+                <th scope="col">{{ 'task_board.import_plan.run.skipped'|trans({}, _b) }}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+                {% set _r = item.report %}
+                <tr data-testid="nowo-task-plan-item" data-status="{{ item.status.value }}">
+                    <th scope="row">
+                        {% if item.boardId %}<a href="{{ path(nowo_task_board_route('board'), {boardId: item.boardId}) }}">{{ item.boardName }}</a>{% else %}{{ item.boardName }}{% endif %}
+                        <span class="{{ nowo_ui_class('muted', _b) }} nowo-task-small">{{ item.sourceLabel }}</span>
+                    </th>
+                    <td>
+                        {{ ('task_board.import_plan.item.' ~ item.status.value)|trans({}, _b) }}
+                        {% if item.errorCode %}<span class="{{ nowo_ui_class('badge_warning', _b) }} nowo-task-badge" data-testid="nowo-task-plan-item-error">{{ include('@NowoTaskBoardBundle/manage/_import_plan_code.html.twig', {code: item.errorCode}) }}</span>{% endif %}
+                    </td>
+                    <td>{{ _r.created ?? 0 }}</td>
+                    <td>{{ _r.updated ?? 0 }}</td>
+                    <td>{{ _r.skipped ?? 0 }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if restartForm %}
+    {{ form_start(restartForm, {action: path(nowo_task_board_route('import_plan_start'), {planId: plan.id}), method: 'POST', attr: {class: 'nowo-task-plan__form nowo-task-mb-3'}}) }}
+        {{ form_widget(restartForm.version) }}
+        {{ form_row(restartForm.mode) }}
+        <div class="nowo-task-flex nowo-task-wrap nowo-task-gap nowo-task-plan__actions">
+            <button type="submit" class="{{ nowo_ui_class('btn_primary', _b) }}" data-testid="nowo-task-plan-reimport">{{ 'task_board.import_plan.run.reimport'|trans({}, _b) }}</button>
+            {% if failedItems > 0 %}
+                <button type="submit" name="retry" value="1" class="{{ nowo_ui_class('btn_secondary', _b) }}" data-testid="nowo-task-plan-retry">{{ 'task_board.import_plan.run.retry'|trans({'%count%': failedItems}, _b) }}</button>
+            {% endif %}
+        </div>
+    {{ form_end(restartForm) }}
+{% endif %}
+<div class="nowo-task-flex nowo-task-wrap nowo-task-gap">
+    {% if not plan.status.active %}
+        <a class="{{ nowo_ui_class('btn_secondary', _b) }}" href="{{ path(nowo_task_board_route('import_plan_report'), {planId: plan.id}) }}" data-testid="nowo-task-plan-report">{{ 'task_board.import_plan.run.report'|trans({}, _b) }}</a>
+    {% endif %}
+    {% if deleteForm %}
+        <button type="button" class="{{ nowo_ui_class('btn_danger', _b) }}" data-nowo-ui-dialog-open="nowo-task-plan-delete" data-testid="nowo-task-plan-delete">{{ 'task_board.import_plan.run.delete'|trans({}, _b) }}</button>
+        {% set _body %}
+            {{ form_start(deleteForm, {action: path(nowo_task_board_route('import_plan_delete'), {planId: plan.id}), method: 'POST', attr: {id: 'nowo-task-plan-delete-form', class: 'nowo-task-dialog__body'}}) }}
+                <p>{{ 'task_board.import_plan.run.delete_text'|trans({}, _b) }}</p>
+            {{ form_end(deleteForm) }}
+        {% endset %}
+        {% set _footer %}
+            <button type="button" class="{{ nowo_ui_class('btn_secondary', _b) }}" data-nowo-ui-dialog-close>{{ 'task_board.action.cancel'|trans({}, _b) }}</button>
+            <button type="submit" form="nowo-task-plan-delete-form" class="{{ nowo_ui_class('btn_danger_solid', _b) }}" data-testid="nowo-task-plan-delete-confirm">{{ 'task_board.import_plan.run.delete'|trans({}, _b) }}</button>
+        {% endset %}
+        {{ include(nowo_ui_partial('dialog', _b), {
+            id: 'nowo-task-plan-delete',
+            title: 'task_board.import_plan.run.delete_title'|trans({}, _b),
+            bundle: _b,
+            root_class: 'nowo-task-dialog nowo-task-dialog--native',
+            body: _body,
+            footer: _footer,
+            footer_attr: {class: 'nowo-task-dialog__footer nowo-task-dialog__actions'},
+        }, false) }}
+    {% endif %}
+</div>

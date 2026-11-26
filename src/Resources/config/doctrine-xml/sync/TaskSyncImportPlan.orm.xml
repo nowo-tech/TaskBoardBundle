@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from the ORM attributes by scripts/generate-xml-mapping.php (2.15.0, REQ-ARCH-001 rule 2). Do not edit. -->
+<doctrine-mapping xmlns="http://doctrine-project.org/schemas/orm/doctrine-mapping"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  xsi:schemaLocation="http://doctrine-project.org/schemas/orm/doctrine-mapping https://www.doctrine-project.org/schemas/orm/doctrine-mapping.xsd">
+    <entity name="Nowo\TaskBoardBundle\Sync\Entity\TaskSyncImportPlan" table="task_board_sync_import_plans">
+        <indexes>
+            <index name="idx_task_board_sync_import_plans_tenant" columns="tenant_key,status"/>
+        </indexes>
+        <unique-constraints>
+            <unique-constraint name="uniq_task_board_sync_import_plans_lock" columns="lock_key"/>
+        </unique-constraints>
+        <id name="id" type="string" length="36"/>
+        <field name="workspaceId" type="string" column="workspace_id" length="64" nullable="true"/>
+        <field name="workspaceName" type="string" column="workspace_name" length="255" nullable="true"/>
+        <field name="status" type="string" length="16"/>
+        <field name="layout" type="string" length="16"/>
+        <field name="reimportMode" type="string" column="reimport_mode" length="16"/>
+        <field name="step" type="string" length="16"/>
+        <field name="options" type="json"/>
+        <field name="fieldMap" type="json" column="field_map"/>
+        <field name="startedById" type="string" column="started_by_id" length="191" nullable="true"/>
+        <field name="startedAt" type="datetime_immutable" column="started_at" nullable="true"/>
+        <field name="finishedAt" type="datetime_immutable" column="finished_at" nullable="true"/>
+        <field name="heartbeatAt" type="datetime_immutable" column="heartbeat_at" nullable="true"/>
+        <field name="runToken" type="string" column="run_token" length="36" nullable="true"/>
+        <field name="resumeAt" type="datetime_immutable" column="resume_at" nullable="true"/>
+        <field name="report" type="json"/>
+        <field name="lockKey" type="string" column="lock_key" length="64" nullable="true"/>
+        <field name="errorCode" type="string" column="error_code" length="64" nullable="true"/>
+        <field name="cancelRequested" type="boolean" column="cancel_requested"/>
+        <field name="version" type="integer"/>
+        <field name="tenantKey" type="string" column="tenant_key" length="191" nullable="true"/>
+        <field name="provider" type="string" length="32"/>
+        <field name="connectionRef" type="string" column="connection_ref" length="191"/>
+        <field name="connectionLabel" type="string" column="connection_label" length="255"/>
+        <field name="createdById" type="string" column="created_by_id" length="191" nullable="true"/>
+        <field name="createdAt" type="datetime_immutable" column="created_at"/>
+        <many-to-one field="directory" target-entity="Nowo\TaskBoardBundle\Sync\Entity\TaskSyncDirectory">
+            <join-column name="directory_id" on-delete="SET NULL"/>
+        </many-to-one>
+    </entity>
+</doctrine-mapping>

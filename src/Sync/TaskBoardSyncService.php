@@ -287,7 +287,8 @@ final readonly class TaskBoardSyncService
             fallbackColumnId: $connection->fallbackColumnId() ?? $options->fallbackColumnId,
             importComments: $connection->option('importComments', $options->importComments),
             importAttachments: $connection->option('importAttachments', $options->importAttachments),
-            archiveRemoteDeletions: $connection->option('archiveRemoteDeletions', $options->archiveRemoteDeletions),
+            // Since 3.2.0: *Add new only* leaves the imported tasks alone, deletions included.
+            archiveRemoteDeletions: !$options->createOnly && $connection->option('archiveRemoteDeletions', $options->archiveRemoteDeletions),
             allowMassArchive: $options->allowMassArchive,
             maxPages: $options->maxPages,
             timeBudgetSeconds: $options->timeBudgetSeconds,
@@ -298,6 +299,7 @@ final readonly class TaskBoardSyncService
             timeFallbackPerTask: $options->timeFallbackPerTask,
             watchers: $options->watchers,
             checklists: $options->checklists,
+            createOnly: $options->createOnly,
         ));
     }
 

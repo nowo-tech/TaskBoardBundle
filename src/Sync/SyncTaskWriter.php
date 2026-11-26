@@ -270,6 +270,11 @@ final readonly class SyncTaskWriter
                 }
                 continue;
             }
+            // Since 3.2.0 (CU-2, *Add new only*): a task imported before stays as it is.
+            if ($ctx->options->createOnly) {
+                ++$ctx->unchanged;
+                continue;
+            }
             if (!$this->canEdit($ctx, $task)) {
                 ++$ctx->skipReadOnly;
                 continue;

@@ -1,0 +1,9 @@
+{#- Since 3.2.0 (CU-2): the text of a plan or item code — task_board.import_plan.code.<code>, else the sync's own
+    task_board.sync.error.<code>, else the code itself. Vars: code. -#}
+{%- set _key = 'task_board.import_plan.code.' ~ code -%}
+{%- set _text = _key|trans({}, 'NowoTaskBoardBundle') -%}
+{%- if _text == _key -%}
+    {%- set _key = 'task_board.sync.error.' ~ code -%}
+    {%- set _text = _key|trans({'%count%': '?', '%total%': '?', '%name%': '', '%reason%': '', '%columns%': ''}, 'NowoTaskBoardBundle') -%}
+{%- endif -%}
+{{- _text == _key ? code : _text -}}
