@@ -305,9 +305,12 @@ warns `native_field_refused`, leaves the definition untouched and keeps those va
 wizard offers only the fields its user may change. An imported field deleted here (on the page, through the manager or by
 applying a board configuration without it) stops being imported: the run warns `native_field_deleted` and imports
 neither the field nor its values (not even as synced, read-only fields; audit ZCFv-L1) until *Import it again* on the
-page clears its tombstone (route `board_field_reimport`). A definition edit or option merge made from a transaction
+page clears its tombstone (route `board_field_reimport`); the next sync then reads every task again (the connection's
+watermark is cleared) and brings the field and its values back (audit ZCFv2-L1). A host that builds
+`TaskCustomFieldManager` by hand passes `SyncNativeFieldReread` for that. A definition edit or option merge made from a transaction
 whose snapshot is older than the locked row is refused (`changed`; audit ZCFv-L2); the import then warns
-`native_field_changed` and imports those values at the next run. A drop-down field's options follow the provider's option ids; an option deleted here is not recreated. There is no overwrite mode: a value
+`native_field_changed`, keeps the previous watermark and imports those values at the next run. A drop-down field's
+options follow the provider's option ids; an option deleted here is not recreated. There is no overwrite mode: a value
 changed here is kept and the provider's value is noted in a comment.
 
 `TaskCustomFieldManager::update()` and `delete()` take an optional `$expectedVersion`. A host form that edits

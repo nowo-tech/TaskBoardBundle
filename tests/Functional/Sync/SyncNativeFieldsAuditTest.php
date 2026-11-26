@@ -26,6 +26,7 @@ use Nowo\TaskBoardBundle\Sync\Dto\SyncReport;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncField;
 use Nowo\TaskBoardBundle\Sync\Field\SyncFieldType;
+use Nowo\TaskBoardBundle\Sync\Field\SyncNativeFieldWriter;
 use Nowo\TaskBoardBundle\Sync\Provider\ProviderCredential;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteContainer;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteCustomField;
@@ -34,6 +35,7 @@ use Nowo\TaskBoardBundle\Tests\Functional\App\FunctionalKernel;
 use Nowo\TaskBoardBundle\Tests\Functional\App\ScriptedRestructurePolicy;
 use Nowo\TaskBoardBundle\Tests\Functional\App\TestCredentialResolver;
 use PHPUnit\Framework\Attributes\Group;
+use ReflectionProperty;
 
 use function array_map;
 use function array_replace_recursive;
@@ -167,6 +169,73 @@ final class SyncNativeFieldsAuditTest extends SyncFunctionalTestCase
         $plain = $this->fields()->define($this->owner, $this->freshBoard($board), null, 'Plain', CustomFieldType::Text);
         $this->fields()->delete($this->owner, $plain);
         self::assertCount(0, $this->em->getRepository(TaskCustomFieldTombstone::class)->findAll());
+    }
+
+    /**
+     * Audit ZCFv2-L1 (b): after *Import it again*, the next sync brings the field and the values of every task back, also
+     * those that did not change in ClickUp since the last run (an incremental run would skip them).
+     */
+    public function testImportItAgainBringsBackTheValuesOfUnchangedTasksOnTheNextSync(): void
+    {
+        $board = $this->board();
+        $this->linked($board, 'fOwner=create');
+        $this->put($this->withFields('t1', 'Old', 1, [new RemoteCustomField('fOwner', 'Owner', SyncFieldType::Text, 'text', [], [], 'Ana', 'Ana')]));
+        $this->put($this->withFields('t2', 'New', 10_000, [new RemoteCustomField('fOwner', 'Owner', SyncFieldType::Text, 'text', [], [], 'Bob', 'Bob')]));
+        $this->sync($board);
+        $field = $this->fields()->sourceField($this->freshBoard($board), 'clickup:fOwner');
+        self::assertInstanceOf(TaskCustomField::class, $field);
+        $this->fields()->delete($this->owner, $field);
+        // Only the newer task changes in ClickUp; the older one stays out of the incremental window.
+        $this->put($this->withFields('t2', 'New', 10_001, [new RemoteCustomField('fOwner', 'Owner', SyncFieldType::Text, 'text', [], [], 'Bob', 'Bob')]));
+        self::assertContains('native_field_deleted', $this->warnings($this->sync($board)));
+        self::assertSame([[], []], [$this->displayed('Old'), $this->displayed('New')]);
+
+        $this->fields()->clearTombstone($this->owner, $this->freshBoard($board), $this->fields()->tombstones($this->freshBoard($board))[0]->getId());
+        $connection = $this->em->getRepository(TaskBoardConnection::class)->findOneBy(['board' => $board->getId()]);
+        self::assertInstanceOf(TaskBoardConnection::class, $connection);
+        self::assertNull($connection->getWatermark(), 'the next run reads the whole list');
+        // No change in ClickUp: the next sync still brings the field and both values back.
+        $report = $this->sync($board);
+        self::assertNotContains('native_field_deleted', $this->warnings($report));
+        self::assertSame([['Owner' => 'Ana'], ['Owner' => 'Bob']], [$this->displayed('Old'), $this->displayed('New')]);
+    }
+
+    /**
+     * Audit ZCFv2-L1 (a): a definition that changed under the run (`native_field_changed`) defers the tasks that carry the
+     * field: the run keeps the previous watermark and the next sync, with no change in ClickUp, imports their values.
+     */
+    public function testAFieldChangedUnderTheRunDefersItsTasksToTheNextSync(): void
+    {
+        $board   = $this->board();
+        $options = [['id' => 'o1', 'name' => 'Draft', 'color' => null], ['id' => 'o2', 'name' => 'Live', 'color' => null]];
+        $this->linked($board, 'fStage=create');
+        $this->put($this->withFields('t1', 'Task', 1, [new RemoteCustomField('fStage', 'Stage', SyncFieldType::Dropdown, 'drop_down', $options, [], 'o1', 'Draft')]));
+        $this->sync($board);
+        self::assertSame(['Stage' => 'Draft'], $this->displayed('Task'));
+        $before = $this->em->getRepository(TaskBoardConnection::class)->findOneBy(['board' => $board->getId()])?->getWatermark();
+        self::assertInstanceOf(DateTimeImmutable::class, $before);
+
+        // The option merge of the next run finds the field changed under its snapshot (as inside a host's older REPEATABLE
+        // READ transaction): the row it reads again is older than the locked one.
+        $stale = $this->staleSnapshot();
+        $this->put($this->withFields('t1', 'Task', 10_000, [new RemoteCustomField('fStage', 'Stage', SyncFieldType::Dropdown, 'drop_down', $options, [], 'o2', 'Live')]));
+        try {
+            $report = $this->sync($board);
+        } finally {
+            $this->forget($stale);
+        }
+        self::assertTrue($stale->done);
+        self::assertContains('native_field_changed', $this->warnings($report));
+        self::assertSame([1, 0], [$report->stat(SyncNativeFieldWriter::DEFERRED), $report->stat('fields.native_values')]);
+        self::assertSame(['Stage' => 'Draft'], $this->displayed('Task'), 'neither native nor synced in that run');
+        self::assertSame([], $this->syncedNames());
+        $this->em->clear();
+        self::assertEquals($before, $this->em->getRepository(TaskBoardConnection::class)->findOneBy(['board' => $board->getId()])?->getWatermark(), 'the watermark is kept');
+
+        // No change in ClickUp: the next sync imports the value.
+        $report = $this->sync($board);
+        self::assertNotContains('native_field_changed', $this->warnings($report));
+        self::assertSame(['Stage' => 'Live'], $this->displayed('Task'));
     }
 
     public function testAFieldCreatedByAnotherWriterBeforeTheLockIsTaken(): void
@@ -331,6 +400,45 @@ final class SyncNativeFieldsAuditTest extends SyncFunctionalTestCase
         $em->getEventManager()->addEventListener([Events::postLoad], $listener);
 
         return $listener;
+    }
+
+    /** Audit ZCFv2-L1: the next locked re-read of a definition (inside a write) returns an older version, once. */
+    private function staleSnapshot(): object
+    {
+        $em = self::getContainer()->get('app.task_board_em');
+        self::assertInstanceOf(EntityManagerInterface::class, $em);
+        $listener = new class {
+            public bool $done = false;
+
+            public function postLoad(PostLoadEventArgs $args): void
+            {
+                $field = $args->getObject();
+                if ($this->done || !$field instanceof TaskCustomField || $args->getObjectManager()->getConnection()->getTransactionNestingLevel() === 0) {
+                    return;
+                }
+                $this->done = true;
+                (new ReflectionProperty(TaskCustomField::class, 'version'))->setValue($field, $field->getVersion() - 1);
+            }
+        };
+        $em->getEventManager()->addEventListener([Events::postLoad], $listener);
+
+        return $listener;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function displayed(string $title): array
+    {
+        $this->em->clear();
+        $this->refreshOwner();
+        $task   = $this->taskTitled($title);
+        $values = [];
+        foreach ($this->fields()->valuesOf([$task->getId()])[$task->getId()] ?? [] as $value) {
+            $values[$value->getField()->getName()] = $this->fields()->display($value);
+        }
+
+        return $values;
     }
 
     private function forget(object $listener): void

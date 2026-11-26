@@ -394,10 +394,13 @@ lists them).
 - **Deleted here stays deleted.** Deleting an imported field (the Custom fields page, a host through the manager, or a
   board configuration that drops it) leaves a tombstone: the next imports warn `native_field_deleted` and import neither
   the field nor its values — not even as a synced, read-only field (audit ZCFv-L1). *Import it again* on the page clears
-  it; the next import creates the field anew and lands the values on it.
+  it and makes the next sync read every task again (the connection's watermark is cleared and every task's remote date
+  reset; audit ZCFv2-L1): that sync creates the field anew and lands the values of every task on it, also of the tasks
+  that did not change in ClickUp.
 - **A definition changed under the run.** When the field's definition changed after the run's transaction started
-  reading (a host transaction around the import), the option merge is refused: the run warns `native_field_changed` and
-  imports those values at the next run.
+  reading (a host transaction around the import), the option merge is refused: the run warns `native_field_changed`, defers the tasks that carry the field
+  (`fields.native_deferred`) and keeps the previous watermark, so the next run, incremental or not, imports those
+  values (audit ZCFv2-L1).
 - **A synced copy left behind (audit ZCFv-I2).** A field that fell back to a synced field for a while (refused or
   unavailable) keeps that synced copy, with its last values, once it lands on a native field; the copy stops updating.
   `SyncFieldValueEraser::eraseField()` removes it per task.

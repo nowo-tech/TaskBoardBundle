@@ -1310,6 +1310,6 @@ task_board.custom_field.refusal.changed: "Alguien cambió este campo mientras ta
 task_board.custom_field.deleted.heading: "Campos importados eliminados"
 task_board.custom_field.deleted.intro: "Estos campos y sus valores ya no se importan, ni siquiera como campos de solo lectura. Elige «Importar de nuevo» para que la próxima importación traiga el campo de vuelta."
 task_board.custom_field.deleted.reimport: "Importar de nuevo"
-task_board.custom_field.flash.reimport: "La próxima importación volverá a crear el campo."
+task_board.custom_field.flash.reimport: "La próxima sincronización vuelve a leer todas las tareas: el campo y sus valores vuelven."
 task_board.sync.error.native_field_deleted: "Algunos campos importados se eliminaron en este tablero: ya no se importan (página Campos personalizados: «Importar de nuevo»)."
 task_board.sync.error.native_field_changed: "Un campo nativo cambió mientras la importación lo leía: sus valores se importan en la próxima sincronización."

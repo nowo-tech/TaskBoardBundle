@@ -42,6 +42,7 @@ use Nowo\TaskBoardBundle\Sync\Exception\ProviderErrorCode;
 use Nowo\TaskBoardBundle\Sync\Exception\ProviderException;
 use Nowo\TaskBoardBundle\Sync\Exception\RateLimitedException;
 use Nowo\TaskBoardBundle\Sync\Exception\SyncBusyException;
+use Nowo\TaskBoardBundle\Sync\Field\SyncNativeFieldWriter;
 use Nowo\TaskBoardBundle\Sync\Hook\LimitRefusal;
 use Nowo\TaskBoardBundle\Sync\People\PeopleMappingService;
 use Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleDirectoryService;
@@ -539,8 +540,12 @@ final readonly class TaskBoardSyncService
                 $ctx->connection->setCursor($status->isResumable() ? $ctx->cursor() : null);
                 if ($status === SyncStatus::Succeeded) {
                     // Audit EG-I11: a list that stopped advancing keeps the previous watermark (the next run reads again
-                    // what this one may have missed).
-                    $ctx->connection->markSuccess($now, $ctx->pagingStopped ? null : $ctx->highWatermark);
+                    // what this one may have missed). Audit ZCFv2-L1: so does a run that deferred tasks because a native
+                    // field's definition changed under it (their values come with the next run), and an incremental run
+                    // whose watermark *Import it again* cleared meanwhile (the next run reads every task).
+                    $rewound = $ctx->updatedSince instanceof DateTimeImmutable && !$ctx->connection->getWatermark() instanceof DateTimeImmutable;
+                    $hold    = $ctx->pagingStopped || $rewound || $ctx->stat(SyncNativeFieldWriter::DEFERRED) > 0;
+                    $ctx->connection->markSuccess($now, $hold ? null : $ctx->highWatermark);
                 }
             }
             if ($status === SyncStatus::Succeeded) {

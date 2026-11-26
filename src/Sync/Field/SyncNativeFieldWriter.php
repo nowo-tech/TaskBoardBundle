@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Sync\Field;
 
+use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskCustomField;
@@ -16,6 +17,7 @@ use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncItem;
 use Nowo\TaskBoardBundle\Sync\Provider\RemoteCustomField;
 use Nowo\TaskBoardBundle\Sync\SyncRunContext;
+use Nowo\TaskBoardBundle\Sync\TaskBoardSyncService;
 
 use function hash;
 use function is_scalar;
@@ -57,6 +59,12 @@ final readonly class SyncNativeFieldWriter
 
     /** The baseline key prefix of a native value on the task's sync item. */
     public const BASELINE_PREFIX = 'native:';
+
+    /**
+     * Since 3.3.0 (audit ZCFv2-L1): the run counter of the tasks deferred because a native field's definition changed
+     * under the run; a run that counts any keeps the previous watermark ({@see TaskBoardSyncService}).
+     */
+    public const DEFERRED = 'fields.native_deferred';
 
     public function __construct(
         private TaskCustomFieldManager $fields,
@@ -102,6 +110,13 @@ final readonly class SyncNativeFieldWriter
                 continue;
             }
             $field = $this->target($ctx, $remote, $type, $targets[$remote->id]);
+            if (!$field instanceof TaskCustomField && ($ctx->nativeFields[$remote->id]['defer'] ?? false)) {
+                // Audit ZCFv2-L1: the definition changed under this run; the task is read again by the next run (as a
+                // deferred task: its remote date is reset and the run keeps the previous watermark).
+                $item->setRemoteUpdatedAt(new DateTimeImmutable('@0'));
+                $ctx->count(self::DEFERRED);
+                continue;
+            }
             if (!$field instanceof TaskCustomField || !$remote->hasValue()) {
                 continue;
             }
@@ -235,6 +250,7 @@ final readonly class SyncNativeFieldWriter
             return $known['id'] !== null ? $this->fields->fieldOfBoard($ctx->board, $known['id']) : null;
         }
         // Audit ZCFv-L1: a field deleted here is not imported at all (neither native nor synced) until *Import it again*.
+        $defer   = false;
         $skip    = $target === TaskBoardConnection::NATIVE_CREATE && $this->fields->isDeletedSource($ctx->board, $ctx->provider->id() . ':' . $remote->id);
         $field   = $skip ? null : $this->resolve($ctx, $remote, $type, $target);
         $options = [];
@@ -247,14 +263,15 @@ final readonly class SyncNativeFieldWriter
             } catch (TaskCustomFieldRefusedException $refused) {
                 // A policy that changed its answer since resolve() asked (`native_field_refused`: values synced), or (audit
                 // ZCFv-L2) a definition changed under this run's snapshot (`native_field_changed`: the values wait for the
-                // next run, neither native nor synced).
+                // next run, neither native nor synced; audit ZCFv2-L1: the tasks are deferred, see write()).
                 $field = null;
-                $skip  = $refused->reason === TaskCustomFieldRefusedException::CHANGED;
-                $ctx->warn($skip ? 'native_field_changed' : 'native_field_refused');
+                $defer = $refused->reason === TaskCustomFieldRefusedException::CHANGED;
+                $skip  = $defer;
+                $ctx->warn($defer ? 'native_field_changed' : 'native_field_refused');
             }
         }
         // @igor-ignore - Built per sync run, not a shared service.
-        $ctx->nativeFields[$remote->id] = ['id' => $field?->getId(), 'options' => $options, 'skip' => $skip];
+        $ctx->nativeFields[$remote->id] = ['id' => $field?->getId(), 'options' => $options, 'skip' => $skip, 'defer' => $defer];
         if ($field instanceof TaskCustomField && $target === TaskBoardConnection::NATIVE_CREATE) {
             $ctx->count('fields.native_fields');
         }

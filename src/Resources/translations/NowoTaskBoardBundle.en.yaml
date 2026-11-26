@@ -1310,6 +1310,6 @@ task_board.custom_field.refusal.changed: "Someone changed this field meanwhile. 
 task_board.custom_field.deleted.heading: "Deleted imported fields"
 task_board.custom_field.deleted.intro: "These fields and their values are not imported any more, not even as read-only fields. Choose “Import it again” to let the next import bring the field back."
 task_board.custom_field.deleted.reimport: "Import it again"
-task_board.custom_field.flash.reimport: "The next import creates the field again."
+task_board.custom_field.flash.reimport: "The next sync reads every task again: the field and its values come back."
 task_board.sync.error.native_field_deleted: "Some imported fields were deleted on this board: they are not imported any more (Custom fields page: “Import it again”)."
 task_board.sync.error.native_field_changed: "A native field changed while the import read it: its values are imported at the next sync."

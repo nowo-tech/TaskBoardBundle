@@ -193,7 +193,7 @@ mode), and a *Custom fields* page per board. **Schema change** (three columns an
   keeps the values synced. The wizard offers only the fields its user may change (`nativeTargets($plan, $actor)`).
 - ZCF-L2: an imported field deleted here leaves a tombstone (`task_board_custom_field_tombstones`,
   `TaskCustomFieldTombstone`; also when a board configuration drops it): a re-import does not create it again (warning
-  `native_field_deleted`, values synced) until *Import it again* on the Custom fields page (route
+  `native_field_deleted`; ZCFv-L1: its values are not imported either) until *Import it again* on the Custom fields page (route
   `board_field_reimport`, `TaskCustomFieldManager::clearTombstone()`).
 - ZCF-L3 (REQ-RUNTIME-003): the import reads and decides a task's values before writing them and writes through
   `TaskCustomFieldManager::setFieldIfUnchanged()` (no rollback when a person's change wins); the marker's field is inserted
@@ -208,6 +208,13 @@ mode), and a *Custom fields* page per board. **Schema change** (three columns an
   transaction whose snapshot is older than the locked row is refused (`changed`), so an option merge or an edit never
   writes over a newer committed definition (two-connection test on MySQL, MariaDB and PostgreSQL). The import warns
   `native_field_changed` and imports those values at the next run.
+- ZCFv2-L1: those promises hold for an incremental sync too. A run whose definition changed under it defers the tasks
+  that carry the field (their remote date is reset, counter `fields.native_deferred`) and keeps the previous watermark,
+  so the next run reads them again. *Import it again* clears the connection's watermark and resets every task's remote
+  date (`SyncNativeFieldReread`, with `sync.enabled`): the next sync reads every task and brings the field and all its
+  values back, also on the tasks that did not change in ClickUp.
+- ZCFv2-I1: the marker's field is hydrated by the locking read itself, so an older snapshot cannot hide it.
+- ZCFv2-I2: deleting an imported field locks the board's row before the field's, as creating one does.
 - ZCFv-I3: the marker's field is looked up again with a locking read under the board lock and after a lost unique key.
 - ZCFv-I1: the new imported field's row is written in a named savepoint of its own, so a duplicate marker is read again
   on DBAL 3 without `use_savepoints` too (it failed the whole unit there); tested on DBAL 3 and 4.

@@ -1310,6 +1310,6 @@ task_board.custom_field.refusal.changed: "Jemand hat dieses Feld inzwischen geä
 task_board.custom_field.deleted.heading: "Gelöschte importierte Felder"
 task_board.custom_field.deleted.intro: "Diese Felder und ihre Werte werden nicht mehr importiert, auch nicht als schreibgeschützte Felder. Wählen Sie „Erneut importieren“, damit der nächste Import das Feld zurückbringt."
 task_board.custom_field.deleted.reimport: "Erneut importieren"
-task_board.custom_field.flash.reimport: "Der nächste Import legt das Feld wieder an."
+task_board.custom_field.flash.reimport: "Die nächste Synchronisierung liest alle Aufgaben erneut: Das Feld und seine Werte kommen zurück."
 task_board.sync.error.native_field_deleted: "Einige importierte Felder wurden auf diesem Board gelöscht: Sie werden nicht mehr importiert (Seite Benutzerdefinierte Felder: „Erneut importieren“)."
 task_board.sync.error.native_field_changed: "Ein natives Feld wurde geändert, während der Import es las: Seine Werte werden bei der nächsten Synchronisierung importiert."

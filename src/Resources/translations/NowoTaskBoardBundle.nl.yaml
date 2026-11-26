@@ -1310,6 +1310,6 @@ task_board.custom_field.refusal.changed: "Iemand heeft dit veld intussen gewijzi
 task_board.custom_field.deleted.heading: "Verwijderde geïmporteerde velden"
 task_board.custom_field.deleted.intro: "Deze velden en hun waarden worden niet meer geïmporteerd, ook niet als alleen-lezen velden. Kies „Opnieuw importeren” zodat de volgende import het veld terugbrengt."
 task_board.custom_field.deleted.reimport: "Opnieuw importeren"
-task_board.custom_field.flash.reimport: "De volgende import maakt het veld opnieuw aan."
+task_board.custom_field.flash.reimport: "De volgende synchronisatie leest alle taken opnieuw: het veld en de waarden komen terug."
 task_board.sync.error.native_field_deleted: "Sommige geïmporteerde velden zijn op dit bord verwijderd: ze worden niet meer geïmporteerd (pagina Aangepaste velden: „Opnieuw importeren”)."
 task_board.sync.error.native_field_changed: "Een eigen veld veranderde terwijl de import het las: de waarden worden bij de volgende synchronisatie geïmporteerd."

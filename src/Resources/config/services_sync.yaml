@@ -160,6 +160,8 @@ services:
     Nowo\TaskBoardBundle\Sync\Field\SyncCustomFieldWriter: ~
     # Since 3.3.0 (CU-3): provider fields an import plan lands on native fields.
     Nowo\TaskBoardBundle\Sync\Field\SyncNativeFieldWriter: ~
+    # Since 3.3.0 (audit ZCFv2-L1): *Import it again* makes the next sync read every task again.
+    Nowo\TaskBoardBundle\Sync\Field\SyncNativeFieldReread: ~
     # Since 1.27.0 (audit GW-M3): erasure and access for custom field values; public for the host's erasure chain.
     Nowo\TaskBoardBundle\Sync\Field\SyncFieldValueEraser:
         public: true

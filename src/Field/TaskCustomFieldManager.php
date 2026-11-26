@@ -8,6 +8,7 @@ use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\DBAL\LockMode;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\Query;
 use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
 use InvalidArgumentException;
@@ -28,6 +29,7 @@ use Nowo\TaskBoardBundle\Folder\TaskBoardRestructurePolicyInterface;
 use Nowo\TaskBoardBundle\Port\Snapshots;
 use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
 use Nowo\TaskBoardBundle\Support\Text;
+use Nowo\TaskBoardBundle\Sync\Field\SyncNativeFieldReread;
 use Throwable;
 
 use function abs;
@@ -84,6 +86,8 @@ final readonly class TaskCustomFieldManager
         // Since 3.0.0 (audit ZAS-V1): TaskBoard rows the application's manager holds are read again by id at each write
         // entry (none: a service built by hand works on the rows it is given, as in 2.x).
         private ?TaskBoardEntityManager $rows = null,
+        // Since 3.3.0 (audit ZCFv2-L1): with `sync.enabled`, *Import it again* makes the next sync read every task again.
+        private ?SyncNativeFieldReread $reread = null,
     ) {
     }
 
@@ -281,6 +285,12 @@ final readonly class TaskCustomFieldManager
         $field = $this->own($field);
         $this->requireRight($actor, $field->getBoard(), $field->getTenantKey());
         $this->write(function () use ($field, $expectedVersion): void {
+            // Audit ZCFv2-I2: an imported field's board row first, as defineFromSource() (board, then field), since its
+            // tombstone references the board.
+            $board = $field->getBoard();
+            if ($board instanceof TaskBoard && $field->getSourceRef() !== null) {
+                $this->lockBoard($board);
+            }
             $field = $this->lockDefinition($field, $expectedVersion);
             foreach ($this->entityManager->getRepository(TaskCustomFieldValue::class)->findBy(['field' => $field]) as $value) {
                 $this->entityManager->remove($value);
@@ -327,8 +337,11 @@ final readonly class TaskCustomFieldManager
         if (!$row instanceof TaskCustomFieldTombstone || $row->getBoard()->getId() !== $board->getId()) {
             throw new TaskCustomFieldRefusedException(TaskCustomFieldRefusedException::NOT_FOUND);
         }
-        $this->write(function () use ($row): void {
+        $this->write(function () use ($row, $board): void {
             $this->entityManager->remove($row);
+            // Audit ZCFv2-L1: the next sync reads every task again (an incremental one would skip the unchanged tasks and
+            // never bring their values back).
+            $this->reread?->forBoard($this->entityManager, $board);
         });
     }
 
@@ -379,10 +392,7 @@ final readonly class TaskCustomFieldManager
             $this->write(function () use ($board, $sourceRef, $name, $type, &$existing): void {
                 // REQ-RUNTIME-003: the board's row is locked first, so two writers of one marker create one field (the
                 // second finds the first's); the unique key (board, marker) stays the last guard.
-                $this->entityManager->createQuery('SELECT b.id FROM ' . TaskBoard::class . ' b WHERE b.id = :id')
-                    ->setParameter('id', $board->getId())
-                    ->setLockMode(LockMode::PESSIMISTIC_WRITE)
-                    ->getSingleColumnResult();
+                $this->lockBoard($board);
                 $existing = $this->sourceField($board, $sourceRef, true);
                 if ($existing instanceof TaskCustomField) {
                     // Another writer created it between the first look and the lock.
@@ -516,21 +526,29 @@ final readonly class TaskCustomFieldManager
     public function sourceField(TaskBoard $board, string $sourceRef, bool $locking = false): ?TaskCustomField
     {
         if ($locking) {
-            // Audit ZCFv-I3: a current read (under the board lock, or after a lost unique key), not the transaction's snapshot.
-            $id = $this->entityManager->createQuery('SELECT f.id FROM ' . TaskCustomField::class . ' f WHERE IDENTITY(f.board) = :board AND f.sourceRef = :ref')
+            // Audits ZCFv-I3 / ZCFv2-I1: the row is hydrated by the locking read itself (a current read, under the board lock
+            // or after a lost unique key), never by a plain read that a caller's older snapshot could hide it from.
+            $field = $this->entityManager->createQuery('SELECT f FROM ' . TaskCustomField::class . ' f WHERE IDENTITY(f.board) = :board AND f.sourceRef = :ref')
                 ->setParameter('board', $board->getId())->setParameter('ref', $sourceRef)
                 ->setLockMode(LockMode::PESSIMISTIC_WRITE)
-                ->getSingleColumnResult();
-            $field = $id === [] ? null : $this->entityManager->find(TaskCustomField::class, (string) $id[0]);
-            if ($field instanceof TaskCustomField) {
-                $this->entityManager->refresh($field);
-            }
+                ->setHint(Query::HINT_REFRESH, true)
+                ->setMaxResults(1)
+                ->getOneOrNullResult();
         } else {
             $field = $this->entityManager->getRepository(TaskCustomField::class)->findOneBy(['board' => $board->getId(), 'sourceRef' => $sourceRef]);
         }
 
         // Byte for byte (the column's collation may fold case on a host without the bundle's key collation).
         return $field instanceof TaskCustomField && $field->getSourceRef() === $sourceRef && $field->getBoardId() === $board->getId() ? $field : null;
+    }
+
+    /** Since 3.3.0 (REQ-RUNTIME-003): locks the board's row (first, before any of its fields' rows). Inside {@see self::write()}. */
+    private function lockBoard(TaskBoard $board): void
+    {
+        $this->entityManager->createQuery('SELECT b.id FROM ' . TaskBoard::class . ' b WHERE b.id = :id')
+            ->setParameter('id', $board->getId())
+            ->setLockMode(LockMode::PESSIMISTIC_WRITE)
+            ->getSingleColumnResult();
     }
 
     /**

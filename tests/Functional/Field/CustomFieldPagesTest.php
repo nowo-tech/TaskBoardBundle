@@ -133,7 +133,7 @@ final class CustomFieldPagesTest extends FunctionalTestCase
         self::assertSelectorTextContains('body', 'The field was not found.');
         $this->client->request('POST', $url, ['tombstone' => 'x', '_token' => PredictableCsrfTokenManager::value('task_board_custom_field_reimport')]);
         $this->client->followRedirect();
-        self::assertSelectorTextContains('body', 'The next import creates the field again.');
+        self::assertSelectorTextContains('body', 'The next sync reads every task again: the field and its values come back.');
         self::assertSelectorNotExists('[data-testid="nowo-task-fields-deleted"]');
     }
 
