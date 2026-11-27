@@ -11,13 +11,14 @@ use RuntimeException;
  * Since 3.5.0 (client API v1, Beacon spec 262 block B): the explicit host signal "this token is valid, but this person
  * lost the Tasks permission". The client API answers `403 module_forbidden` (`module: tasks`, no `WWW-Authenticate`) so a
  * client hides the module and keeps its session. Nothing else produces that 403: a disabled or anonymised account (the
- * resolver returns null, or `TaskBoardAccessCheckerInterface::canAccess()` is false) still gets `401 invalid_token`.
+ * resolver returns null, or `TaskBoardAccessCheckerInterface::canAccess()` is false) still gets `401 invalid_token`, even
+ * when the resolver also signals.
  *
- * Throw it from `TaskClientPrincipalResolverInterface::resolve()` (recommended: Beacon maps the `module_forbidden`
- * refusal of TimeTrack's `ClientFamilyTokenAuthenticator` for the `tasks` family to it, instead of returning null) with
- * the principal of the valid token; or from `TaskBoardAccessCheckerInterface::canAccess()` when it is called for the
- * client API (it is also called by the web UI, so prefer the resolver). The principal gives the per-token budget and the
- * audit event their token id; the request carries no task data.
+ * Throw it from `TaskClientPrincipalResolverInterface::resolve()` only (it runs on the client API alone) with the
+ * principal of the valid token; the principal's user must be the host's security user, else the request is a 401. Never
+ * throw it from `TaskBoardAccessCheckerInterface::canAccess()`: that port is shared with the web UI, the personal Task
+ * API, SearchKit and commands, which do not catch it. The principal gives the per-token budget and the audit event their
+ * token id; the request carries no task data.
  */
 final class TaskBoardModuleForbiddenException extends RuntimeException
 {

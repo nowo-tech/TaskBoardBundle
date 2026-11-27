@@ -156,6 +156,17 @@ final class ClientApiAccessTest extends ClientApiTestCase
         $this->assertError(429, 'rate_limited');
     }
 
+    public function testAnInactiveAccountIs401EvenWhenTheResolverSignals(): void
+    {
+        $this->user('blocked@example.com', []);
+        $this->clientToken(email: 'blocked@example.com');
+        ClientApiTestHost::$tokens[self::CLIENT_TOKEN]['forbidden'] = true;
+        $this->call('GET', '/me');
+        $this->assertError(401, 'invalid_token');
+        self::assertSame('Bearer error="invalid_token"', $this->client->getResponse()->headers->get('WWW-Authenticate'));
+        self::assertSame('account_inactive', $this->denied[0]->reason);
+    }
+
     public function testAnUnknownTokenIsStillA401WhateverThePersonMayDo(): void
     {
         // No oracle: the module refusal exists only behind a valid token.

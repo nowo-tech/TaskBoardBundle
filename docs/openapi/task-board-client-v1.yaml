@@ -2,7 +2,7 @@
 openapi: 3.1.0
 info:
   title: TaskBoardBundle client API
-  version: 3.4.0
+  version: 3.5.0
   description: 'A stateless client API for a first-party app (Beacon Desktop), off unless client_api.principal_resolver is set. Paths are relative to <client_api.prefix>/v1 (default /api/task-board/v1). Every request names its context (X-Beacon-Context, client_api.context_header). Errors are {ok: false, error, ...}. See docs/CLIENT-API.md.'
 servers:
   - url: /api/task-board/v1
@@ -393,6 +393,7 @@ components:
         currentRevision: {type: integer}
         policyCode: {type: string}
         message: {type: string}
+        module: {type: string, description: '3.5: module_forbidden only: tasks.'}
         reason: {type: string}
         code: {type: string}
     Person:

@@ -57,8 +57,8 @@ use function strlen;
  * 1. the principal the authenticator resolved, behind the same security user (else the host forgot the firewall:
  *    `500 server_error`, logged; the API fails closed);
  * 2. the person may use the task board now (`TaskBoardAccessCheckerInterface::canAccess()`) — `401 invalid_token` (audit reason
- *    `account_inactive`: a disabled or anonymised account); 3.5: when the host signalled a lost Tasks permission with
- *    {@see TaskBoardModuleForbiddenException} (from the resolver or the checker), `403 module_forbidden` (`module: tasks`,
+ *    `account_inactive`: a disabled or anonymised account); 3.5: when the account is active and the host's resolver
+ *    signalled a lost Tasks permission with {@see TaskBoardModuleForbiddenException}, `403 module_forbidden` (`module: tasks`,
  *    no `WWW-Authenticate`, audit reason `module_forbidden`: the client hides the module and keeps its session);
  * 3. the route's scope (`task-board:read` for every GET, `task-board:write` for every write) — `403 insufficient_scope`;
  * 4. the context: the token's bound context, else the context header (`invalid_context` / `context_required`), checked
@@ -168,21 +168,21 @@ final readonly class TaskClientApiListener implements EventSubscriberInterface
         // Audit ZDF-L1: the token's budget comes first, so a client looping on a refusal (401 or 403) is bounded per token.
         $this->spend($request, $client, $ipPrefix);
         $forbidden = $request->attributes->get(TaskClientAuthenticator::MODULE_FORBIDDEN) === true;
-        $active    = false;
-        if (!$forbidden) {
-            try {
-                $active = $this->accessChecker->canAccess($client->user);
-            } catch (TaskBoardModuleForbiddenException) {
-                $forbidden = true;
-            }
-        }
-        if ($forbidden) {
-            // 3.5 (audit ZDF-M1): only the host's explicit signal means "permission lost": 403, the client keeps its session.
-            $this->deny('module_forbidden', Response::HTTP_FORBIDDEN, $client, $ipPrefix, [], null, ['message' => 'Tasks is not available for this account.', 'module' => 'tasks']);
+        // Audit ZDH-L1: the account check always runs, so an inactive account is a 401 even when the resolver signalled.
+        try {
+            $active = $this->accessChecker->canAccess($client->user);
+        } catch (TaskBoardModuleForbiddenException) {
+            // Safety net only: the resolver is the supported signal (audit ZDH-M1); a checker that throws it is read as one.
+            $active    = true;
+            $forbidden = true;
         }
         if (!$active) {
             // A disabled or anonymised account: 401 as before 3.5 (the client signs out).
             $this->deny('invalid_token', Response::HTTP_UNAUTHORIZED, $client, $ipPrefix, ['WWW-Authenticate' => 'Bearer error="invalid_token"'], 'account_inactive');
+        }
+        if ($forbidden) {
+            // 3.5 (audit ZDF-M1): only the host's explicit signal means "permission lost": 403, the client keeps its session.
+            $this->deny('module_forbidden', Response::HTTP_FORBIDDEN, $client, $ipPrefix, [], null, ['message' => 'Tasks is not available for this account.', 'module' => 'tasks']);
         }
         if (!$client->hasScope($scope)) {
             $this->deny('insufficient_scope', Response::HTTP_FORBIDDEN, $client, $ipPrefix, ['WWW-Authenticate' => sprintf('Bearer error="insufficient_scope", scope="%s"', $scope)]);

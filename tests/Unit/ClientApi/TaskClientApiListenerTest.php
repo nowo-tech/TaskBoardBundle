@@ -24,6 +24,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use RuntimeException;
+use stdClass;
 use Symfony\Component\HttpFoundation\Cookie;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -35,6 +36,7 @@ use Symfony\Component\Security\Core\Authentication\Token\NullToken;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorage;
 use Symfony\Component\Security\Core\Authentication\Token\UsernamePasswordToken;
 use Symfony\Component\Security\Core\Exception\AccessDeniedException;
+use Symfony\Component\Security\Core\Exception\CustomUserMessageAuthenticationException;
 use Symfony\Component\Security\Core\User\InMemoryUser;
 use Throwable;
 
@@ -213,6 +215,26 @@ final class TaskClientApiListenerTest extends TestCase
         $unauthorized = $send($inactive);
         self::assertSame(401, $unauthorized->getStatusCode());
         self::assertSame('Bearer error="invalid_token"', $unauthorized->headers->get('WWW-Authenticate'));
+    }
+
+    public function testASignalWithAPrincipalThatIsNotASecurityUserIsA401(): void
+    {
+        $resolver = new class implements TaskClientPrincipalResolverInterface {
+            public function resolve(string $bearer, TaskClientRequest $request): ?TaskClientPrincipal
+            {
+                throw new TaskBoardModuleForbiddenException(new TaskClientPrincipal(new stdClass(), [TaskClientPrincipal::SCOPE_READ], 'tok-1'));
+            }
+        };
+        $request = Request::create('/v1/me', server: ['HTTP_AUTHORIZATION' => 'Bearer abc']);
+        $this->expectException(CustomUserMessageAuthenticationException::class);
+        try {
+            (new TaskClientAuthenticator($resolver, '/v1'))->authenticate($request);
+        } finally {
+            // The flag is set before the user is checked, and the failure handler clears it with the principal.
+            $answer = (new TaskClientAuthenticator($resolver, '/v1'))->onAuthenticationFailure($request, new CustomUserMessageAuthenticationException('invalid_token'));
+            self::assertSame(401, $answer->getStatusCode());
+            self::assertFalse($request->attributes->has(TaskClientAuthenticator::MODULE_FORBIDDEN));
+        }
     }
 
     private static function contexts(): TaskClientContextPolicyInterface

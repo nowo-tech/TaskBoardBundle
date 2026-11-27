@@ -252,21 +252,24 @@ From **3.4.x**, no code change is required. Beacon Desktop permission parity (sp
   token's `TaskClientPrincipal`, makes the API answer
   `403 {"ok": false, "error": "module_forbidden", "message": "Tasks is not available for this account.", "module": "tasks"}`
   (`Cache-Control: no-store, private`, no `WWW-Authenticate`; audit reason `module_forbidden`). Throw it from
-  `TaskClientPrincipalResolverInterface::resolve()` (recommended), or from `TaskBoardAccessCheckerInterface::canAccess()`
-  (also called by the web UI: prefer the resolver).
+  `TaskClientPrincipalResolverInterface::resolve()` only. Never throw it from `TaskBoardAccessCheckerInterface::canAccess()`:
+  that port is shared with the web UI, the personal Task API, SearchKit and commands, which do not catch it.
 - **Unchanged.** A missing, unknown, expired or revoked token, a disabled or anonymised account (the resolver returns
   null, or `canAccess()` is false) still gets `401 invalid_token` with `WWW-Authenticate` and audit reason
-  `account_inactive`. Nothing else produces the 403.
-- **Beacon.** Its `tasks`-family resolver (over TimeTrack's `ClientFamilyTokenAuthenticator`) currently returns null for
-  every refusal except `rate_limited`, which gives `401` and signs Desktop out. Map TimeTrack's
-  `ClientCapabilitiesResolver::MODULE_FORBIDDEN` refusal for the `tasks` family to
-  `throw new TaskBoardModuleForbiddenException($principal)` (the principal of the valid token) instead of returning null;
-  keep returning null for the other refusals. Add a functional test: tasks token, capabilities provider says
-  `tasks: false` gives 403 `module_forbidden` and the token is kept.
+  `account_inactive`, even if the resolver also throws the signal (the account check always runs). Nothing else
+  produces the 403.
+- **Beacon.** When Beacon wires the `tasks`-family resolver (planned Beacon v1.183, over TimeTrack's
+  `ClientFamilyTokenAuthenticator`), it must map TimeTrack's `ClientCapabilitiesResolver::MODULE_FORBIDDEN` refusal for
+  the `tasks` family to `throw new TaskBoardModuleForbiddenException($principal)` (the principal of the valid token)
+  instead of returning null, which would give 401 and sign Desktop out; keep returning null for the other refusals. Add
+  a functional test then: tasks token, capabilities provider says `tasks: false` gives 403 `module_forbidden` and the
+  token is kept.
 - **Clients** that treated 401 as "no Tasks access" must handle 403 `module_forbidden` (refresh capabilities, hide Tasks,
   keep the session); 401 now only means the token or the account is no longer valid.
 - **Budget order (audit ZDF-L1).** The person's request budget is consumed right after the token resolved, before the
-  access, scope and context refusals: a request those checks refuse now spends one request of the budget.
+  access, scope and context refusals: a request those checks refuse now spends one request of the budget. For client API calls `consume()` now gets the
+  token's principal with an empty `where` (the context is resolved after the budget), so a limiter keyed on tenants
+  would see no tenant; one keyed on the token id is unaffected.
 
 ## To 3.4.1
 

@@ -23,7 +23,8 @@ use Nowo\TaskBoardBundle\ClientApi\Model\TaskClientRequest;
  * 3.5 (Beacon spec 262 block B): return null for a disabled or anonymised account too (401: the client signs out). For a
  * valid token whose person lost the Tasks permission, throw {@see TaskBoardModuleForbiddenException} with the principal
  * instead of returning null: the API answers `403 module_forbidden` (`module: tasks`, no `WWW-Authenticate`), so the
- * client hides the module and keeps its session. Nothing else produces that 403.
+ * client hides the module and keeps its session. Nothing else produces that 403, and an inactive account is a 401 even if
+ * you throw it. Throw it only here, never from `TaskBoardAccessCheckerInterface::canAccess()`.
  */
 interface TaskClientPrincipalResolverInterface
 {
