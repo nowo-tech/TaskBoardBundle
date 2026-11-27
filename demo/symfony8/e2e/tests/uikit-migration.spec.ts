@@ -99,6 +99,7 @@ test('board: dialogs fill and open, the column delete asks through the kit, drag
   await apply.locator('footer [data-nowo-ui-dialog-close]').click();
   await expect(apply).toBeHidden();
 
+  const columnCount = await page.locator('.nowo-task-board__column').count();
   await page.locator('.nowo-task-column__edit').first().click();
   const edit = page.locator('dialog#nowo-task-board-edit-column-modal');
   await expect(edit).toBeVisible();
@@ -109,6 +110,8 @@ test('board: dialogs fill and open, the column delete asks through the kit, drag
   await page.keyboard.press('Escape');
   await expect(confirm).toBeHidden();
   await expect(edit).toBeVisible();
+  // Audit ZDJ-TB-H1: the question came before anything was posted; the column is still there.
+  await expect(page.locator('.nowo-task-board__column')).toHaveCount(columnCount);
   await page.keyboard.press('Escape');
   await expect(edit).toBeHidden();
 
