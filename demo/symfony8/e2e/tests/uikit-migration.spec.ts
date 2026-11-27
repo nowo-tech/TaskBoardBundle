@@ -119,9 +119,10 @@ test('board: dialogs fill and open, the column delete asks through the kit, drag
   // The board's HTML5 drag does not move under touch emulation: the test on a real device decides it, with the move to `sortable`.
   test.skip(isMobile, 'Drag on touch: a real device test decides it.');
   const columns = page.locator('.nowo-task-board__column');
-  const card = columns.first().locator('.nowo-task-card').first();
-  const title = (await card.getAttribute('data-nowo-task-title')) ?? '';
+  const title = (await columns.first().locator('.nowo-task-card').first().getAttribute('data-nowo-task-title')) ?? '';
   expect(title).not.toBe('');
+  // By title, not by position: cards of equal position may be listed in another order on the next render.
+  const card = columns.first().locator(`.nowo-task-card[data-nowo-task-title="${title}"]`).first();
   const moved = page.waitForResponse((r) => /\/move/.test(r.url()) && r.request().method() === 'POST');
   await card.dragTo(columns.nth(1));
   expect((await moved).status()).toBeLessThan(400);
