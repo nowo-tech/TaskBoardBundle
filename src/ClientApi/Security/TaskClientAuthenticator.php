@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\ClientApi\Security;
 
 use Nowo\TaskBoardBundle\ClientApi\Contract\TaskClientPrincipalResolverInterface;
+use Nowo\TaskBoardBundle\ClientApi\Exception\TaskBoardModuleForbiddenException;
 use Nowo\TaskBoardBundle\ClientApi\Model\TaskClientPrincipal;
 use Nowo\TaskBoardBundle\ClientApi\Model\TaskClientRequest;
 use Nowo\TaskBoardBundle\ClientApi\TaskClientApiException;
@@ -55,6 +56,9 @@ final class TaskClientAuthenticator extends AbstractAuthenticator implements Aut
     /** Request attribute of the resolved principal. */
     public const ATTRIBUTE = '_nowo_task_board_client';
 
+    /** Request attribute (3.5): the resolver signalled a lost Tasks permission with {@see TaskBoardModuleForbiddenException}. */
+    public const MODULE_FORBIDDEN = '_nowo_task_board_client_module_forbidden';
+
     /** Longest Bearer token passed to the resolver (bytes). */
     public const MAX_TOKEN_LENGTH = 4096;
 
@@ -80,13 +84,19 @@ final class TaskClientAuthenticator extends AbstractAuthenticator implements Aut
         if ($bearer === null) {
             throw new CustomUserMessageAuthenticationException('invalid_token');
         }
-        $header    = $request->headers->get($this->contextHeader);
-        $principal = $this->resolver->resolve($bearer, new TaskClientRequest(
-            $request->getClientIp(),
-            $header === null ? null : substr($header, 0, self::MAX_CONTEXT_LENGTH),
-            $request->getPathInfo(),
-            $request->getMethod(),
-        ));
+        $header = $request->headers->get($this->contextHeader);
+        try {
+            $principal = $this->resolver->resolve($bearer, new TaskClientRequest(
+                $request->getClientIp(),
+                $header === null ? null : substr($header, 0, self::MAX_CONTEXT_LENGTH),
+                $request->getPathInfo(),
+                $request->getMethod(),
+            ));
+        } catch (TaskBoardModuleForbiddenException $forbidden) {
+            // 3.5: a valid token whose person lost Tasks: the listener answers 403 module_forbidden after the token budget.
+            $principal = $forbidden->principal;
+            $request->attributes->set(self::MODULE_FORBIDDEN, true);
+        }
         if (!$principal instanceof TaskClientPrincipal || !$principal->user instanceof UserInterface) {
             throw new CustomUserMessageAuthenticationException('invalid_token');
         }
@@ -105,6 +115,7 @@ final class TaskClientAuthenticator extends AbstractAuthenticator implements Aut
     public function onAuthenticationFailure(Request $request, AuthenticationException $exception): JsonResponse
     {
         $request->attributes->remove(self::ATTRIBUTE);
+        $request->attributes->remove(self::MODULE_FORBIDDEN);
         $this->events?->dispatch(new TaskClientApiDeniedEvent('invalid_token', null, null, self::ipPrefix($request->getClientIp())), TaskBoardEvents::CLIENT_API_DENIED);
 
         return self::invalidToken();

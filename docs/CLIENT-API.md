@@ -88,9 +88,10 @@ device label. The person's budgets come from `api.hooks.rate_limiter` (`consume(
   header naming another context is refused). Unknown, revoked and foreign contexts are one answer: `403
   context_forbidden`. A `whereFor()` that answers `TaskApiWhere::everything()` is a host error: `500 server_error`,
   logged (audit ZCS-L1).
-- **Throttling before authentication** (audit ZCS-I6): the person's budget is spent only once the token, the access and
-  the context are accepted. Unknown tokens, scope and context refusals are not counted by the bundle: the host throttles
-  them per IP (the denied event carries the `/24` or `/64`) or at its firewall, as Beacon's family authenticator does.
+- **Throttling before authentication** (audit ZCS-I6, ZDF-L1 from 3.5): the person's budget is spent as soon as the
+  token resolved, before the access (401 / 403 `module_forbidden`), scope and context refusals, so a client looping on a
+  refusal is bounded per token. Unknown tokens are not counted by the bundle: the host throttles them per IP (the denied
+  event carries the `/24` or `/64`) or at its firewall, as Beacon's family authenticator does.
 - **Ids** are the bundle's UUIDs; people are the host's public ids (`TaskApiUsersInterface::apiId()`); never an e-mail.
 - **Dates** are RFC 3339; answers in UTC (`Z`). `allDay: true` when the task's dates are midnight UTC (the bundle's
   date-only dates); a write with `allDay: true` keeps the date part only.
@@ -183,8 +184,8 @@ conversion is linear: one pass over each line, only a span's inside read again.
 | Status | Codes |
 |---|---|
 | 400 | `invalid_context`, `context_required`, `invalid_cursor`, `invalid_limit`, `invalid_json`, `invalid_field` (`field`), `invalid_date`, `search_too_broad`, `parent_refused` (`reason`) |
-| 401 | `invalid_token` (missing, unknown, expired or revoked token; before 3.5 also a person without Tasks access) (+ `WWW-Authenticate: Bearer error="invalid_token"`) |
-| 403 | `insufficient_scope` (+ `WWW-Authenticate`), 3.5 `module_forbidden` (`message`, `module: tasks`; valid token, the person may not use Tasks now; no `WWW-Authenticate`: hide the module, do not sign out), `context_forbidden`, `forbidden`, `plan_limit` (`reason`: `tasks_module`, `limit`), `transition_refused` (`policyCode`, `message`) |
+| 401 | `invalid_token` (missing, unknown, expired or revoked token, or a disabled or anonymised account) (+ `WWW-Authenticate: Bearer error="invalid_token"`) |
+| 403 | `insufficient_scope` (+ `WWW-Authenticate`), 3.5 `module_forbidden` (`message`, `module: tasks`; valid token, the host signalled with `TaskBoardModuleForbiddenException` that the person lost the Tasks permission; no `WWW-Authenticate`: hide the module, do not sign out), `context_forbidden`, `forbidden`, `plan_limit` (`reason`: `tasks_module`, `limit`), `transition_refused` (`policyCode`, `message`) |
 | 404 | `not_found` |
 | 409 | `conflict` (`currentRevision`), `parent_refused` (`reason`), `idempotency_mismatch`, `idempotency_in_flight`, `unavailable` (`code: CONFLICT_001`, `Retry-After`), `partial` (`code: CONFLICT_002`: read again) |
 | 413 | `invalid_json` (a body over `api.max_body_bytes`) |

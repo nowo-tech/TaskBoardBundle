@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Tests\Unit\ClientApi;
 
+use ArrayObject;
 use Doctrine\DBAL\Exception\DeadlockException;
 use Nowo\TaskBoardBundle\Api\Hook\TaskApiRateLimiterInterface;
 use Nowo\TaskBoardBundle\Api\TaskApiPrincipal;
@@ -12,6 +13,7 @@ use Nowo\TaskBoardBundle\Api\TaskApiWhere;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiRateLimitState;
 use Nowo\TaskBoardBundle\ClientApi\Contract\TaskClientContextPolicyInterface;
 use Nowo\TaskBoardBundle\ClientApi\Contract\TaskClientPrincipalResolverInterface;
+use Nowo\TaskBoardBundle\ClientApi\Exception\TaskBoardModuleForbiddenException;
 use Nowo\TaskBoardBundle\ClientApi\Model\TaskClientPrincipal;
 use Nowo\TaskBoardBundle\ClientApi\Model\TaskClientRequest;
 use Nowo\TaskBoardBundle\ClientApi\Security\TaskClientApiListener;
@@ -31,7 +33,9 @@ use Symfony\Component\HttpKernel\Event\ResponseEvent;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
 use Symfony\Component\Security\Core\Authentication\Token\NullToken;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorage;
+use Symfony\Component\Security\Core\Authentication\Token\UsernamePasswordToken;
 use Symfony\Component\Security\Core\Exception\AccessDeniedException;
+use Symfony\Component\Security\Core\User\InMemoryUser;
 use Throwable;
 
 use function json_decode;
@@ -130,6 +134,105 @@ final class TaskClientApiListenerTest extends TestCase
         self::assertSame('203.0.113.0/24', TaskClientAuthenticator::ipPrefix('203.0.113.9'));
         self::assertSame('2001:db8:1:2::/64', TaskClientAuthenticator::ipPrefix('2001:db8:1:2:3:4:5:6'));
         self::assertNull((new TaskClientAuthenticator($this->resolver(), '/v1'))->onAuthenticationSuccess(Request::create('/v1/me'), new NullToken(), 'main'));
+    }
+
+    public function testALostTasksPermissionSignalledByTheCheckerIs403AndAnInactiveAccountIs401(): void
+    {
+        $user    = new InMemoryUser('ana', null);
+        $storage = new TokenStorage();
+        $storage->setToken(new UsernamePasswordToken($user, 'main', []));
+        $order = new ArrayObject();
+        $build = static fn (callable $canAccess): array => [
+            new TaskClientApiListener(self::contexts(), new class($canAccess, $order) implements TaskBoardAccessCheckerInterface {
+                /** @param ArrayObject<int, string> $order */
+                public function __construct(private readonly mixed $decide, private readonly ArrayObject $order)
+                {
+                }
+
+                public function canAccess(object $user): bool
+                {
+                    $this->order->append('access');
+
+                    return ($this->decide)($user);
+                }
+
+                public function canCreateBoard(object $user): bool
+                {
+                    return false;
+                }
+
+                public function canListBoards(object $user): bool
+                {
+                    return false;
+                }
+            }, $storage, new class($order) implements TaskApiRateLimiterInterface {
+                /** @param ArrayObject<int, string> $order */
+                public function __construct(private readonly ArrayObject $order)
+                {
+                }
+
+                public function consume(TaskApiPrincipal $principal): TaskApiRateLimitState
+                {
+                    $this->order->append('consume:' . $principal->tokenId);
+
+                    return new TaskApiRateLimitState(true, 1, 1, 1);
+                }
+
+                public function failedTokenState(string $clientIp): TaskApiRateLimitState
+                {
+                    return new TaskApiRateLimitState(true, 1, 1, 1);
+                }
+
+                public function registerFailedToken(string $clientIp): void
+                {
+                }
+            }, '/api/task-board/v1'),
+        ];
+        $principal = new TaskClientPrincipal($user, [TaskClientPrincipal::SCOPE_READ], 'tok-1');
+        $send      = function (TaskClientApiListener $listener) use ($principal): Response {
+            $request = Request::create('/api/task-board/v1/me');
+            $request->attributes->set(TaskClientApiListener::ROUTE_SCOPE, TaskClientPrincipal::SCOPE_READ);
+            $request->attributes->set(TaskClientAuthenticator::ATTRIBUTE, $principal);
+            $event = new RequestEvent($this->kernel(), $request, HttpKernelInterface::MAIN_REQUEST);
+            $listener->onRequest($event);
+            $response = $event->getResponse();
+            self::assertInstanceOf(Response::class, $response);
+
+            return $response;
+        };
+
+        [$signal]  = $build(static fn (): bool => throw new TaskBoardModuleForbiddenException($principal));
+        $forbidden = $send($signal);
+        self::assertSame(403, $forbidden->getStatusCode());
+        self::assertSame(['ok' => false, 'error' => 'module_forbidden', 'message' => 'Tasks is not available for this account.', 'module' => 'tasks'], json_decode((string) $forbidden->getContent(), true));
+        self::assertFalse($forbidden->headers->has('WWW-Authenticate'));
+        // The token's budget is consumed before the checker is asked.
+        self::assertSame(['consume:tok-1', 'access'], $order->getArrayCopy());
+
+        [$inactive]   = $build(static fn (): bool => false);
+        $unauthorized = $send($inactive);
+        self::assertSame(401, $unauthorized->getStatusCode());
+        self::assertSame('Bearer error="invalid_token"', $unauthorized->headers->get('WWW-Authenticate'));
+    }
+
+    private static function contexts(): TaskClientContextPolicyInterface
+    {
+        return new class implements TaskClientContextPolicyInterface {
+            public function contextsFor(TaskClientPrincipal $principal): array
+            {
+                return [];
+            }
+
+            public function allows(TaskClientPrincipal $principal, string $contextKey): bool
+            {
+                return false;
+            }
+
+            public function whereFor(TaskClientPrincipal $principal, string $contextKey): TaskApiWhere
+            {
+                return TaskApiWhere::limitedTo([], []);
+            }
+        };
     }
 
     private function resolver(): TaskClientPrincipalResolverInterface

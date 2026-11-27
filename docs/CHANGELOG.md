@@ -141,20 +141,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Target: 3.5.0.
 
+### Added
+
+- **`TaskBoardModuleForbiddenException`** (`Nowo\TaskBoardBundle\ClientApi\Exception`, BC-promised): the host's explicit
+  signal "valid token, this person lost the Tasks permission" (Beacon spec 262 block B, Desktop permission parity). Throw
+  it from `TaskClientPrincipalResolverInterface::resolve()` with the token's principal (recommended), or from
+  `TaskBoardAccessCheckerInterface::canAccess()` when the client API asks. The client API then answers
+  `403 {ok: false, error: "module_forbidden", message: "Tasks is not available for this account.", module: "tasks"}` with
+  `Cache-Control: no-store, private` and no `WWW-Authenticate`, so the client hides the module and keeps its session.
+  The audit event `TaskClientApiDeniedEvent` carries the reason `module_forbidden` (and the token id).
+
 ### Changed
 
-- **Client API: a person who lost Tasks access gets `403 module_forbidden`, not `401 invalid_token`** (Beacon spec 262
-  block B, Desktop permission parity). When the token is valid but `TaskBoardAccessCheckerInterface::canAccess()` is
-  false, `/task-board/v1/*` answers `403 {ok: false, error: "module_forbidden", message: "Tasks is not available for this
-  account.", module: "tasks"}` with `Cache-Control: no-store, private` and no `WWW-Authenticate`, so a client hides the
-  module without signing out. `401 invalid_token` stays for missing, unknown, expired and revoked tokens (the 403 is
-  only reachable after the authenticator accepted the token: no oracle). `TaskClientApiDeniedEvent` keeps the reason
-  `account_inactive`. OpenAPI and `docs/CLIENT-API.md` updated. **Upgrade note:** clients that treated 401 as "no Tasks
-  access" must handle 403 `module_forbidden` (see UPGRADING).
+- **The person's budget is consumed right after the token resolved** (audit ZDF-L1), before the access, scope and
+  context refusals, so a client looping on a 401 or 403 is bounded per token. A request refused by one of those checks
+  now spends one request of the budget (before: only requests that passed them).
+- A disabled or anonymised account (`canAccess()` false, or the resolver returns null) still gets `401 invalid_token`,
+  audit reason `account_inactive`, unchanged (audit ZDF-M1: only the explicit signal is a 403).
 
 ### Tests
 
-- Module refusal (403 body, headers, audit reason) and an unknown token still 401.
+- Inactive account 401; the signal 403 on a read and a write route, with audit reason and token id; the budget consumed
+  before the refusal (and 429 first when spent); the checker-thrown signal (unit).
 
 ## [3.4.1] - 2026-11-27
 
