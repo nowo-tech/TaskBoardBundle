@@ -36,7 +36,7 @@ final class ClientApiSecretPassTest extends TestCase
 
     public function testAnEmptySecretFails(): void
     {
-        foreach (['', '  ', null] as $secret) {
+        foreach (['', '  ', null, ['not', 'a', 'string']] as $secret) {
             $container = $this->clientApi();
             $container->setParameter('kernel.secret', $secret);
             try {

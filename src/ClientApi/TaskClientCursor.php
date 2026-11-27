@@ -44,8 +44,14 @@ use const JSON_UNESCAPED_UNICODE;
  */
 final readonly class TaskClientCursor
 {
-    /** Longest cursor accepted (bytes). */
-    public const MAX_LENGTH = 1024;
+    /**
+     * Longest cursor accepted (bytes). Since 3.4.1 (audit ZCY-L1): 3072, so a board cursor keyed by a 255-character name
+     * in 4-byte characters (with JSON escapes, the id, the padding, the nonce and the tag) still fits.
+     */
+    public const MAX_LENGTH = 3072;
+
+    /** Since 3.4.1 (audit ZCY-L1): longest string value of a cursor (bytes); 3.4.0 refused more than 191. */
+    public const MAX_VALUE_BYTES = 1024;
 
     private const NONCE = 12;
 
@@ -112,7 +118,7 @@ final readonly class TaskClientCursor
             return null;
         }
         foreach ($values as $value) {
-            if (!is_int($value) && (!is_string($value) || strlen($value) > 191)) {
+            if (!is_int($value) && (!is_string($value) || strlen($value) > self::MAX_VALUE_BYTES)) {
                 return null;
             }
         }

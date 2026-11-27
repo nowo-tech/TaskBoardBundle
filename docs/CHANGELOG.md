@@ -154,10 +154,17 @@ Patch 3.4.1: follow-ups of the 3.4.0 client API re-audit (ZCS-v). No BC break fo
 ### Fixed
 
 - **Emphasis conversion is linear** (audit ZCS-v-I1): `TaskTextTokens` keeps each emphasis pattern's leftmost match and
-  asks a pattern again only when a span went past it; a pattern with no match is not asked again on that text. An
+  asks a pattern again only when a span went past it; a pattern with no match is not asked again on that text, so each
+  pattern tries each start position at most once per level (each start reads a bounded span body). An
   unclosed marker beside closed ones (`~~a _b_ ` repeated) no longer re-walks the rest of the line on every span: 64 KB
   of it now takes about 6 ms instead of about 0.55 s. The wall-clock unit test (0.5 s, flaky on slow runners) is
-  replaced by a deterministic bound on the start positions the patterns walk over.
+  replaced by a deterministic bound on the search start positions the patterns try.
+- **The board list can be paged past a long board name** (audit ZCY-L1, since 3.4.0). `GET boards` keys its cursor by
+  the lowercased board name, and a cursor refused string values over 191 bytes, so a page that ended on a name of 64+
+  CJK (or 96+ accented) characters handed out a cursor its next call refused (`400 invalid_cursor`, or `400
+  invalid_field` once the cursor passed the 256-character limit of query values). Cursor string values may now be up
+  to 1024 bytes (`TaskClientCursor::MAX_VALUE_BYTES`), and a cursor (`cursor`, `before`, `since`) up to 3072
+  characters (`TaskClientCursor::MAX_LENGTH`, was 1024; OpenAPI `maxLength` updated).
 
 ## [3.4.0] - 2026-11-27
 

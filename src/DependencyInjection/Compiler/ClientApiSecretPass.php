@@ -27,7 +27,8 @@ final class ClientApiSecretPass implements CompilerPassInterface
             return;
         }
         $secret = $container->hasParameter('kernel.secret') ? $container->getParameter('kernel.secret') : null;
-        if ($secret === null || (is_scalar($secret) && trim((string) $secret) === '')) {
+        // Audit ZCY-I2: anything but a non-blank scalar (null, an array) is refused too.
+        if (!is_scalar($secret) || trim((string) $secret) === '') {
             throw new LogicException('nowo_task_board.client_api needs a non-empty kernel.secret (framework.secret, usually APP_SECRET): the client API cursors are sealed with keys derived from it.');
         }
     }

@@ -27,6 +27,7 @@ use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 
 use function array_column;
 use function array_map;
+use function str_repeat;
 
 /**
  * Since 3.4.0 (client API v1, §4.2, §5): the read routes, narrowed by the context and the person's access before paging.
@@ -85,6 +86,27 @@ final class ClientApiReadTest extends ClientApiTestCase
         $this->assertError(400, 'invalid_limit');
         $this->call('GET', '/boards?limit=101');
         $this->assertError(400, 'invalid_limit');
+    }
+
+    /**
+     * Audit ZCY-L1: a page that ends on a 255-character CJK name (765 bytes lowercased) hands out a cursor the next call
+     * accepts (3.4.0 refused string values over 191 bytes: `400 invalid_cursor`).
+     */
+    public function testTheBoardListPagesPastALongName(): void
+    {
+        $long = str_repeat("\u{4E00}", 255);
+        $this->board($long, tenantKey: 'tenant-a');
+        $this->board("\u{9FA5}", tenantKey: 'tenant-a');
+        $this->call('GET', '/boards?limit=2');
+        self::assertResponseIsSuccessful();
+        self::assertSame(['Roadmap', $long], array_column($this->json()['boards'], 'title'));
+        $cursor = $this->json()['nextCursor'];
+        self::assertIsString($cursor);
+
+        $this->call('GET', '/boards?limit=2&cursor=' . $cursor);
+        self::assertResponseIsSuccessful();
+        self::assertSame(["\u{9FA5}"], array_column($this->json()['boards'], 'title'));
+        self::assertNull($this->json()['nextCursor']);
     }
 
     public function testABoardOfAnotherContextOrUnknownIsTheSame404(): void

@@ -105,12 +105,15 @@ final class TaskClientValuesTest extends TestCase
         $tampered     = $cursor;
         $tampered[20] = $tampered[20] === 'A' ? 'B' : 'A';
         self::assertNull($cursors->decode($tampered, 'k', 3));
-        foreach (['', '***', str_repeat('a', 1025), 'AAAA', $cursors->encode('k', ['x', 'y'])] as $bad) {
+        foreach (['', '***', str_repeat('a', TaskClientCursor::MAX_LENGTH + 1), 'AAAA', $cursors->encode('k', ['x', 'y'])] as $bad) {
             self::assertNull($cursors->decode($bad, 'k', 1), $bad);
         }
         // Sealed but not a list of short strings and integers: refused too.
         $shape = new ReflectionMethod(TaskClientCursor::class, 'encode');
-        self::assertNull($cursors->decode($shape->invoke($cursors, 'k', [str_repeat('x', 192)]), 'k', 1));
+        self::assertNull($cursors->decode($shape->invoke($cursors, 'k', [str_repeat('x', TaskClientCursor::MAX_VALUE_BYTES + 1)]), 'k', 1));
+        // Audit ZCY-L1: a 255-character name in 4-byte characters fits (value and cursor length).
+        $name = str_repeat("\u{1F600}", 255);
+        self::assertSame([$name, 'id'], $cursors->decode($cursors->encode('boards', [$name, 'id']), 'boards', 2));
         self::assertNull($cursors->decode($shape->invoke($cursors, 'k', [1.5]), 'k', 1));
     }
 

@@ -310,7 +310,8 @@ final readonly class TaskTextTokens
         // Audit ZCS-v-I1: each pattern's leftmost match is kept; it is asked again only when a span went past its start,
         // and a pattern that found nothing is never asked again on this text. A match does not depend on the offset it
         // was searched from (lookbehinds read the whole subject), so a kept match at or after the offset is the one a
-        // new search would return. Each pattern so reads each byte of the text once: the loop is linear.
+        // new search would return. Each pattern so tries each start position of the text at most once per level (each
+        // start reads a span body of at most 2000 characters, a constant): the loop is linear.
         $tokens = [];
         $offset = 0;
         $length = strlen($text);

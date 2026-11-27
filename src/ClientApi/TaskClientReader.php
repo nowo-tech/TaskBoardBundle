@@ -378,7 +378,7 @@ final readonly class TaskClientReader
         $task   = $this->taskOf($call, $taskId);
         $kind   = 'c' . $task->getId();
         $limit  = TaskClientInput::limit($request, self::COMMENTS_PAGE);
-        $before = $this->queryString($request, 'before');
+        $before = $this->queryString($request, 'before', TaskClientCursor::MAX_LENGTH);
         $after  = $before === null ? null : $this->cursors->decode($before, $kind, 2) ?? throw new TaskClientApiException('invalid_cursor', 400);
         $rows   = $this->apiQueries->comments($task, $after === null ? null : new DateTimeImmutable((string) $after[0]), $after === null ? null : (string) $after[1], $limit + 1);
         $more   = count($rows) > $limit;
@@ -469,7 +469,7 @@ final readonly class TaskClientReader
     public function changes(TaskClientCall $call, Request $request): array
     {
         $limit = TaskClientInput::limit($request, self::CHANGES_LIMIT, self::CHANGES_LIMIT);
-        $since = $this->queryString($request, 'since');
+        $since = $this->queryString($request, 'since', TaskClientCursor::MAX_LENGTH);
         $now   = new DateTimeImmutable('now', new DateTimeZone('UTC'));
         if ($since === null) {
             return ['changes' => [], 'nextCursor' => $this->cursors->encode('changes/' . $call->contextKey, [$now->format('Y-m-d H:i:s'), '']), 'reset' => true];
@@ -798,7 +798,7 @@ final readonly class TaskClientReader
      */
     private function cursor(Request $request, string $kind, int $count): ?array
     {
-        $cursor = $this->queryString($request, 'cursor');
+        $cursor = $this->queryString($request, 'cursor', TaskClientCursor::MAX_LENGTH);
 
         return $cursor === null ? null : $this->cursors->decode($cursor, $kind, $count) ?? throw new TaskClientApiException('invalid_cursor', 400);
     }
@@ -817,13 +817,16 @@ final readonly class TaskClientReader
         return $q;
     }
 
-    private function queryString(Request $request, string $name): ?string
+    /**
+     * @param int $max longest value (characters); cursors take TaskClientCursor::MAX_LENGTH (audit ZCY-L1)
+     */
+    private function queryString(Request $request, string $name, int $max = 256): ?string
     {
         $value = $request->query->all()[$name] ?? null;
         if ($value === null || $value === '') {
             return null;
         }
-        if (!is_string($value) || mb_strlen($value) > 256) {
+        if (!is_string($value) || mb_strlen($value) > $max) {
             throw TaskClientApiException::invalidField($name);
         }
 
