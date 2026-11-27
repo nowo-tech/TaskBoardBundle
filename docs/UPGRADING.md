@@ -4,7 +4,7 @@ This document describes how to upgrade between versions of TaskBoard Bundle.
 
 ## Table of contents
 
-- [Unreleased](#unreleased)
+- [To 3.6.0](#to-360)
 - [To 3.5.0](#to-350)
 - [To 3.4.1](#to-341)
   - [To 3.4.1](#to-341-1)
@@ -241,7 +241,7 @@ This document describes how to upgrade between versions of TaskBoard Bundle.
 - [Future 1.x releases](#future-1x-releases)
   - [FormKitBundle (admin forms)](#formkitbundle-admin-forms)
 
-## Unreleased
+## To 3.6.0
 
 **Overrides of the board dialogs.** `_add_task_modal.html.twig`, `_add_column_modal.html.twig` and `_edit_column_modal.html.twig`
 are now fragments (the content of a remote dialog: body and a `[data-nowo-ui-dialog-actions]` footer), not `<dialog>` markup. A
