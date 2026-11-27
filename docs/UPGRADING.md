@@ -6,6 +6,12 @@ This document describes how to upgrade between versions of TaskBoard Bundle.
 
 - [Unreleased](#unreleased)
 - [To 3.4.0](#to-340)
+  - [Schema change: two indexes](#schema-change-two-indexes)
+  - [Personal-data export (UserKit section `task_board`)](#personal-data-export-userkit-section-task_board)
+  - [The token page's way back (optional)](#the-token-pages-way-back-optional)
+  - ["Forget this person" (optional)](#forget-this-person-optional)
+  - [Client API v1 (optional)](#client-api-v1-optional)
+  - [Beacon adoption](#beacon-adoption)
 - [To 3.3.0](#to-330)
   - [Schema change: custom field provenance and version](#schema-change-custom-field-provenance-and-version)
   - [Native fields from the ClickUp import](#native-fields-from-the-clickup-import)
