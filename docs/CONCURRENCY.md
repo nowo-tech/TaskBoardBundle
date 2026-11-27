@@ -288,7 +288,9 @@ Every write of `/task-board/v1` ([CLIENT-API](CLIENT-API.md)) follows the Task A
   (`lockedRevision()`, `SELECT … FOR UPDATE`), then `TaskManager::move()`'s own column scan (same order). `If-Match` is
   compared on the locked row (database-incremented revision): a stale one is `409 conflict {currentRevision}` and
   nothing is written. A reorder inside one column is last-writer-wins by design (`If-Match: *`, no revision bump).
-- **Checklist items** compare the item's own revision; members compare the task's.
+- **Checklist items** compare the item's own revision, after locking the column the tick enters (done, or back to the
+  first column: column before row, audit ZCS-L3); members compare the task's.
+- **The change is built from the row as locked** (audit ZCS-I1): a field the client did not send keeps the committed value.
 - **No I/O under the locks**: the host's `TaskClientSourceLinkInterface` is asked before the transaction; the audit
   event and the answer are built after it.
 - **Idempotency**: creates require `Idempotency-Key` (the Task API's store: claim, 24 h; a replay re-checks reach; a lock
@@ -304,7 +306,8 @@ Every write of `/task-board/v1` ([CLIENT-API](CLIENT-API.md)) follows the Task A
 its own (a savepoint inside the caller's): the directory's row is locked first (its counter numbers the former people),
 then the person's row; both are read as committed; the person is anonymised only when no concurrent call did it first
 (idempotent: a second call changes nothing and dispatches nothing); the audit event (`SYNC_PERSON_ANONYMISED`, ids only)
-is dispatched after the commit. A failure rolls back to the entry level (`TransactionRollback`), resets a closed manager
+is dispatched after this call's commit (inside a caller's transaction: after this call's savepoint, before the
+caller's commit, which may still roll back; audit ZCS-I8). A failure rolls back to the entry level (`TransactionRollback`), resets a closed manager
 and rethrows. The erasure path (`forget()`, inside `detachUser()`) keeps its caller's transaction. Test:
 `ForgetPersonTest::testTheCounterIsReadUnderTheLockAndAPersonForgottenMeanwhileIsLeftAlone`.
 

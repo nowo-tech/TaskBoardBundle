@@ -504,6 +504,9 @@ New authenticated surface (immediate audit per the Beacon Desktop plan): `/task-
 | Lost updates between devices | `If-Match` required (428), compared on the locked row (409). |
 | Replay of a create | `Idempotency-Key` required on creates; keyed to the token; a replay re-checks reach. |
 | CSRF / sessions | Bearer only; cookies, sessions and CSRF are never read; answers never set a cookie; `Cache-Control: no-store, private`. |
+| Hidden rows in cursors and counts | Cursors are sealed (encrypted and authenticated with keys from `kernel.secret`, audit ZCS-L2); `counts.open` counts the tasks the reader may open, and only on `GET boards/{id}`. |
+| A heavy description | tokens/1 is linear and bounded (4 KB lines, 16 KB, 256 spans, 64 KB cut on a character; audit ZCS-M1, ZCS-I4). |
+| A host context of everything | Refused: `500 server_error`, logged (audit ZCS-L1). |
 | Probing | Every refusal (including each `404` of an authenticated call) dispatches `TaskClientApiDeniedEvent` (ids, codes and the `/24` or `/64` network only). |
 | A host that forgot the firewall | The API fails closed (`500 server_error`, logged) instead of answering as nobody. |
 
@@ -511,7 +514,8 @@ New authenticated surface (immediate audit per the Beacon Desktop plan): `/task-
 
 - `TaskBoardPersonalDataExporterInterface` / UserKit's `task_board` section: the host authorises the caller (UserKit:
   the person themself). Ids, dates and metadata only; never a secret, a token, a connection reference, a run token or a
-  body; the rows of exactly the user (REQ-SEC-006). Each section matches an erasure step, pinned by a test.
+  body; the rows of exactly the user (REQ-SEC-006). A remote person only suggested to the user (an unverified e-mail
+  match) is exported by ids only (audit ZCS-L4). Owner decision 2026-11-27: metadata only, no bodies. Each section matches an erasure step, pinned by a test.
 - "Forget this person": `sync.people_forget` off by default; deny by default (`SYNC_PERSON_FORGET_CHECK`), on top of
   the connection-manage right; CSRF POST behind a confirm dialog; the person of exactly this id in exactly this
   board's directory (else `404`); logged and audited by id only; pseudonymisation as described above.

@@ -262,7 +262,8 @@ With nowo-tech/user-kit-bundle installed, UserKit's export now has a `task_board
 `PersonalData\TaskBoardPersonalDataExporterInterface` itself). A DDD host without UserKit calls the interface (public
 service) from its own export. It lists ids, dates and metadata — boards and tasks the person created, assignments,
 comments, documents, history and member history, last writes, custom field values they set, time entries, questions,
-recurring series, import plans and the remote people mapped to them — never a secret, a token, a connection reference
+recurring series, import plans and the remote people mapped to them (a person only *suggested* by an unverified e-mail
+match by ids only, audit ZCS-L4) — never a secret, a token, a connection reference
 or a comment / description body. Your erasure flow does not change (`TaskSyncPeopleReassigner::detachUser()`, then
 `TaskRecurrenceManager::forgetAuthor()`); after it, every section an erasure step reaches is empty.
 
@@ -324,14 +325,20 @@ matches the same prefix.
    family) and `nowo_task_board.sync_person_forget_check` (`SyncPersonForgetCheckEvent::allow()` for project and
    organisation managers). `nowo_task_board.api_write` already has Beacon's listener (writes arrive with
    `channel: app`).
-5. **Provenance**: the write provenance provider answers `WriteChannel::App` for paths under `/api/task-board/v1`, with
+5. **Channel `app` is a person** (Q-BD-24): `HumansOnlyColumnTransitionPolicy` lets it into *humans only* columns. A
+   host transition policy or `API_WRITE` listener that blocks automation by `channel === 'api'` decides for `app` too
+   (audit ZCS-I5).
+6. **Throttling**: the bundle counts the person's budget only after the token and the context are accepted; keep the
+   per-IP limit of the family authenticator in front of it (audit ZCS-I6).
+7. **Provenance**: the write provenance provider answers `WriteChannel::App` for paths under `/api/task-board/v1`, with
    the device label as the actor label.
-6. **Revocation and erasure** (B-T8): call `TaskApiIdempotencyStoreInterface::forget(hash('sha256',
+8. **Revocation and erasure** (B-T8): call `TaskApiIdempotencyStoreInterface::forget(hash('sha256',
    'nowo-task-board-api|' . $tokenId))` when a `tasks` token is revoked and for every `tasks` token of an erased user (the
    client API uses the Task API's store and scope).
-7. **Routes**: `nowo_task_board_client_v1_*` (19, see the OpenAPI document) and
+9. **Routes**: `nowo_task_board_client_v1_*` (19, see the OpenAPI document) and
    `nowo_task_board_board_connection_people_forget`. No template override is needed.
-8. **Schema**: the two indexes above.
+10. **Schema**: the two indexes above.
+11. **Cursors** are sealed with `kernel.secret`: rotating it invalidates the cursors the app holds (it reloads).
 
 ## To 3.3.0
 

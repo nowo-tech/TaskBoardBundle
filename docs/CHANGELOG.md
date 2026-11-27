@@ -186,6 +186,18 @@ two indexes (see UPGRADING).
   `TaskBoardEvents::SYNC_PERSON_FORGET_CHECK` listener (`SyncPersonForgetCheckEvent`, **deny by default**) on top of the
   connection-manage right; idempotent; logged and audited by id (`SYNC_PERSON_ANONYMISED`). Seven languages.
 
+### Security (pre-release audit ZCS, no advisory: first shipped in 3.4.0)
+
+- **ZCS-M1:** tokens/1 emphasis is linear and bounded (one pass per line; lines up to 4 KB, 16 KB and 256 spans per text,
+  spans up to 2000 characters); a 64 KB adversarial description no longer exhausts memory or CPU.
+- **ZCS-L1:** a context whose `whereFor()` is `everything()` is refused (`500 server_error`, logged).
+- **ZCS-L2:** cursors are sealed with keys derived from `kernel.secret`; a changed one is `400 invalid_cursor`. The board
+  list has no counts; `GET boards/{id}` counts only the open tasks the reader may open (`counts {open, capped}`).
+- **ZCS-L3:** a checklist tick locks the column it enters before the item's row.
+- **ZCS-L4:** the export lists a person only suggested to the user by ids.
+- ZCS-I1 (form data built after the lock), I2 (exact id re-compare in the writes), I3 (`If-Match` in the idempotency
+  fingerprint), I4 (64 KB cut on a character boundary, `truncated: true`).
+
 ### Changed
 
 - `TaskSyncPeopleDirectoryService::anonymise()` (REQ-RUNTIME-003): one short transaction that locks the directory's row,

@@ -373,7 +373,7 @@ components:
     bearer: {type: http, scheme: bearer, description: 'A device token of the host''s tasks family (task-board:read, task-board:write).'}
   parameters:
     Context: {name: X-Beacon-Context, in: header, description: 'personal or org:<uuid> (required unless the token is bound to a context)', schema: {type: string, maxLength: 128}}
-    Cursor: {name: cursor, in: query, description: 'nextCursor of the previous page (opaque)', schema: {type: string, maxLength: 512}}
+    Cursor: {name: cursor, in: query, description: 'nextCursor of the previous page (opaque, sealed)', schema: {type: string, maxLength: 1024}}
     Limit: {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 100}}
     IdempotencyKey: {name: Idempotency-Key, in: header, schema: {type: string, maxLength: 255}}
     IdempotencyKeyRequired: {name: Idempotency-Key, in: header, required: true, schema: {type: string, maxLength: 255}}
@@ -430,7 +430,7 @@ components:
         archived: {const: false}
         group: {type: [object, 'null'], properties: {type: {type: string, enum: [space, folder]}, id: {type: string}, label: {type: string}}}
         columns: {type: array, items: {$ref: '#/components/schemas/Column'}}
-        counts: {type: object, properties: {open: {type: integer}}}
+        counts: {type: object, description: 'GET boards/{id} only: the open tasks the reader may open', properties: {open: {type: integer}, capped: {type: boolean}}}
         permissions: {type: object, properties: {canCreate: {type: boolean}, canMove: {type: boolean}}}
     Boards:
       type: object
@@ -471,7 +471,7 @@ components:
     Tokens:
       type: object
       description: 'tokens/1 (shared with ChatKit''s client API): blocks paragraph, heading, quote, list (checked), code, rule; tokens text (marks), break, code, link, reference (visible), image (visible)'
-      properties: {format: {const: tokens/1}, blocks: {type: array, items: {type: object}}}
+      properties: {format: {const: tokens/1}, blocks: {type: array, items: {type: object}}, truncated: {const: true, description: 'Present when the text was cut at 64 KB'}}
     TaskDetail:
       type: object
       properties:

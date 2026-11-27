@@ -86,11 +86,18 @@ device label. The person's budgets come from `api.hooks.rate_limiter` (`consume(
   `Cache-Control: no-store, private` and never set a cookie. No CORS.
 - **Context**: `X-Beacon-Context: personal` or `org:<uuid>` on every request (unless the token is bound to one, then a
   header naming another context is refused). Unknown, revoked and foreign contexts are one answer: `403
-  context_forbidden`.
+  context_forbidden`. A `whereFor()` that answers `TaskApiWhere::everything()` is a host error: `500 server_error`,
+  logged (audit ZCS-L1).
+- **Throttling before authentication** (audit ZCS-I6): the person's budget is spent only once the token, the access and
+  the context are accepted. Unknown tokens, scope and context refusals are not counted by the bundle: the host throttles
+  them per IP (the denied event carries the `/24` or `/64`) or at its firewall, as Beacon's family authenticator does.
 - **Ids** are the bundle's UUIDs; people are the host's public ids (`TaskApiUsersInterface::apiId()`); never an e-mail.
 - **Dates** are RFC 3339; answers in UTC (`Z`). `allDay: true` when the task's dates are midnight UTC (the bundle's
   date-only dates); a write with `allDay: true` keeps the date part only.
-- **Cursors** are opaque (base64url of `v1.<list>.<sort values>`), bound to their list, sort and context; `limit` 1–100.
+- **Cursors** are opaque and **sealed** (audit ZCS-L2): the sort values of the last scanned row are encrypted and
+  authenticated with keys derived from `kernel.secret` (HMAC-SHA-256 in counter mode, a random nonce, a 128-bit tag),
+  bound to their list, sort and context; a changed cursor, one of another list or one made with another secret is `400
+  invalid_cursor`. Rotating `kernel.secret` invalidates the cursors in flight (the app reloads the list). `limit` 1–100.
   A page may hold fewer rows than `limit` when rows it scanned are not visible to the reader. `nextCursor: null` at the
   end.
 - **Repeatable query parameters** (`priority`, `tag`) are read as `?tag=a&tag=b` or `?tag[]=a&tag[]=b`.
@@ -103,8 +110,8 @@ Read routes need `task-board:read`, writes `task-board:write` (else `403 insuffi
 |---|---|
 | `GET me` | `{apiVersion: 1, user, scopes, context, contexts, features, limits, enums}`; `features.realtime`, `templates`, `files`, `activity` are false in 3.4.0 |
 | `GET my-tasks?bucket=&today=&cursor=&limit=` | The caller's open tasks (open or custom column, not completed, not archived) as **assignee** in the context's boards; `bucket` = `overdue`, `today`, `upcoming` (the next 14 days), `no_date`, `review` (as **reviewer**), `all` (default). `today` = the client's local date, within a day of the server's UTC date (else `400 invalid_date`). Sorted by due date, priority, id. The first page also returns `counts {overdue, today, upcoming, review}`. At most 2000 open assignments are read per request. |
-| `GET boards?cursor=&limit=&q=` | The context's boards the person may view, by name; `group` = the board's folder, else the host's space of its tenant (`{type: folder\|space, id, label}`). |
-| `GET boards/{id}` | The board, the people the caller may assign there (100 at most) and the tags in use (50 at most). |
+| `GET boards?cursor=&limit=&q=` | The context's boards the person may view, by name; `group` = the board's folder, else the host's space of its tenant (`{type: folder\|space, id, label}`). No counts in the list (audit ZCS-L2). |
+| `GET boards/{id}` | The board with `counts {open, capped}` (open tasks the reader may open; at most 2000 are read, `capped` says when there were more), the people the caller may assign there (100 at most) and the tags in use (50 at most). |
 | `GET boards/{id}/tasks?column=&sort=&cursor=&limit=&assignee=me&priority=&tag=&q=&due=&parent=` | With `column`: that column's top-level cards in board order (30 by default). Without: the list view, `sort` = `position` (default), `due`, `priority`, `updated`, `number`. `due` = `overdue`, `today`, `week`, `none` (UTC days); `q` = the Task API's search (`search.max_matches`, else `400 search_too_broad`); `parent=<id>` lists one task's subtasks. |
 | `GET tasks/{id}` | The task's detail with `ETag: "<revision>"`. `GET tasks/123?board=<id>` (or `#123`) looks it up by number. |
 | `GET tasks/{id}/subtasks?cursor=&limit=` | One level, board order. |
@@ -138,6 +145,11 @@ References inside code are never resolved. An `image` is `{visible: true, fileId
 may open; any other image is `{visible: false}`. Mentions stay text (TaskBoard keeps a comment's mentioned users beside
 the body). The app renders every string as a text node.
 
+Limits (audit ZCS-M1, ZCS-I4): a text is read up to 64 KB, cut on a character boundary (the body then carries
+`truncated: true`); emphasis (`bold`, `italic`, `strike`) is read on lines of at most 4 KB, over the first 16 KB of a
+text and for at most 256 spans, each at most 2000 characters — beyond that the text is plain `text` tokens. The
+conversion is linear: one pass over each line, only a span's inside read again.
+
 ## Permission filtering per reader (R2)
 
 - Every list is narrowed by the context's `where`, then by the person's access (the guard's reach, `canViewBoard()`,
@@ -157,7 +169,7 @@ the body). The app renders every string as a text node.
 - **`Idempotency-Key`** is required on `POST tasks` and `POST tasks/{id}/checklist-items`, optional on the other writes:
   the Task API's store (`api.hooks.idempotency_store`), 24 hours, scoped to the token exactly as the Task API scopes it
   (`sha256('nowo-task-board-api|' . tokenId)`), so `TaskApiIdempotencyStoreInterface::forget()` on revocation or erasure
-  drops both APIs' answers. Another request with the same key is `409 idempotency_mismatch`; while it runs, `409
+  drops both APIs' answers. Another request with the same key (another body, query, context or `If-Match`: a fresh revision needs a fresh key, audit ZCS-I3) is `409 idempotency_mismatch`; while it runs, `409
   idempotency_in_flight`. A replay answers `Idempotency-Replayed: true` and re-checks reach first.
 - Every write dispatches `API_WRITE` with `channel: app` (without a listener: `503 audit_unavailable`); creates ask the
   host's plan limits (`403 plan_limit`).
@@ -191,8 +203,9 @@ reason, the token id and user id when known, the `/24` or `/64` network; ids and
   revoked and a membership removed half-way, flat memory.
 - REQ-RUNTIME-003: every change runs in one short transaction (`TaskApiTransaction`: rollback to the entry level, the
   connection closed when that rollback fails, the original exception rethrown, the events held until the commit); the
-  column a move enters is locked before the task's row (the Task API's order), then `If-Match` is compared on the locked
-  row; the host's source link is asked before the transaction (no I/O under the locks). See [CONCURRENCY](CONCURRENCY.md).
+  column a move or a checklist tick enters is locked before the task's (or item's) row (the Task API's order, audit
+  ZCS-L3), then `If-Match` is compared on the locked row and the change is built from the row as locked (audit
+  ZCS-I1); the host's source link is asked before the transaction (no I/O under the locks). See [CONCURRENCY](CONCURRENCY.md).
 
 ## Not in 3.4.0
 
