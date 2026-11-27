@@ -245,9 +245,9 @@ final class ManageTemplatesRenderingTest extends TestCase
         self::assertStringContainsString('nowo-task-card nowo-task-card--colored"', $board);
         self::assertStringContainsString('data-nowo-task-vars="{&quot;--nowo-task-card-color&quot;:&quot;#ef4444&quot;}"', $board);
         self::assertSame(1, substr_count($board, 'nowo-task-card--colored'));
-        // The add task dialog is native and offers the colour.
-        self::assertStringContainsString('nowo-task-dialog nowo-task-dialog--native nowo-task-dialog--wide', $board);
-        self::assertStringContainsString('name="task_form[customColor]"', $board);
+        // The add task dialog is the fragment of task_new (since 3.6.0) and offers the colour.
+        $dialog = $this->twig()->render('@NowoTaskBoardBundle/manage/_add_task_modal.html.twig', ['board' => $this->board, 'addTaskQuery' => []] + $this->boardContext([]));
+        self::assertStringContainsString('name="task_form[customColor]"', $dialog);
         self::assertStringNotContainsString('class="modal', $board);
         self::assertStringNotContainsString(' style="', $board);
 
@@ -566,7 +566,9 @@ final class ManageTemplatesRenderingTest extends TestCase
         ])->createView();
         self::assertFalse(isset($taskForm['columnId']));
 
-        $html = $this->twig()->render('@NowoTaskBoardBundle/manage/board.html.twig', $this->boardContext(['tasks' => [], 'taskForm' => $taskForm]));
+        // Since 3.6.0 the add task form is the fragment of the task_new route.
+        $this->twig()->render('@NowoTaskBoardBundle/manage/board.html.twig', $this->boardContext(['tasks' => []]));
+        $html = $this->twig()->render('@NowoTaskBoardBundle/manage/_add_task_modal.html.twig', ['board' => $this->board, 'taskForm' => $taskForm, 'addTaskQuery' => []]);
         self::assertStringContainsString('data-nowo-task-board-add-task-modal-target="titleInput"', $html);
         self::assertStringNotContainsString('data-nowo-task-board-add-task-modal-target="columnField"', $html);
 
@@ -613,21 +615,35 @@ final class ManageTemplatesRenderingTest extends TestCase
         self::assertStringContainsString('nowo-task-column--colored', $html);
         self::assertStringContainsString('data-nowo-task-vars="{&quot;--nowo-task-column-color&quot;:&quot;#16a34a&quot;}"', $html);
         self::assertStringContainsString('<i class="ti ti-inbox" aria-hidden="true"></i>', $html);
-        self::assertStringContainsString('data-column-icon="tabler:inbox"', $html);
-        self::assertStringContainsString('<option value="tabler:bug">bug</option>', $html);
+        // Since 3.6.0 the pencil carries only the opener of the column_edit dialog, not the column's values.
+        self::assertStringNotContainsString('data-column-icon=', $html);
+        self::assertStringContainsString('data-nowo-ui-dialog-src="/tools/task-board/board/' . $this->board->getId() . '/column/' . $this->todo->getId() . '/edit"', $html);
         self::assertStringContainsString('data-task-panel-url="/tools/task-board/task/' . $this->task->getId() . '/panel?_target_path=/tools/task-board/board/' . $this->board->getId() . '"', $html);
-        self::assertStringContainsString('task_board.action.delete_column', $html);
-        self::assertStringContainsString('COLUMN_ID&#x2F;delete', $html);
         self::assertStringContainsString('nowo-task-dialog nowo-task-dialog--native', $html);
         self::assertStringContainsString('/column-sets/apply', $html);
         self::assertStringContainsString('id="nowo-task-column-set-delete-form"', $html);
         self::assertSame(1, substr_count($html, 'form="nowo-task-column-set-delete-form"'));
         self::assertStringContainsString('Todo, Done', $html);
-        // Since 1.26 (dialog rule v2): add task, add / edit column, save set, add from set — header, body, footer.
-        $this->assertDialogAnatomy($html, 5);
+        // Since 1.26 (dialog rule v2): save set, add from set — header, body, footer. Since 3.6.0 the task and column dialogs
+        // are fragments of their own routes, rendered below.
+        $this->assertDialogAnatomy($html, 2);
+        foreach (['nowo-task-board-add-task-modal', 'nowo-task-board-add-column-modal', 'nowo-task-board-edit-column-modal'] as $shell) {
+            self::assertCount(1, (new Crawler($html))->filter('dialog#' . $shell), $shell);
+        }
+        self::assertStringNotContainsString('nowo-task-board-edit-column-form', $html);
         // Edit column has one primary: Delete column is a secondary danger action in the footer, bound to the hidden
         // delete form (which keeps its confirm).
-        $editColumn = (new Crawler($html))->filter('dialog[data-nowo-task-board-edit-column-modal-target="modal"]');
+        $fragment = $this->twig()->render('@NowoTaskBoardBundle/manage/_edit_column_modal.html.twig', [
+            'board'               => $this->board,
+            'column'              => $this->todo,
+            'editColumnForm'      => $this->factory()->create(BoardColumnFormType::class, new BoardColumnFormData(), ['icon_choices' => $icons])->createView(),
+            'editColumnUrl'       => '/x',
+            'columnDeleteForm'    => $this->factory()->createNamed('', CsrfActionType::class, null, ['csrf_token_id' => 'd'])->createView(),
+            'columnDeleteWarning' => '',
+        ]);
+        self::assertStringContainsString('<option value="tabler:bug">bug</option>', $fragment);
+        self::assertStringContainsString('task_board.action.delete_column', $fragment);
+        $editColumn = (new Crawler($fragment));
         $delete     = $editColumn->filter('.nowo-task-dialog__footer button[form="nowo-task-board-column-delete-form"]');
         self::assertSame('nowo-ui-btn nowo-ui-btn--danger btn btn-outline-danger nowo-task-btn-danger', $delete->attr('class'));
         self::assertSame('nowo-task-board-column-delete-help', $delete->attr('aria-describedby'));
@@ -658,11 +674,16 @@ final class ManageTemplatesRenderingTest extends TestCase
         $footer = (new Crawler($html))->filter('dialog[data-dialog="apply"] .nowo-task-dialog__footer button');
         self::assertCount(1, $footer);
         self::assertNotNull($footer->attr('data-nowo-ui-dialog-close'));
-        $this->assertDialogAnatomy($html, 5);
-        // Without columnDeleteForm the edit column footer is not split.
-        self::assertStringNotContainsString('--split', (string) (new Crawler($html))->filter('dialog[data-nowo-task-board-edit-column-modal-target="modal"] .nowo-task-dialog__footer')->attr('class'));
-        // A two-column board without columnDeleteForm (older controllers) has no delete button.
-        self::assertStringNotContainsString('task_board.action.delete_column', $html);
+        $this->assertDialogAnatomy($html, 2);
+        // Without columnDeleteForm the edit column footer is not split, and there is no delete button.
+        $fragment = $this->twig()->render('@NowoTaskBoardBundle/manage/_edit_column_modal.html.twig', [
+            'board'          => $this->board,
+            'column'         => $this->todo,
+            'editColumnForm' => $this->factory()->create(BoardColumnFormType::class, new BoardColumnFormData())->createView(),
+            'editColumnUrl'  => '/x',
+        ]);
+        self::assertStringNotContainsString('--split', (string) (new Crawler($fragment))->filter('.nowo-task-dialog__footer')->attr('class'));
+        self::assertStringNotContainsString('task_board.action.delete_column', $fragment);
     }
 
     public function testColumnIconFollowsTheUiKitIconSet(): void
@@ -739,10 +760,16 @@ final class ManageTemplatesRenderingTest extends TestCase
             'dashboardRoute' => null,
         ]);
         self::assertStringContainsString('<span class="nowo-task-column__icon nowo-task-column__icon--emoji" aria-hidden="true">📝</span>', $html);
-        self::assertStringContainsString('data-column-icon="📝"', $html);
-        self::assertStringNotContainsString('nowo-task-picker__icons', $html, 'a host widget replaces the grid');
-        self::assertStringContainsString('nowo-task-field--column-icon', $html);
-        self::assertStringContainsString('task_board.form.column.icon_help', $html);
+        // Since 3.6.0 the edit dialog is the fragment of column_edit.
+        $fragment = $this->twig()->render('@NowoTaskBoardBundle/manage/_edit_column_modal.html.twig', [
+            'board'          => $this->board,
+            'column'         => $this->todo,
+            'editColumnForm' => $this->factory()->create(BoardColumnFormType::class, new BoardColumnFormData(), ['icon_form_type' => TextType::class])->createView(),
+            'editColumnUrl'  => '/x',
+        ]);
+        self::assertStringNotContainsString('nowo-task-picker__icons', $fragment, 'a host widget replaces the grid');
+        self::assertStringContainsString('nowo-task-field--column-icon', $fragment);
+        self::assertStringContainsString('task_board.form.column.icon_help', $fragment);
     }
 
     public function testTaskPanelIsAFragmentWhoseFormsComeBackToTheBoard(): void

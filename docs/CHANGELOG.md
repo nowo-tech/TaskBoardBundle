@@ -140,6 +140,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Add task, add column and edit column load when they open** (owner rule 2026-11-23, every dialog loads its content on
+  demand; the task page did since 2.31.0). The board and the calendar print three empty remote dialogs and their openers; the
+  forms are the GET of three new routes, each with the access of its write: `task_new` (`/board/{boardId}/task/new`,
+  pre-filled from `?column=`, `?due=`, `?taskTemplate=`; `?calendar=1&_target_path=` bring it back to the calendar),
+  `column_new` and `column_edit` (`/board/{boardId}/column/{columnId}/edit`: the column's own values, its delete form and the
+  host's delete warnings; a column of another board is a 404). The page carries no per-column data attributes any more and the
+  board no longer builds `taskForm`, `columnForm`, `editColumnForm`, `columnDeleteForm` or `columnDeleteWarnings`.
+- **Writes from those dialogs answer `204` + `X-Nowo-Redirect`** (create task, create / update / delete column), so the dialog
+  closes and the page goes where the redirect went; a post without the dialog header keeps its redirect. The routes are in the
+  `routes` configuration as `task_new`, `column_new` and `column_edit`.
+- **New board and Import from file can load when they open**: `board_create` and `board_import` answer `GET` with their form as a
+  fragment for a host that opens them in a UiKit remote dialog (the bundle's own index still renders the New board dialog
+  pre-built, and the board header's Import stays a page link). The fragment is served when UiKit's remote dialog header (`X-Nowo-Dialog: 1`) is present (a plain `GET` of `board_create` goes to the index with the
+  dialog open, the import page is unchanged), with the gates of their `POST`; an invalid post answers `422` with the form and its
+  errors, a saved one `204` + `X-Nowo-Redirect`. A UiKit dialog request counts as a host dialog request for the create form
+  (`board.create_dialog_header` stays for hosts with their own dialog).
+- **Assets**: `AddColumnModalController` is removed; `AddTaskModalController` and `EditColumnModalController` keep only what
+  the fragment and the page need. Rebuild `task-board.js` if you build your own copy.
+
 ## [3.5.0] - 2026-11-27
 
 Target: 3.5.0.

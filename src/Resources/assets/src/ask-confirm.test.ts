@@ -69,4 +69,16 @@ describe('installFormConfirm', () => {
         expect(window.nowoUiAskConfirm).toHaveBeenCalledWith('One?', { danger: true });
         expect(submitted).toEqual(['shared']);
     });
+
+    it('asks before a handler of a surrounding dialog sees the submit (audit ZDJ-TB-H1)', () => {
+        document.body.insertAdjacentHTML('beforeend', '<dialog id="remote" open><form id="in-dialog" data-confirm="Delete?"><button id="in-go" type="submit">Go</button></form></dialog>');
+        window.nowoUiAskConfirm = vi.fn().mockResolvedValue(false);
+        let seenPrevented: boolean | null = null;
+        document.getElementById('remote')?.addEventListener('submit', (event) => {
+            seenPrevented = event.defaultPrevented;
+        });
+        document.getElementById('in-go')?.click();
+        expect(seenPrevented).toBe(true);
+        expect(window.nowoUiAskConfirm).toHaveBeenCalled();
+    });
 });

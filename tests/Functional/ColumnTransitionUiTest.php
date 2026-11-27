@@ -80,8 +80,9 @@ final class ColumnTransitionUiTest extends FunctionalTestCase
 
         $crawler = $this->client->request('GET', self::BASE . '/board/' . $this->board->getId());
         self::assertCount(1, $crawler->filter('[data-testid="nowo-task-column-humans-only"]'));
-        self::assertCount(1, $crawler->filter('[data-column-humans-only="1"]'));
-        self::assertGreaterThan(0, $crawler->filter('input[name="board_column_form[humansOnly]"]')->count());
+        // Since 3.6.0 the toggle is in the edit dialog (the column_edit fragment), with the column's own value.
+        $crawler = $this->client->request('GET', self::BASE . '/board/' . $this->board->getId() . '/column/' . $blocked->getId() . '/edit', server: ['HTTP_X_NOWO_DIALOG' => '1', 'HTTP_X_REQUESTED_WITH' => 'XMLHttpRequest', 'HTTP_ACCEPT' => 'text/html']);
+        self::assertCount(1, $crawler->filter('input[name="board_column_form[humansOnly]"][checked]'));
 
         $manager = self::getContainer()->get(BoardColumnManager::class);
         self::assertInstanceOf(BoardColumnManager::class, $manager);

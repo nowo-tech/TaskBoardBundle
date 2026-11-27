@@ -1,7 +1,8 @@
 {#
-    Add column dialog (since 1.13 a native <dialog>, styled by task-board.css: no CSS framework modal needed): name,
-    colour palette and icon grid (_column_fields.html.twig). Since 1.26 (dialog rule v2) the actions sit in the footer,
-    outside the scrolling form (form="nowo-task-board-add-column-form").
+    Add column dialog. Since 3.6.0 (owner rule 2026-11-23, every dialog loads its content on demand) the content of the GET
+    of `column_new`, answered as a fragment for UiKit's remote dialog: name, colour palette and icon grid
+    (_column_fields.html.twig). Cancel and Add column sit in the footer, outside the scrolling form
+    (form="nowo-task-board-add-column-form").
 #}
 {% set _body %}
     {{ form_start(columnForm, {
@@ -25,13 +26,5 @@
             {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'layout-columns'}) }}{{ 'task_board.action.add_column'|trans({}, 'NowoTaskBoardBundle') }}
         </button>
 {% endset %}
-{{ include(nowo_ui_partial('dialog', 'NowoTaskBoardBundle'), {
-    id: 'nowo-task-board-add-column-modal',
-    title: 'task_board.board.add_column'|trans({}, 'NowoTaskBoardBundle'),
-    bundle: 'NowoTaskBoardBundle',
-    root_class: 'nowo-task-dialog nowo-task-dialog--native',
-    attr: {'data-nowo-task-board-add-column-modal-target': 'modal'},
-    body: _body,
-    footer: _footer,
-    footer_attr: {class: 'nowo-task-dialog__footer nowo-task-dialog__actions'},
-}, false) }}
+{{ _body }}
+<div class="nowo-task-dialog__footer nowo-task-dialog__actions" data-nowo-ui-dialog-actions>{{ _footer }}</div>

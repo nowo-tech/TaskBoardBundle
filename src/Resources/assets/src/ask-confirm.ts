@@ -10,7 +10,9 @@ const asked = new WeakSet<HTMLFormElement>();
 
 /**
  * A form or submit button with `data-confirm` asks before it submits. One delegated listener, so it also works in fragments
- * loaded later (the task panel), and the button that was used, with its `formaction`, is the one submitted.
+ * loaded later (the task panel), and the button that was used, with its `formaction`, is the one submitted. Registered in the
+ * capture phase (audit ZDJ-TB-H1): inside a UiKit remote dialog the dialog's own submit listener would otherwise post the form
+ * (delete column) before the question, and a prevented submit is the one thing it leaves alone.
  */
 export function installFormConfirm(root: Document): void {
     root.addEventListener('submit', (event: SubmitEvent) => {
@@ -35,5 +37,5 @@ export function installFormConfirm(root: Document): void {
                 form.requestSubmit(submitter instanceof HTMLButtonElement ? submitter : undefined);
             }
         });
-    });
+    }, true);
 }

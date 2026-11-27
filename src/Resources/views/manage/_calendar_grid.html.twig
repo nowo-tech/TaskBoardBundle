@@ -1,3 +1,4 @@
+{% import '@NowoTaskBoardBundle/manage/_dialog_openers.html.twig' as dialogOpeners %}
 {#
     Since 2.1.0 (spec 214, FR-019, FR-020, FR-025, FR-031): the month and week grid. role="grid": arrow keys move between the days
     (nowo-task-board-calendar). Each day is a `sortable` list, and a bar is an item of the day it starts in. On a phone the bars
@@ -42,7 +43,7 @@
                     <div class="nowo-task-cal__day-head">
                         <a class="nowo-task-cal__day-number" href="{{ path(nowo_task_board_route('calendar'), {boardId: board.id}|merge(calendarQuery)|merge({mode: 'list', date: day.date})) }}#nowo-task-cal-day-{{ day.date }}" title="{{ 'task_board.calendar.day_tasks'|trans({'%date%': day.date, '%count%': day.entries|length}, 'NowoTaskBoardBundle') }}"><span class="nowo-task-sr-only">{{ day.date }} </span><span aria-hidden="true">{{ day.day }}</span>{% if day.entries is not empty %} <span class="nowo-task-cal__day-count">({{ day.entries|length }})</span>{% endif %}</a>{% if day.annotation %}{{ include('@NowoTaskBoardBundle/manage/_calendar_day_label.html.twig', {annotation: day.annotation}, with_context: false) }}{% endif %}
                         {% if canEditBoard %}
-                            <button type="button" class="nowo-task-cal__add" data-testid="nowo-task-cal-add" data-action="nowo-task-board-add-task-modal#open" data-due-date="{{ day.date }}" data-column-name="{{ day.date }}" aria-label="{{ 'task_board.calendar.add_on_day'|trans({'%date%': day.date}, 'NowoTaskBoardBundle') }}" title="{{ 'task_board.calendar.add_on_day'|trans({'%date%': day.date}, 'NowoTaskBoardBundle') }}">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}</button>
+                            <button type="button" class="nowo-task-cal__add" data-testid="nowo-task-cal-add" {{ dialogOpeners.add_task_on_day(board.id, day.date, panelTargetPath|default(null)) }} aria-label="{{ 'task_board.calendar.add_on_day'|trans({'%date%': day.date}, 'NowoTaskBoardBundle') }}" title="{{ 'task_board.calendar.add_on_day'|trans({'%date%': day.date}, 'NowoTaskBoardBundle') }}">{{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}</button>
                         {% endif %}
                     </div>
                     {% if day.events is not empty %}{{ include('@NowoTaskBoardBundle/manage/_calendar_events.html.twig', {events: day.events, day: day.date}, with_context: false) }}{% endif %}

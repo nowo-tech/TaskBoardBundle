@@ -123,6 +123,7 @@ use Nowo\TaskBoardBundle\Service\TaskMemberAssigner;
 use Nowo\TaskBoardBundle\Service\TaskTimeBillableDefaultProviderInterface;
 use Nowo\TaskBoardBundle\Service\TaskTimeBillableService;
 use Nowo\TaskBoardBundle\Service\TaskTimeLogger;
+use Nowo\TaskBoardBundle\Support\ColumnIcon;
 use Nowo\TaskBoardBundle\Support\TaskContentDigest;
 use Nowo\TaskBoardBundle\Support\TaskDeviation;
 use Nowo\TaskBoardBundle\Support\TaskNavigator;
@@ -380,7 +381,7 @@ final class TaskBoardManageController extends AbstractController
      * errors: the index page with the New board dialog open, or only the create form when the request carries the
      * `board.create_dialog_header` header (a host dialog). It used to redirect to the index and lose them.
      */
-    #[Route('/tools/task-board/create', name: 'nowo_task_board_board_create', methods: ['POST'])]
+    #[Route('/tools/task-board/create', name: 'nowo_task_board_board_create', methods: ['GET', 'POST'])]
     public function createBoard(Request $request): Response
     {
         $user   = $this->requireUser();
@@ -393,6 +394,15 @@ final class TaskBoardManageController extends AbstractController
         }
 
         $form = $this->createBoardForm($user, $tenant?->key, $scopes);
+        // Since 3.6.0 (owner rule 2026-11-23, every dialog loads its content on demand): the GET is the New board dialog, a
+        // fragment for UiKit's remote dialog (`X-Nowo-Dialog: 1`) with the gates of the POST; any other GET opens the index with it.
+        if ($request->isMethod(Request::METHOD_GET)) {
+            if (!$this->remoteDialog()->isDialog($request)) {
+                return $this->redirectToRoute($this->routes['index']['name'], ['new' => 1]);
+            }
+
+            return $this->unstorable($this->remoteDialog()->fragment($this->render('@NowoTaskBoardBundle/manage/_board_create_form.html.twig', ['form' => $form->createView(), 'in_dialog' => true])));
+        }
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
@@ -415,7 +425,7 @@ final class TaskBoardManageController extends AbstractController
                 $board = $this->boardCreator->create($data, $user, $target?->key, $set);
                 $this->logWrite('board_create', ['board_id' => $board->getId(), 'column_set_id' => $set?->getId()]);
 
-                return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $board->getId()] + ($scopes !== [] && $target instanceof TaskBoardTenant && $this->tenantContext?->isEnabled() === true ? ['tenantSlug' => $target->slug] : []));
+                return $this->answerDialogWrite($request, $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $board->getId()] + ($scopes !== [] && $target instanceof TaskBoardTenant && $this->tenantContext?->isEnabled() === true ? ['tenantSlug' => $target->slug] : [])));
             }
         }
 
@@ -424,10 +434,12 @@ final class TaskBoardManageController extends AbstractController
         }
 
         if ($this->isDialogRequest($request)) {
-            return $this->unstorable($this->render('@NowoTaskBoardBundle/manage/_board_create_form.html.twig', [
+            $invalid = $this->unstorable($this->render('@NowoTaskBoardBundle/manage/_board_create_form.html.twig', [
                 'form'      => $form->createView(),
                 'in_dialog' => true,
             ], new Response(status: Response::HTTP_UNPROCESSABLE_ENTITY)));
+
+            return $this->remoteDialog()->isDialog($request) ? $this->remoteDialog()->fragment($invalid) : $invalid;
         }
 
         // The <noscript> copy of the form shows the same values and errors.
@@ -468,7 +480,6 @@ final class TaskBoardManageController extends AbstractController
         $canEditBoard = $this->resourceAccessChecker->canEditBoard($user, $board);
         // Since 2.5.0 (TB-13): the column controls (Add column, the pencil, the grip, the column sets) follow it.
         $canManageColumns = $canEditBoard && $this->resourceAccessChecker->canManageColumns($user, $board);
-        $columnForm       = $this->createColumnForm(new BoardColumnFormData());
         $columnChoices    = $this->buildColumnChoices($board);
 
         $taskData = new TaskFormData(
@@ -477,7 +488,6 @@ final class TaskBoardManageController extends AbstractController
         );
         // Since 2.16.0 (FR-061): the Template picker; a chosen template pre-fills the form and opens the dialog.
         $templateView = $canEditBoard ? $this->templatePicker($user, $board, $taskData) : [];
-        $taskForm     = $this->createForm(TaskFormType::class, $taskData, ['column_choices' => $columnChoices]);
 
         [$allTasks, $taskWindow] = $this->boardTasks($board);
         $taskTree                = TaskTree::fromTasks($allTasks);
@@ -493,17 +503,14 @@ final class TaskBoardManageController extends AbstractController
             'taskTree'         => $taskTree,
             'canEditBoard'     => $canEditBoard,
             'canManageColumns' => $canManageColumns,
-            'columnForm'       => $columnForm->createView(),
-            'editColumnForm'   => $this->createColumnForm(new BoardColumnFormData())->createView(),
-            'taskForm'         => $taskForm->createView(),
+            // Since 3.6.0 (owner rule 2026-11-23): the add task, add column and edit column dialogs load on open (newTaskDialog(),
+            // newColumnDialog(), editColumnDialog()); the page carries no form of them. Query the add task opener forwards:
+            'addTaskOpenQuery' => $this->addTaskOpenQuery(),
             'dashboardRoute'   => $this->dashboardRoute,
             // Since 1.11: column icons, column delete, column sets and the task panel URL of the cards.
-            'columnIcons'      => $this->columnIcons,
-            'columnDeleteForm' => $canManageColumns ? $this->csrfActionForm('task_board_column_delete')->createView() : null,
-            // Since 2.10.0 (spec 216): the host's warnings per column id, shown by the delete dialog.
-            'columnDeleteWarnings' => $canManageColumns ? $this->columnDeleteWarnings($board, $user) : [],
-            'panelTargetPath'      => $this->currentRequestUri(),
-            'inlineTaskForms'      => $canEditBoard ? $this->inlineTaskForms($board, $columnChoices) : [],
+            'columnIcons'     => $this->columnIcons,
+            'panelTargetPath' => $this->currentRequestUri(),
+            'inlineTaskForms' => $canEditBoard ? $this->inlineTaskForms($board, $columnChoices) : [],
             // Since 1.16: comments per task (one query) for the card counters.
             'commentCounts' => $this->commentCounts($allTasks),
             // Since 2.23.0 (Beacon spec 242): open questions per task (one query) for the Waiting for answer badge.
@@ -511,6 +518,136 @@ final class TaskBoardManageController extends AbstractController
             // Since 1.21: "Showing N of M tasks" when the board has more than board.max_tasks.
             'taskWindow' => $taskWindow,
         ] + $templateView + ($canManageColumns ? $this->columnSetViewData($board, $user) : []));
+    }
+
+    /**
+     * Since 3.6.0 (owner rule 2026-11-23, every dialog loads its content on demand): the add task dialog, the GET of a
+     * route of its own with the access of the write (the board must be editable). `?column=<id>` (a column of this board)
+     * and `?due=<Y-m-d>` pre-fill it, `?calendar=1&_target_path=` bring it back to the calendar, `?taskTemplate=` /
+     * `?taskTitle=` apply a template. Answers the fragment for `X-Nowo-Dialog: 1`, else sends the browser to the board.
+     */
+    #[Route('/tools/task-board/board/{boardId}/task/new', name: 'nowo_task_board_task_new', methods: ['GET'])]
+    public function newTaskDialog(string $boardId, Request $request): Response
+    {
+        $user  = $this->requireUser();
+        $board = $this->findBoard($boardId, $user, true);
+        if (!$this->isRemoteDialogRequest($request)) {
+            return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $boardId]);
+        }
+
+        $choices = $this->buildColumnChoices($board);
+        $data    = new TaskFormData(columnId: $choices === [] ? null : reset($choices));
+        $column  = $request->query->get('column');
+        if (is_string($column) && in_array($column, $choices, true)) {
+            $data->columnId = $column;
+        }
+        $due = $request->query->get('due');
+        if (is_string($due) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $due) === 1) {
+            $parsed = DateTimeImmutable::createFromFormat('!Y-m-d', $due);
+            if ($parsed instanceof DateTimeImmutable && $parsed->format('Y-m-d') === $due) {
+                $data->dueAt = $parsed;
+            }
+        }
+        $calendar = $request->query->getBoolean('calendar');
+        $picker   = $calendar ? [] : $this->templatePicker($user, $board, $data);
+        $form     = $this->createForm(TaskFormType::class, $data, ['column_choices' => $choices]);
+        $query    = $calendar ? ['calendar' => 1] : [];
+        $target   = $this->safeTargetPath($request);
+        if ($calendar && $target !== null) {
+            $query['_target_path'] = $target;
+        }
+
+        return $this->remoteDialog()->fragment($this->render('@NowoTaskBoardBundle/manage/dialog/fragment.html.twig', [
+            'dialog_template' => '@NowoTaskBoardBundle/manage/_add_task_modal.html.twig',
+            'dialog_vars'     => ['board' => $board, 'taskForm' => $form->createView(), 'addTaskQuery' => $query] + $picker,
+        ]));
+    }
+
+    /**
+     * Since 3.6.0: the add column dialog (the board's column management is the access, as for the write).
+     */
+    #[Route('/tools/task-board/board/{boardId}/column/new', name: 'nowo_task_board_column_new', methods: ['GET'])]
+    public function newColumnDialog(string $boardId, Request $request): Response
+    {
+        $user  = $this->requireUser();
+        $board = $this->findBoardForColumns($boardId, $user);
+        if (!$this->isRemoteDialogRequest($request)) {
+            return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $boardId]);
+        }
+
+        return $this->remoteDialog()->fragment($this->render('@NowoTaskBoardBundle/manage/dialog/fragment.html.twig', [
+            'dialog_template' => '@NowoTaskBoardBundle/manage/_add_column_modal.html.twig',
+            'dialog_vars'     => ['board' => $board, 'columnForm' => $this->createColumnForm(new BoardColumnFormData())->createView()],
+        ]));
+    }
+
+    /**
+     * Since 3.6.0: the edit column dialog of one column of the board (another board's column id is a 404), with the
+     * column's own values, its delete form and the host's delete warnings for it.
+     */
+    #[Route('/tools/task-board/board/{boardId}/column/{columnId}/edit', name: 'nowo_task_board_column_edit', methods: ['GET'])]
+    public function editColumnDialog(string $boardId, string $columnId, Request $request): Response
+    {
+        $user   = $this->requireUser();
+        $board  = $this->findBoardForColumns($boardId, $user);
+        $column = $this->findColumn($board, $columnId);
+        if (!$this->isRemoteDialogRequest($request)) {
+            return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $boardId]);
+        }
+
+        $icon = $column->getIcon();
+        $form = $this->createColumnForm(new BoardColumnFormData(
+            name: $column->getName(),
+            color: $column->getColor(),
+            // A stored icon the server would no longer store opens as "No icon" (audit JM-I7).
+            icon: $icon !== null && $icon !== '' && ColumnIcon::normalize($icon) === null ? null : $icon,
+            humansOnly: $column->isHumansOnly(),
+        ), $icon);
+        $canDelete = $board->getColumns()->count() > 1;
+
+        return $this->remoteDialog()->fragment($this->render('@NowoTaskBoardBundle/manage/dialog/fragment.html.twig', [
+            'dialog_template' => '@NowoTaskBoardBundle/manage/_edit_column_modal.html.twig',
+            'dialog_vars'     => [
+                'board'            => $board,
+                'column'           => $column,
+                'editColumnForm'   => $form->createView(),
+                'editColumnUrl'    => $this->generateUrl($this->routes['column_update']['name'], ['boardId' => $boardId, 'columnId' => $columnId]),
+                'columnDeleteForm' => $canDelete
+                    ? $this->csrfActionForm('task_board_column_delete', $this->generateUrl($this->routes['column_delete']['name'], ['boardId' => $boardId, 'columnId' => $columnId]))->createView()
+                    : null,
+                'columnDeleteWarning' => implode("\n", $this->columnDeleteWarnings($board, $user)[$columnId] ?? []),
+            ],
+        ]));
+    }
+
+    /**
+     * Since 3.6.0: the query the add task opener of a board with `?taskTemplate=` forwards to its dialog.
+     *
+     * @return array<string, string>
+     */
+    private function addTaskOpenQuery(): array
+    {
+        $query = $this->currentRequest()?->query;
+        $out   = [];
+        foreach ([TaskTemplatePickerType::FIELD_TEMPLATE, TaskTemplatePickerType::FIELD_TITLE] as $key) {
+            $value = $query?->get($key);
+            if (is_string($value) && $value !== '') {
+                $out[$key] = $value;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Since 3.6.0: a write posted from an on-demand dialog (`X-Nowo-Dialog: 1`) that ends in a redirect answers
+     * 204 + `X-Nowo-Redirect` (the dialog closes, the page goes there, the flash survives); any other request keeps the redirect.
+     */
+    private function answerDialogWrite(Request $request, RedirectResponse $redirect): Response
+    {
+        return $this->isRemoteDialogRequest($request)
+            ? $this->remoteDialog()->redirect($redirect->getTargetUrl(), request: $request)
+            : $redirect;
     }
 
     /**
@@ -576,7 +713,12 @@ final class TaskBoardManageController extends AbstractController
      * Since 1.11: deletes a column; its tasks move to the first remaining column. The last column is kept.
      */
     #[Route('/tools/task-board/board/{boardId}/column/{columnId}/delete', name: 'nowo_task_board_column_delete', methods: ['POST'])]
-    public function deleteColumn(string $boardId, string $columnId, Request $request): RedirectResponse
+    public function deleteColumn(string $boardId, string $columnId, Request $request): Response
+    {
+        return $this->answerDialogWrite($request, $this->deleteColumnRedirect($boardId, $columnId, $request));
+    }
+
+    private function deleteColumnRedirect(string $boardId, string $columnId, Request $request): RedirectResponse
     {
         $user = $this->requireUser();
         $this->denyUnlessValidCsrfForm($request, $this->csrfActionForm('task_board_column_delete'));
@@ -693,7 +835,12 @@ final class TaskBoardManageController extends AbstractController
     }
 
     #[Route('/tools/task-board/board/{boardId}/column', name: 'nowo_task_board_column_create', methods: ['POST'])]
-    public function createColumn(string $boardId, Request $request): RedirectResponse
+    public function createColumn(string $boardId, Request $request): Response
+    {
+        return $this->answerDialogWrite($request, $this->createColumnRedirect($boardId, $request));
+    }
+
+    private function createColumnRedirect(string $boardId, Request $request): RedirectResponse
     {
         $user  = $this->requireUser();
         $board = $this->findBoardForColumns($boardId, $user);
@@ -720,7 +867,12 @@ final class TaskBoardManageController extends AbstractController
     }
 
     #[Route('/tools/task-board/board/{boardId}/column/{columnId}', name: 'nowo_task_board_column_update', methods: ['POST'])]
-    public function updateColumn(string $boardId, string $columnId, Request $request): RedirectResponse
+    public function updateColumn(string $boardId, string $columnId, Request $request): Response
+    {
+        return $this->answerDialogWrite($request, $this->updateColumnRedirect($boardId, $columnId, $request));
+    }
+
+    private function updateColumnRedirect(string $boardId, string $columnId, Request $request): RedirectResponse
     {
         $user   = $this->requireUser();
         $board  = $this->findBoardForColumns($boardId, $user);
@@ -809,7 +961,12 @@ final class TaskBoardManageController extends AbstractController
     }
 
     #[Route('/tools/task-board/board/{boardId}/create', name: 'nowo_task_board_task_create', methods: ['POST'])]
-    public function createTask(string $boardId, Request $request): RedirectResponse
+    public function createTask(string $boardId, Request $request): Response
+    {
+        return $this->answerDialogWrite($request, $this->createTaskRedirect($boardId, $request));
+    }
+
+    private function createTaskRedirect(string $boardId, Request $request): RedirectResponse
     {
         $user  = $this->requireUser();
         $board = $this->findBoard($boardId, $user, true);
@@ -899,10 +1056,18 @@ final class TaskBoardManageController extends AbstractController
                 ], 'NowoTaskBoardBundle'));
             }
 
-            return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $boardId]);
+            return $this->answerDialogWrite($request, $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $boardId]));
         }
 
         $view = $form->createView();
+
+        // Since 3.6.0 (owner rule 2026-11-23): UiKit's remote dialog gets the form as a fragment, 422 in place when invalid.
+        if ($this->remoteDialog()->isDialog($request)) {
+            return $this->remoteDialog()->fragment($this->render('@NowoTaskBoardBundle/manage/_import_dialog.html.twig', [
+                'board'      => $board,
+                'importForm' => $view,
+            ], new Response(status: $form->isSubmitted() ? Response::HTTP_UNPROCESSABLE_ENTITY : Response::HTTP_OK)));
+        }
 
         return $this->render($this->templates['import'], [
             'page' => new FormPage(
@@ -1177,7 +1342,6 @@ final class TaskBoardManageController extends AbstractController
             'panelTargetPath'    => $this->currentRequestUri(),
             'taskWindow'         => new TaskWindow(count($tasks), $total, $this->maxTasks),
             'canEditBoard'       => $canEditBoard,
-            'taskForm'           => $canEditBoard ? $this->createForm(TaskFormType::class, new TaskFormData(columnId: $columns === [] ? null : reset($columns)), ['column_choices' => $columns])->createView() : null,
             'scheduleForm'       => in_array(true, $editable, true) ? $this->formFactory()->createNamed('', TaskScheduleFormType::class)->createView() : null,
             // Since 2.24.0: the Move event dialog, when the viewer may try to move an event of the page.
             'eventMoveForm' => $calendar->anyMovableEvent ? $this->formFactory()->createNamed('', CalendarEventMoveFormType::class)->createView() : null,
@@ -2897,7 +3061,8 @@ final class TaskBoardManageController extends AbstractController
      */
     private function isDialogRequest(Request $request): bool
     {
-        return $this->createDialogHeader !== null && $this->createDialogHeader !== '' && $request->headers->has($this->createDialogHeader);
+        // Since 3.6.0: UiKit's remote dialog (`X-Nowo-Dialog: 1`) is a dialog request too, whatever the host header.
+        return $this->remoteDialog()->isDialog($request) || $this->createDialogHeader !== null && $this->createDialogHeader !== '' && $request->headers->has($this->createDialogHeader);
     }
 
     /**

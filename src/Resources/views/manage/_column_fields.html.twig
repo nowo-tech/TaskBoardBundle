@@ -8,7 +8,7 @@
 {% set _target = 'data-' ~ controller ~ '-target' %}
 <div class="nowo-task-field">
     {{ form_label(form.name) }}
-    {{ form_widget(form.name, {attr: {(_target): 'nameInput', class: 'form-control'}}) }}
+    {{ form_widget(form.name, {attr: {(_target): 'nameInput', class: 'form-control', autofocus: 'autofocus'}}) }}
     {{ form_errors(form.name) }}
 </div>
 

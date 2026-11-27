@@ -1,0 +1,19 @@
+{#
+    Import tasks from a file into a board. Since 3.6.0 (owner rule 2026-11-23, every dialog loads its content on demand) the
+    content of the GET of `board_import` for UiKit's remote dialog (`X-Nowo-Dialog: 1`); the import page is the same form for
+    a request without it. A refused upload answers 422 with this form and its errors; a done import answers 204 +
+    `X-Nowo-Redirect` (the flash with the summary follows). Variables: board, importForm (TaskImportFormType view).
+#}
+{{ form_start(importForm, {attr: {id: 'nowo-task-board-import-form', class: 'nowo-task-dialog__body', 'data-testid': 'nowo-task-board-import-form'}}) }}
+    {{ form_errors(importForm) }}
+    {{ form_row(importForm.source) }}
+    {% for child in importForm %}
+        {% if not child.rendered %}
+            {{ form_row(child) }}
+        {% endif %}
+    {% endfor %}
+{{ form_end(importForm, {render_rest: false}) }}
+<div class="nowo-task-dialog__footer nowo-task-dialog__actions" data-nowo-ui-dialog-actions>
+    <button type="button" class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }}" data-nowo-ui-dialog-close>{{ 'task_board.action.cancel'|trans({}, 'NowoTaskBoardBundle') }}</button>
+    <button type="submit" form="nowo-task-board-import-form" class="{{ nowo_ui_class('btn_primary', 'NowoTaskBoardBundle') }}" data-testid="nowo-task-board-import-submit">{{ 'task_board.import.form.submit'|trans({}, 'NowoTaskBoardBundle') }}</button>
+</div>

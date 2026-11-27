@@ -1286,6 +1286,20 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *             idempotency_store?: scalar|Param|null, // Api\Hook\TaskApiIdempotencyStoreInterface. // Default: null
  *         },
  *     },
+ *     client_api?: array{ // Since 3.4.0: the versioned client API for a first-party app (Beacon Desktop), <prefix>/v1, over the Task API's operations. Off: no route, service or listener. Needs api.enabled. See docs/CLIENT-API.md.
+ *         principal_resolver?: scalar|Param|null, // Service id of a ClientApi\Contract\TaskClientPrincipalResolverInterface. null: the client API is off (no route). // Default: null
+ *         context_policy?: scalar|Param|null, // Service id of a ClientApi\Contract\TaskClientContextPolicyInterface. Required with principal_resolver. // Default: null
+ *         reference_resolver?: scalar|Param|null, // Service id of a ClientApi\Contract\TaskClientReferenceResolverInterface (tokens/1 references). null: every reference reads visible: false. // Default: null
+ *         link_visibility?: scalar|Param|null, // Service id of a Link\TaskObjectLinkVisibilityInterface. null: every host-object link reads visible: false in the client API. // Default: null
+ *         file_resolver?: scalar|Param|null, // Service id of a ClientApi\Contract\TaskClientFileResolverInterface (tokens/1 images). null: every image reads visible: false. // Default: null
+ *         source_link?: scalar|Param|null, // Service id of a ClientApi\Contract\TaskClientSourceLinkInterface (POST tasks with source). null: source is 400 invalid_field. // Default: null
+ *         file_scheme?: scalar|Param|null, // The URL scheme of the host's files in Markdown images (Beacon: beacon-file). null: no image is a host file. // Default: null
+ *         prefix?: scalar|Param|null, // Base path; the routes are under <prefix>/v1 (house rule /<segment>/v<N>). // Default: "/api/task-board"
+ *         context_header?: scalar|Param|null, // The request header naming the context (personal, org:<uuid>). // Default: "X-Beacon-Context"
+ *     },
+ *     personal_data?: array{ // Since 3.4.0: the personal-data export (PersonalData\TaskBoardPersonalDataExporterInterface, always registered).
+ *         user_kit?: bool|Param, // Register the UserKit export section task_board when nowo-tech/user-kit-bundle is installed (default true: automatic). false when your application calls TaskBoardPersonalDataExporterInterface itself. Without UserKit nothing is registered. // Default: true
+ *     },
  *     security?: array{
  *         access_checker?: scalar|Param|null, // Default: null
  *         access_roles?: list<scalar|Param|null>,
@@ -1367,6 +1381,18 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         column_update?: array{
  *             path?: scalar|Param|null, // Default: "/tools/task-board/board/{boardId}/column/{columnId}"
  *             name?: scalar|Param|null, // Default: "nowo_task_board_column_update"
+ *         },
+ *         task_new?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/board/{boardId}/task/new"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_task_new"
+ *         },
+ *         column_new?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/board/{boardId}/column/new"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_column_new"
+ *         },
+ *         column_edit?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/board/{boardId}/column/{columnId}/edit"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_column_edit"
  *         },
  *         column_reorder?: array{
  *             path?: scalar|Param|null, // Default: "/tools/task-board/board/{boardId}/columns/reorder"
@@ -1532,6 +1558,10 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *             path?: scalar|Param|null, // Default: "/tools/task-board/board/{boardId}/connection/people/former"
  *             name?: scalar|Param|null, // Default: "nowo_task_board_board_connection_people_former"
  *         },
+ *         board_connection_people_forget?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/board/{boardId}/connection/people/{personId}/forget"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_board_connection_people_forget"
+ *         },
  *         board_fields?: array{
  *             path?: scalar|Param|null, // Default: "/tools/task-board/board/{boardId}/fields"
  *             name?: scalar|Param|null, // Default: "nowo_task_board_board_fields"
@@ -1547,6 +1577,10 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         board_field_delete?: array{
  *             path?: scalar|Param|null, // Default: "/tools/task-board/board/{boardId}/fields/{fieldId}/delete"
  *             name?: scalar|Param|null, // Default: "nowo_task_board_board_field_delete"
+ *         },
+ *         board_field_reimport?: array{
+ *             path?: scalar|Param|null, // Default: "/tools/task-board/board/{boardId}/fields/deleted/{tombstoneId}/reimport"
+ *             name?: scalar|Param|null, // Default: "nowo_task_board_board_field_reimport"
  *         },
  *         import_plans?: array{
  *             path?: scalar|Param|null, // Default: "/tools/task-board/import-plans"
@@ -1846,6 +1880,7 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         lookup?: array{
  *             cache_pool?: scalar|Param|null, // Since 1.25: service id of a PSR-6 pool caching the list search (300 s, keyed by a hash of the connection reference, never the token). null = no cache. // Default: null
  *         },
+ *         people_forget?: bool|Param, // Since 3.4.0 (Beacon spec 208 E): true = the People page offers "Forget this person" (name and e-mail cleared; references and the mapping stay), to whoever manages the board's connection AND is allowed by a SYNC_PERSON_FORGET_CHECK listener (denied by default). false = no button, and the route answers 404. // Default: false
  *         people_bulk_former?: bool|Param, // Since 1.28.0: true = the People page offers "Mark every unmapped person as a former person" (mapping external, changeable person by person). false = no button, and the route answers 404. // Default: false
  *         include_multi_list_tasks?: bool|Param, // Since 1.28.0: true = a ClickUp list source also reads the tasks added to it from other lists (include_timl). Each still appears once, with all its lists; a task belongs to one board. // Default: false
  *         full_sync_rereads_details?: bool|Param, // Since 1.28.0: true = a full sync reads each task's detail again even when its date did not move (within sync.watchers.max_detail_calls_per_run). For when a new file does not move ClickUp's date_updated. // Default: false

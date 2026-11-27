@@ -277,7 +277,14 @@ final class CalendarPageTest extends CalendarTestCase
         $this->login($this->owner);
 
         $crawler = $this->client->request('GET', $this->calendarUrl($board, 'date=2026-11-15'));
-        self::assertSame('2026-11-10', $crawler->filter('[data-date="2026-11-10"] .nowo-task-cal__add')->attr('data-due-date'));
+        // Since 3.6.0 the add control is the opener of the task_new dialog, which comes back to the calendar.
+        $opener = $crawler->filter('[data-date="2026-11-10"] .nowo-task-cal__add');
+        self::assertSame('nowo-task-board-add-task-modal', $opener->attr('data-nowo-ui-dialog-open'));
+        $src = (string) $opener->attr('data-nowo-ui-dialog-src');
+        self::assertStringContainsString('/task/new?due=2026-11-10&calendar=1&_target_path=', $src);
+        self::assertCount(0, $crawler->filter('#nowo-task-board-add-task-form'), 'the form loads when the dialog opens');
+        $crawler = $this->client->request('GET', $src, server: ['HTTP_X_NOWO_DIALOG' => '1', 'HTTP_X_REQUESTED_WITH' => 'XMLHttpRequest', 'HTTP_ACCEPT' => 'text/html']);
+        self::assertSame('2026-11-10', $crawler->filter('input[name="task_form[dueAt]"]')->attr('value'));
         $action = (string) $crawler->filter('#nowo-task-board-add-task-form')->attr('action');
         self::assertStringContainsString('calendar=1', $action);
 
@@ -285,6 +292,7 @@ final class CalendarPageTest extends CalendarTestCase
         $form['task_form[title]'] = 'From the calendar';
         $form['task_form[dueAt]'] = '2026-11-10';
         $this->client->submit($form);
+        // From the dialog the same post answers 204 + X-Nowo-Redirect; here it is the page post.
 
         self::assertResponseRedirects($this->calendarUrl($board, 'date=2026-11-15'));
         $task = $this->em->getRepository(Task::class)->findOneBy(['title' => 'From the calendar']);

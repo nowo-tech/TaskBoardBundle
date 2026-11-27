@@ -78,7 +78,7 @@ final class ColumnManagementDecisionTest extends FunctionalTestCase
             self::assertCount(0, $crawler->filter($control), $control);
         }
         self::assertCount(3, $crawler->filter('.nowo-task-board__column'), 'the columns themselves stay');
-        self::assertGreaterThan(0, $crawler->filter('.nowo-task-inline-add, [data-action*="add-task-modal#open"]')->count(), 'the task controls stay');
+        self::assertGreaterThan(0, $crawler->filter('.nowo-task-inline-add, [data-nowo-ui-dialog-open="nowo-task-board-add-task-modal"]')->count(), 'the task controls stay');
     }
 
     /** Audit IM-I7 (a): a lower-priority listener that grants every action does not lift the deny over HTTP. */
