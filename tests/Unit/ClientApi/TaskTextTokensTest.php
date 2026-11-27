@@ -11,6 +11,9 @@ use Nowo\TaskBoardBundle\ClientApi\Text\TaskTextTokens;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 
+use function ini_get;
+use function strlen;
+
 /**
  * Since 3.4.0 (client API v1, tokens/1, §5.2): the converter's blocks and tokens, and R2 for references and images.
  */
@@ -119,6 +122,43 @@ final class TaskTextTokensTest extends TestCase
             [['type' => 'link', 'url' => 'https://x.test/a', 'text' => 'https://x.test/a'], ['type' => 'text', 'text' => '. '], ['type' => 'text', 'text' => 'ab', 'marks' => ['bold']], ['type' => 'text', 'text' => ' '], ['type' => 'link', 'url' => 'https://y.test', 'text' => 'run x']],
             (new TaskTextTokens())->of('https://x.test/a. **a****b** [run `x`](https://y.test)', new stdClass())['blocks'][0]['tokens'],
         );
+    }
+
+    /**
+     * Audit ZCS-M1: adversarial emphasis stays linear and bounded — 64 KB in one line, in 4 KB lines, closed and unclosed
+     * markers — under a 128 MB limit and in well under a second each.
+     */
+    public function testAdversarialEmphasisIsBounded(): void
+    {
+        $limit = ini_get('memory_limit');
+        ini_set('memory_limit', '128M');
+        try {
+            foreach (['*a* ', '**a ', '_a ', '~~a ', '*a* **b** _c_ '] as $unit) {
+                $line  = str_repeat($unit, intdiv(65536, strlen($unit)));
+                $lines = implode("\n", str_split(str_repeat($unit, intdiv(65536, strlen($unit))), 4000));
+                foreach ([$line, $lines] as $text) {
+                    $started = microtime(true);
+                    $blocks  = (new TaskTextTokens())->of($text, new stdClass())['blocks'];
+                    self::assertNotSame([], $blocks);
+                    self::assertLessThan(0.5, microtime(true) - $started, $unit);
+                }
+            }
+            self::assertLessThan(128 * 1024 * 1024, memory_get_peak_usage());
+        } finally {
+            ini_set('memory_limit', $limit);
+        }
+        // Within the budget, emphasis is read; past MAX_MARKS spans the rest is plain text.
+        $tokens = (new TaskTextTokens())->of(str_repeat('*a* ', 300), new stdClass())['blocks'][0]['tokens'];
+        self::assertSame(['type' => 'text', 'text' => 'a', 'marks' => ['italic']], $tokens[0]);
+        self::assertStringContainsString('*a*', (string) $tokens[array_key_last($tokens)]['text']);
+    }
+
+    public function testALongTextIsCutOnACharacterAndSaysSo(): void
+    {
+        $text = (new TaskTextTokens())->of(str_repeat('é', 40000), new stdClass());
+        self::assertTrue($text['truncated'] ?? false);
+        self::assertSame(32768, mb_strlen((string) $text['blocks'][0]['tokens'][0]['text']));
+        self::assertArrayNotHasKey('truncated', (new TaskTextTokens())->of('short', new stdClass()));
     }
 
     public function testSafeUrls(): void

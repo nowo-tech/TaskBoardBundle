@@ -97,6 +97,8 @@ final class DddHostKernel extends Kernel
         $services->set('logger', RecordingLogger::class)->public();
         $services->set('security.csrf.token_manager', PredictableCsrfTokenManager::class);
         $services->set('app.users', DddUsers::class)->public();
+        // Since 3.4.0: the client API's ports (look-alike checks).
+        $services->set('app.ddd_client', DddClientHost::class);
         $services->set('app.cause_text', DddCauseText::class);
         $services->set('app.multi_scope', DddMultiBoardScope::class);
         // Since 2.18.0 (Beacon spec 234): used when a test sets member_badge_provider / write_provenance_provider.

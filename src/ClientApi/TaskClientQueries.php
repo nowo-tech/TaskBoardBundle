@@ -153,6 +153,26 @@ final readonly class TaskClientQueries
     }
 
     /**
+     * The ids of a board's open (not completed, not archived) tasks, at most `$limit`.
+     *
+     * @return list<string>
+     */
+    public function openTaskIds(string $boardId, int $limit): array
+    {
+        /** @var list<array{id: string}> $rows */
+        $rows = $this->entityManager->createQueryBuilder()
+            ->select('t.id AS id')
+            ->from(Task::class, 't')
+            ->where('t.board = :board')->setParameter('board', $boardId)
+            ->andWhere('t.archivedAt IS NULL')
+            ->andWhere('t.completedAt IS NULL')
+            ->orderBy('t.id', 'ASC')
+            ->getQuery()->setMaxResults($limit)->getArrayResult();
+
+        return array_map(static fn (array $row): string => (string) $row['id'], $rows);
+    }
+
+    /**
      * Comments per task (deleted ones left out), in one query.
      *
      * @param list<string> $taskIds

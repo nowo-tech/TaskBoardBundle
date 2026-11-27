@@ -53,6 +53,7 @@ use Nowo\TaskBoardBundle\ClientApi\Contract\TaskClientPrincipalResolverInterface
 use Nowo\TaskBoardBundle\ClientApi\Controller\TaskClientApiController;
 use Nowo\TaskBoardBundle\ClientApi\Security\TaskClientApiListener;
 use Nowo\TaskBoardBundle\ClientApi\Security\TaskClientAuthenticator;
+use Nowo\TaskBoardBundle\ClientApi\TaskClientCursor;
 use Nowo\TaskBoardBundle\ClientApi\TaskClientIdempotency;
 use Nowo\TaskBoardBundle\ClientApi\TaskClientQueries;
 use Nowo\TaskBoardBundle\ClientApi\TaskClientReader;
@@ -633,6 +634,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->setDefinition(TaskClientQueries::class, (new Definition(TaskClientQueries::class))
             ->setArgument('$entityManager', $manager)
             ->setArgument('$users', new Reference(TaskBoardUsers::class)));
+        // Audit ZCS-L2: cursors sealed with keys derived from kernel.secret.
+        $container->setDefinition(TaskClientCursor::class, (new Definition(TaskClientCursor::class))->setArgument('$secret', '%kernel.secret%'));
         $container->setDefinition(TaskTextTokens::class, (new Definition(TaskTextTokens::class))
             ->setArgument('$references', $optional($client['reference_resolver']))
             ->setArgument('$files', $optional($client['file_resolver']))

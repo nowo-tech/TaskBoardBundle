@@ -23,6 +23,7 @@ use Nowo\TaskBoardBundle\Question\Entity\TaskQuestionRecipient;
 use Nowo\TaskBoardBundle\Recurrence\Entity\TaskRecurrence;
 use Nowo\TaskBoardBundle\Support\ExactKey;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncImportPlan;
+use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPersonMapping;
 use Nowo\TaskBoardBundle\Sync\People\SyncUser;
 use Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleReassigner;
 use Nowo\TaskBoardBundle\Sync\People\TaskSyncPersonRepository;
@@ -32,7 +33,6 @@ use Nowo\TaskBoardBundle\ValueObject\TaskBoardUserRef;
 use function array_chunk;
 use function array_map;
 use function array_merge;
-use function array_values;
 use function in_array;
 use function is_string;
 use function str_starts_with;
@@ -266,14 +266,22 @@ final readonly class TaskBoardPersonalDataExporter implements TaskBoardPersonalD
     }
 
     /**
-     * The remote people mapped or suggested to the user, each with what references them (by id).
+     * The remote people mapped to the user, each with what references them (by id); suggested ones by id only.
      *
      * @return list<array<string, mixed>>
      */
     private function syncPeople(TaskSyncPersonRepository $people, object $user): array
     {
+        $rows = [];
+        foreach ($people->linkedToUser($user) as $person) {
+            // Audit ZCS-L4: a suggestion (an e-mail match of an account not verified) is the other person's identity
+            // until someone confirms it: its ids only, never its name, e-mail or remote work.
+            $rows[] = $person->getMapping() === TaskSyncPersonMapping::Suggested
+                ? ['person' => ['id' => $person->getId(), 'directoryId' => $person->getDirectory()->getId(), 'provider' => $person->getDirectory()->getProvider(), 'mapping' => TaskSyncPersonMapping::Suggested->value]]
+                : $people->exportPerson($person);
+        }
 
-        return array_values(array_map($people->exportPerson(...), $people->linkedToUser($user)));
+        return $rows;
     }
 
     /**

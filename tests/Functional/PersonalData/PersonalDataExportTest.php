@@ -81,6 +81,8 @@ final class PersonalDataExportTest extends SyncFunctionalTestCase
         $json = (string) json_encode($document);
         self::assertStringNotContainsString('conn-secret-ref', $json, 'never a connection reference');
         self::assertStringNotContainsString('Body of a comment', $json, 'no bodies');
+        self::assertStringNotContainsString('Not Bob', $json, 'a suggested person is ids only');
+        self::assertContains(['person' => ['id' => $this->suggestedId(), 'directoryId' => $document['sync_people'][0]['person']['directoryId'], 'provider' => 'clickup', 'mapping' => 'suggested']], $document['sync_people']);
 
         $reassigner = self::getContainer()->get(TaskSyncPeopleReassigner::class);
         self::assertInstanceOf(TaskSyncPeopleReassigner::class, $reassigner);
@@ -132,6 +134,10 @@ final class PersonalDataExportTest extends SyncFunctionalTestCase
         $person = new TaskSyncPerson($directory, 'r-1', 'Bob remote', new DateTimeImmutable());
         $person->map(TaskSyncPersonMapping::Manual, $bob, null, new DateTimeImmutable());
         $this->em->persist($person);
+        // Audit ZCS-L4: an unconfirmed e-mail match is someone else's identity until confirmed.
+        $suggested = new TaskSyncPerson($directory, 'r-2', 'Not Bob', new DateTimeImmutable());
+        $suggested->map(TaskSyncPersonMapping::Suggested, $bob, null, new DateTimeImmutable());
+        $this->em->persist($suggested);
         $this->em->flush();
 
         return $bob;
@@ -143,5 +149,10 @@ final class PersonalDataExportTest extends SyncFunctionalTestCase
         self::assertInstanceOf(TaskBoardPersonalDataExporterInterface::class, $exporter);
 
         return $exporter;
+    }
+
+    private function suggestedId(): string
+    {
+        return (string) $this->em->getConnection()->fetchOne("SELECT id FROM task_board_sync_people WHERE provider_user_id = 'r-2'");
     }
 }

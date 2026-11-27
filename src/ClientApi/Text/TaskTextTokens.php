@@ -68,11 +68,21 @@ final readonly class TaskTextTokens
     /** A placeholder in a line: kind (Code, Reference, Image, Link) and index. */
     private const PLACEHOLDER = '/\x{E000}([CRIL])(\d+)\x{E000}/u';
 
+    /** Emphasis is read on lines of at most this many bytes; a longer line is plain text (audit ZCS-M1). */
+    public const MAX_EMPHASIS_LINE = 4096;
+
+    /** Bytes of a text read for emphasis; the lines after them are plain text (audit ZCS-M1). */
+    public const MAX_EMPHASIS_BYTES = 16384;
+
+    /** Emphasis spans of a text; the rest is plain text (audit ZCS-M1). */
+    public const MAX_MARKS = 256;
+
+    /** Bounded lazy spans: no pattern scans more than 2000 characters from one start (audit ZCS-M1). */
     private const EMPHASIS = [
-        'bold'   => '/\*\*(?=\S)(.+?)(?<=\S)\*\*/u',
-        'strike' => '/~~(?=\S)(.+?)(?<=\S)~~/u',
-        'italic' => '/(?<![\w*])\*(?=\S)(.+?)(?<=\S)\*(?![\w*])/u',
-        'em'     => '/(?<![\w_])_(?=\S)(.+?)(?<=\S)_(?![\w_])/u',
+        'bold'   => '/\*\*(?=\S)(.{1,2000}?)(?<=\S)\*\*/u',
+        'strike' => '/~~(?=\S)(.{1,2000}?)(?<=\S)~~/u',
+        'italic' => '/(?<![\w*])\*(?=\S)(.{1,2000}?)(?<=\S)\*(?![\w*])/u',
+        'em'     => '/(?<![\w_])_(?=\S)(.{1,2000}?)(?<=\S)_(?![\w_])/u',
     ];
 
     /**
@@ -93,13 +103,17 @@ final readonly class TaskTextTokens
      */
     public function of(?string $markdown, object $reader): array
     {
-        $text = str_replace(["\r\n", "\r"], "\n", trim(substr((string) $markdown, 0, self::MAX_BYTES)));
+        $markdown = (string) $markdown;
+        // Audit ZCS-I4: cut on a character boundary, and say so.
+        $truncated = strlen($markdown) > self::MAX_BYTES;
+        $text      = str_replace(["\r\n", "\r"], "\n", trim($truncated ? mb_strcut($markdown, 0, self::MAX_BYTES, 'UTF-8') : $markdown));
         if ($text === '') {
             return ['format' => self::FORMAT, 'blocks' => []];
         }
-        $memo = new TaskTextMemo();
+        $memo   = new TaskTextMemo();
+        $tokens = ['format' => self::FORMAT, 'blocks' => $this->blocks($text, $reader, $memo)];
 
-        return ['format' => self::FORMAT, 'blocks' => $this->blocks($text, $reader, $memo)];
+        return $truncated ? $tokens + ['truncated' => true] : $tokens;
     }
 
     /**
@@ -274,7 +288,13 @@ final readonly class TaskTextTokens
         }, $text);
         $placeholders['L'] = $links;
 
-        return $this->merge($this->styled($text, [], $placeholders));
+        // Audit ZCS-M1: emphasis only on short lines and within the text's budget; anything else is plain text.
+        if (strlen($text) > self::MAX_EMPHASIS_LINE || $memo->emphasisBytes + strlen($text) > self::MAX_EMPHASIS_BYTES) {
+            return $this->merge($this->atoms($text, [], $placeholders));
+        }
+        $memo->emphasisBytes += strlen($text);
+
+        return $this->merge($this->styled($text, [], $placeholders, $memo));
     }
 
     /**
@@ -283,26 +303,39 @@ final readonly class TaskTextTokens
      *
      * @return list<array<string, mixed>>
      */
-    private function styled(string $text, array $marks, array $placeholders): array
+    private function styled(string $text, array $marks, array $placeholders, TaskTextMemo $memo): array
     {
-        $best = null;
-        foreach (self::EMPHASIS as $mark => $pattern) {
-            if (preg_match($pattern, $text, $match, PREG_OFFSET_CAPTURE) === 1 && ($best === null || $match[0][1] < $best[1][0][1])) {
-                $best = [$mark === 'em' ? 'italic' : $mark, $match];
+        // Audit ZCS-M1: the spans of one level in one pass over offsets (no copy of the rest of the line per span, no
+        // recursion on it); only a span's inside is read again, and at most MAX_MARKS spans per text.
+        $tokens = [];
+        $offset = 0;
+        $length = strlen($text);
+        while ($offset < $length && $memo->marks < self::MAX_MARKS) {
+            $best = null;
+            foreach (self::EMPHASIS as $mark => $pattern) {
+                if (preg_match($pattern, $text, $match, PREG_OFFSET_CAPTURE, $offset) === 1 && ($best === null || $match[0][1] < $best[1][0][1])) {
+                    $best = [$mark === 'em' ? 'italic' : $mark, $match];
+                }
             }
+            if ($best === null) {
+                break;
+            }
+            ++$memo->marks;
+            [$mark, $match] = $best;
+            $start          = $match[0][1];
+            foreach ($this->atoms(substr($text, $offset, $start - $offset), $marks, $placeholders) as $token) {
+                $tokens[] = $token;
+            }
+            foreach ($this->styled($match[1][0], in_array($mark, $marks, true) ? $marks : [...$marks, $mark], $placeholders, $memo) as $token) {
+                $tokens[] = $token;
+            }
+            $offset = $start + strlen($match[0][0]);
         }
-        if ($best === null) {
-            return $this->atoms($text, $marks, $placeholders);
+        foreach ($this->atoms(substr($text, $offset), $marks, $placeholders) as $token) {
+            $tokens[] = $token;
         }
-        [$mark, $match] = $best;
-        $start          = $match[0][1];
-        $end            = $start + strlen($match[0][0]);
 
-        return array_merge(
-            $this->atoms(substr($text, 0, $start), $marks, $placeholders),
-            $this->styled($match[1][0], in_array($mark, $marks, true) ? $marks : [...$marks, $mark], $placeholders),
-            $this->styled(substr($text, $end), $marks, $placeholders),
-        );
+        return $tokens;
     }
 
     /**

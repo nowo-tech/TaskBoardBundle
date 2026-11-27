@@ -101,9 +101,9 @@ final class ClientApiEdgeTest extends ClientApiTestCase
         $this->call('GET', '/tasks/12?board=' . $this->roadmap->getId());
         $this->assertError(404, 'not_found');
 
-        $this->call('GET', '/changes?since=' . TaskClientCursor::encode('changes/personal', ['not a date', 'x']));
+        $this->call('GET', '/changes?since=' . $this->cursors()->encode('changes/personal', ['not a date', 'x']));
         $this->assertError(400, 'invalid_cursor');
-        $this->call('GET', '/changes?since=' . TaskClientCursor::encode('changes/personal', ['2020-01-01 00:00:00', '']));
+        $this->call('GET', '/changes?since=' . $this->cursors()->encode('changes/personal', ['2020-01-01 00:00:00', '']));
         self::assertTrue($this->json()['reset'], 'a cursor older than a day');
 
         // An archived board is not found.
@@ -135,17 +135,16 @@ final class ClientApiEdgeTest extends ClientApiTestCase
         ClientApiTestHost::$wheres['owner@example.com']['org:named']   = TaskApiWhere::limitedTo([], [$named->getId(), $named->getId(), 'gone']);
         ClientApiTestHost::$contexts['owner@example.com']['org:named'] = [];
         $this->call('GET', '/boards', context: 'org:named');
-        $this->call('GET', '/boards', context: 'org:named');
         self::assertSame([['type' => 'folder', 'label' => 'Planning']], array_map(static fn (array $board): array => ['type' => $board['group']['type'], 'label' => $board['group']['label']], $this->json()['boards']));
 
+        // Audit ZCS-L1: a host that answers everything() for a context is refused, by-id reads and writes too.
         ClientApiTestHost::$wheres['owner@example.com']['org:all']   = TaskApiWhere::everything();
         ClientApiTestHost::$contexts['owner@example.com']['org:all'] = [];
-        $this->call('GET', '/boards', context: 'org:all');
-        self::assertSame([], $this->json()['boards'], 'everything is never a context: nothing is listed');
-        $this->call('GET', '/my-tasks', context: 'org:all');
-        self::assertSame([], $this->json()['tasks']);
-        $this->call('GET', '/changes?since=' . TaskClientCursor::encode('changes/org:all', [(new DateTimeImmutable('-1 minute'))->format('Y-m-d H:i:s'), '']), context: 'org:all');
-        self::assertSame([], $this->json()['changes']);
+        $task                                                        = $this->task($this->roadmap, 'Anywhere');
+        foreach ([['GET', '/boards'], ['GET', '/tasks/' . $task->getId()], ['PATCH', '/tasks/' . $task->getId()]] as [$method, $path]) {
+            $this->call($method, $path, $method === 'PATCH' ? ['title' => 'x'] : null, ['HTTP_IF_MATCH' => '"1"'], context: 'org:all');
+            $this->assertError(500, 'server_error');
+        }
     }
 
     public function testEveryKindOfLinkInADetail(): void
@@ -213,5 +212,10 @@ final class ClientApiEdgeTest extends ClientApiTestCase
         ApiTestHost::$unknownEmails = ['gone@example.com'];
         $this->call('PUT', '/tasks/' . $task->getId() . '/members/uuid-' . $colleague->getId(), ['role' => 'assignee'], ['HTTP_IF_MATCH' => '"1"']);
         $this->assertError(400, 'invalid_field');
+    }
+
+    private function cursors(): TaskClientCursor
+    {
+        return new TaskClientCursor('functional-test');
     }
 }

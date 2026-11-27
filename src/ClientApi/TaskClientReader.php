@@ -105,6 +105,8 @@ final readonly class TaskClientReader
         private TaskBoardRepositoryInterface $boards,
         private TaskMemberAssigner $members,
         private TaskTextTokens $text,
+        // Since audit ZCS-L2: sealed cursors.
+        private TaskClientCursor $cursors,
         private ?TaskTextSearchInterface $search = null,
         private int $searchMaxMatches = 500,
         private ?TaskApiQuestionOperations $questions = null,
@@ -178,12 +180,13 @@ final readonly class TaskClientReader
             }
         }
         usort($rows, static fn (array $a, array $b): int => $a[0] <=> $b[0]);
-        $page   = array_slice($rows, 0, $limit);
-        $counts = $this->apiQueries->countByBoard(array_map(static fn (array $row): string => $row[1]->getId(), $page), null);
+        $page = array_slice($rows, 0, $limit);
 
+        // Audit ZCS-L2: no count in the list (a count of every open task would include the ones the reader may not see);
+        // GET boards/{id} counts the visible ones.
         return [
-            'boards'     => array_map(fn (array $row): array => $this->serializer->board($row[1], $call->principal->user, $counts[$row[1]->getId()] ?? 0, $this->group($call, $row[1])), $page),
-            'nextCursor' => count($rows) > $limit && $page !== [] ? TaskClientCursor::encode('boards', $page[array_key_last($page)][0]) : null,
+            'boards'     => array_map(fn (array $row): array => $this->serializer->board($row[1], $call->principal->user, null, $this->group($call, $row[1])), $page),
+            'nextCursor' => count($rows) > $limit && $page !== [] ? $this->cursors->encode('boards', $page[array_key_last($page)][0]) : null,
         ];
     }
 
@@ -194,12 +197,15 @@ final readonly class TaskClientReader
      */
     public function board(TaskClientCall $call, string $boardId): array
     {
-        $board   = $this->boardOf($call, $boardId);
-        $counts  = $this->apiQueries->countByBoard([$board->getId()], null);
+        $board = $this->boardOf($call, $boardId);
+        // Audit ZCS-L2: the open tasks the reader may open, at most MY_TASKS_SCAN of them read.
+        $open    = $this->queries->openTaskIds($board->getId(), TaskClientQueries::MY_TASKS_SCAN + 1);
+        $capped  = count($open) > TaskClientQueries::MY_TASKS_SCAN;
+        $counts  = ['open' => count($this->visible($call, array_slice($open, 0, TaskClientQueries::MY_TASKS_SCAN), false)), 'capped' => $capped];
         $people  = $this->members->assignableUsers($board) ?? [];
         $profile = $people === [] ? [] : $this->users->profiles(array_slice($people, 0, 100), $call->principal);
 
-        return ['board' => $this->serializer->board($board, $call->principal->user, $counts[$board->getId()] ?? 0, $this->group($call, $board)) + [
+        return ['board' => $this->serializer->board($board, $call->principal->user, $counts, $this->group($call, $board)) + [
             'people'    => array_values(array_map(fn (TaskApiUser $user): array => (array) $this->serializer->user($user), $profile)),
             'tags'      => array_slice($this->apiQueries->tagsOf([$board->getId()]), 0, 50),
             'templates' => [],
@@ -254,7 +260,7 @@ final readonly class TaskClientReader
         $rows  = array_slice($rows, 0, $limit);
         $ids   = $this->visible($call, array_map(static fn (array $row): string => $row['id'], $rows), isset($filter['me']));
 
-        return ['tasks' => $this->cards($call, $ids), 'nextCursor' => $more && $rows !== [] ? TaskClientCursor::encode($kind, $rows[array_key_last($rows)]['cursor']) : null];
+        return ['tasks' => $this->cards($call, $ids), 'nextCursor' => $more && $rows !== [] ? $this->cursors->encode($kind, $rows[array_key_last($rows)]['cursor']) : null];
     }
 
     /**
@@ -309,7 +315,7 @@ final readonly class TaskClientReader
         $page   = array_slice($matched, 0, $limit);
         $answer = [
             'tasks'      => $this->cards($call, array_map(static fn (array $row): string => $row[1]->getId(), $page)),
-            'nextCursor' => count($matched) > $limit && $page !== [] ? TaskClientCursor::encode('my/' . $bucket . '/' . $today->format('Y-m-d'), $page[array_key_last($page)][0]) : null,
+            'nextCursor' => count($matched) > $limit && $page !== [] ? $this->cursors->encode('my/' . $bucket . '/' . $today->format('Y-m-d'), $page[array_key_last($page)][0]) : null,
         ];
         if ($after === null) {
             $answer['counts'] = $counts;
@@ -359,7 +365,7 @@ final readonly class TaskClientReader
         $rows  = array_slice($rows, 0, $limit);
         $ids   = $this->visible($call, array_map(static fn (array $row): string => $row['id'], $rows), false);
 
-        return ['tasks' => $this->cards($call, $ids), 'nextCursor' => $more && $rows !== [] ? TaskClientCursor::encode($kind, $rows[array_key_last($rows)]['cursor']) : null];
+        return ['tasks' => $this->cards($call, $ids), 'nextCursor' => $more && $rows !== [] ? $this->cursors->encode($kind, $rows[array_key_last($rows)]['cursor']) : null];
     }
 
     /**
@@ -373,7 +379,7 @@ final readonly class TaskClientReader
         $kind   = 'c' . $task->getId();
         $limit  = TaskClientInput::limit($request, self::COMMENTS_PAGE);
         $before = $this->queryString($request, 'before');
-        $after  = $before === null ? null : TaskClientCursor::decode($before, $kind, 2) ?? throw new TaskClientApiException('invalid_cursor', 400);
+        $after  = $before === null ? null : $this->cursors->decode($before, $kind, 2) ?? throw new TaskClientApiException('invalid_cursor', 400);
         $rows   = $this->apiQueries->comments($task, $after === null ? null : new DateTimeImmutable((string) $after[0]), $after === null ? null : (string) $after[1], $limit + 1);
         $more   = count($rows) > $limit;
         $rows   = array_slice($rows, 0, $limit);
@@ -388,7 +394,7 @@ final readonly class TaskClientReader
 
         return [
             'comments'   => array_map(fn (TaskComment $comment): array => $this->serializer->comment($comment, $comment->getAuthor() === null ? null : $profiles[$this->apiId($comment->getAuthor()) ?? ''] ?? null, $call->principal->user), $rows),
-            'nextCursor' => $more && $last instanceof TaskComment ? TaskClientCursor::encode($kind, [$last->getCreatedAt()->format('Y-m-d H:i:s'), $last->getId()]) : null,
+            'nextCursor' => $more && $last instanceof TaskComment ? $this->cursors->encode($kind, [$last->getCreatedAt()->format('Y-m-d H:i:s'), $last->getId()]) : null,
         ];
     }
 
@@ -466,9 +472,9 @@ final readonly class TaskClientReader
         $since = $this->queryString($request, 'since');
         $now   = new DateTimeImmutable('now', new DateTimeZone('UTC'));
         if ($since === null) {
-            return ['changes' => [], 'nextCursor' => TaskClientCursor::encode('changes/' . $call->contextKey, [$now->format('Y-m-d H:i:s'), '']), 'reset' => true];
+            return ['changes' => [], 'nextCursor' => $this->cursors->encode('changes/' . $call->contextKey, [$now->format('Y-m-d H:i:s'), '']), 'reset' => true];
         }
-        $after = TaskClientCursor::decode($since, 'changes/' . $call->contextKey, 2) ?? throw new TaskClientApiException('invalid_cursor', 400);
+        $after = $this->cursors->decode($since, 'changes/' . $call->contextKey, 2) ?? throw new TaskClientApiException('invalid_cursor', 400);
         $at    = DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', (string) $after[0], new DateTimeZone('UTC'));
         if ($at === false) {
             throw new TaskClientApiException('invalid_cursor', 400);
@@ -482,24 +488,21 @@ final readonly class TaskClientReader
 
         return [
             'changes'    => array_values(array_map(static fn (array $row): array => ['taskId' => $row['id'], 'boardId' => $row['boardId'], 'revision' => $row['revision']], array_filter($rows, static fn (array $row): bool => isset($shown[$row['id']])))),
-            'nextCursor' => TaskClientCursor::encode('changes/' . $call->contextKey, $last === null ? [(string) $after[0], (string) $after[1]] : [$last['updatedAt'], $last['id']]),
+            'nextCursor' => $this->cursors->encode('changes/' . $call->contextKey, $last === null ? [(string) $after[0], (string) $after[1]] : [$last['updatedAt'], $last['id']]),
             'reset'      => $reset,
         ];
     }
 
     /**
-     * The boards of the context the person may see (none for a context whose `where` is everything: fail closed).
+     * The boards of the context the person may see.
      *
      * @return list<TaskBoard>
      */
     public function contextBoards(TaskClientCall $call): array
     {
-        $where   = $call->principal->where;
-        $tenants = $where->tenantKeys();
-        if ($tenants === null) {
-            return [];
-        }
-        $boards = $this->apiQueries->activeBoardsOfTenants($tenants);
+        $where = $call->principal->where;
+        // The listener refuses an `everything()` context (audit ZCS-L1).
+        $boards = $this->apiQueries->activeBoardsOfTenants($where->tenantKeys() ?? []);
         $seen   = [];
         foreach ($boards as $board) {
             $seen[$board->getId()] = true;
@@ -596,7 +599,7 @@ final readonly class TaskClientReader
                 }
                 if (!$mine) {
                     // Only a look-alike id of a folding collation reaches here (the query asked for the caller's id).
-                    continue; // @codeCoverageIgnore
+                    continue;
                 }
             }
             $shown[] = $task->getId();
@@ -797,7 +800,7 @@ final readonly class TaskClientReader
     {
         $cursor = $this->queryString($request, 'cursor');
 
-        return $cursor === null ? null : TaskClientCursor::decode($cursor, $kind, $count) ?? throw new TaskClientApiException('invalid_cursor', 400);
+        return $cursor === null ? null : $this->cursors->decode($cursor, $kind, $count) ?? throw new TaskClientApiException('invalid_cursor', 400);
     }
 
     /** `q`: the words searched (at most 128 characters), or null. */

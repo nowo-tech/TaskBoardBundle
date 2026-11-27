@@ -57,7 +57,8 @@ use function strlen;
  * 2. the person may use the task board now (`TaskBoardAccessCheckerInterface::canAccess()`) — `401 invalid_token`;
  * 3. the route's scope (`task-board:read` for every GET, `task-board:write` for every write) — `403 insufficient_scope`;
  * 4. the context: the token's bound context, else the context header (`invalid_context` / `context_required`), checked
- *    by the host's `TaskClientContextPolicyInterface` on every request — `403 context_forbidden` (one answer);
+ *    by the host's `TaskClientContextPolicyInterface` on every request — `403 context_forbidden` (one answer); a
+ *    `whereFor()` of `everything()` is a host error — `500 server_error`, logged (audit ZCS-L1);
  * 5. the person's budget (`api.hooks.rate_limiter`, shared with their personal tokens) — `429 rate_limited`.
  *
  * Then the call holds a `TaskApiPrincipal` (level `Read` for `task-board:read`, `Tasks` with `task-board:write`, never
@@ -166,8 +167,14 @@ final readonly class TaskClientApiListener implements EventSubscriberInterface
         }
         $context = $this->context($client, $request->headers->get($this->contextHeader), $ipPrefix);
         $where   = $this->contexts->whereFor($client, $context);
-        $level   = $client->hasScope(TaskClientPrincipal::SCOPE_WRITE) ? TaskApiLevel::Tasks : TaskApiLevel::Read;
-        $call    = new TaskClientCall($client, new TaskApiPrincipal($client->user, $level, $where, $client->tokenId, $client->tokenName !== '' ? $client->tokenName : 'app', ColumnTransitionVia::APP), $context);
+        // Audit ZCS-L1: a context is a list of tenants; `everything()` would open every tenant of the person to by-id
+        // reads and writes. A host error: fail closed, as for a missing firewall.
+        if ($where->tenantKeys() === null) {
+            $this->logger->error('TaskBoard client API: TaskClientContextPolicyInterface::whereFor() must not return TaskApiWhere::everything().', ['bundle' => 'nowo_task_board']);
+            $this->deny('server_error', Response::HTTP_INTERNAL_SERVER_ERROR, $client, $ipPrefix, [], 'context_everything');
+        }
+        $level = $client->hasScope(TaskClientPrincipal::SCOPE_WRITE) ? TaskApiLevel::Tasks : TaskApiLevel::Read;
+        $call  = new TaskClientCall($client, new TaskApiPrincipal($client->user, $level, $where, $client->tokenId, $client->tokenName !== '' ? $client->tokenName : 'app', ColumnTransitionVia::APP), $context);
 
         $state = $this->rateLimiter->consume($call->principal);
         $request->attributes->set(self::RATE_LIMIT, $state);

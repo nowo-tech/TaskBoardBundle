@@ -19,4 +19,10 @@ final class TaskTextMemo
 
     /** @var array<string, bool> */
     public array $files = [];
+
+    /** Since 3.4.0 (audit ZCS-M1): bytes read for emphasis so far. */
+    public int $emphasisBytes = 0;
+
+    /** Since 3.4.0 (audit ZCS-M1): emphasis spans found so far. */
+    public int $marks = 0;
 }

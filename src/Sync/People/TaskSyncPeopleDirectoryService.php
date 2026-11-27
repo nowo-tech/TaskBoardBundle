@@ -306,7 +306,7 @@ final readonly class TaskSyncPeopleDirectoryService
      * Since 3.4.0 (REQ-RUNTIME-003, the People page action of Beacon spec 208 E): one short transaction of its own (a
      * savepoint inside the caller's) that locks the directory's row, then the person's (fixed order: the directory's
      * counter numbers the former people), reads both as committed and anonymises the person only when no concurrent
-     * call did it first. No I/O under the locks; the audit event (ids only) is dispatched after the commit, once. A
+     * call did it first. No I/O under the locks; the audit event (ids only) is dispatched after this call's commit, once (inside a caller's transaction: after this call's savepoint, before the caller's commit, which may still roll back; audit ZCS-I8). A
      * failure rolls back to the entry level (the connection is closed when that rollback fails: a deadlock that ended
      * the transaction), resets a closed manager and rethrows the original exception. Idempotent: a forgotten person
      * changes nothing and dispatches nothing.

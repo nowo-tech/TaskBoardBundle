@@ -13,11 +13,10 @@ use Nowo\TaskBoardBundle\ClientApi\TaskClientApiException;
 use Nowo\TaskBoardBundle\ClientApi\TaskClientCursor;
 use Nowo\TaskBoardBundle\ClientApi\TaskClientInput;
 use PHPUnit\Framework\TestCase;
+use ReflectionMethod;
 use stdClass;
 use Symfony\Component\HttpFoundation\Request;
 
-use function base64_encode;
-use function rtrim;
 use function str_repeat;
 use function strtr;
 
@@ -50,16 +49,30 @@ final class TaskClientValuesTest extends TestCase
         new TaskClientContext('bad key', 'x');
     }
 
-    public function testCursorsAreBoundToTheirKindAndShape(): void
+    public function testCursorsAreSealedAndBoundToTheirKindAndShape(): void
     {
-        $cursor = TaskClientCursor::encode('k', ['2026-01-01 00:00:00', 3, 'id']);
-        self::assertSame(['2026-01-01 00:00:00', 3, 'id'], TaskClientCursor::decode($cursor, 'k', 3));
-        self::assertNull(TaskClientCursor::decode($cursor, 'other', 3));
-        self::assertNull(TaskClientCursor::decode($cursor, 'k', 2));
-        $encode = static fn (string $raw): string => rtrim(strtr(base64_encode($raw), '+/', '-_'), '=');
-        foreach (['', '***', str_repeat('a', 513), $encode('v1.k.{nope'), $encode('v1.k.{"a":1}'), $encode('v1.k.[1.5]'), $encode('v1.k.["' . str_repeat('x', 192) . '"]')] as $bad) {
-            self::assertNull(TaskClientCursor::decode($bad, 'k', 1), $bad);
+        $cursors = new TaskClientCursor('secret');
+        $cursor  = $cursors->encode('k', ['2026-01-01 00:00:00', 3, 'task-id-123']);
+        self::assertSame(['2026-01-01 00:00:00', 3, 'task-id-123'], $cursors->decode($cursor, 'k', 3));
+        // Audit ZCS-L2: nothing of the values can be read in the cursor.
+        $raw = (string) base64_decode(strtr($cursor, '-_', '+/'), true);
+        self::assertStringNotContainsString('task-id-123', $raw);
+        self::assertStringNotContainsString('2026-01-01', $raw);
+        self::assertNotSame($cursor, $cursors->encode('k', ['2026-01-01 00:00:00', 3, 'task-id-123']), 'a fresh nonce each time');
+        self::assertNull($cursors->decode($cursor, 'other', 3));
+        self::assertNull($cursors->decode($cursor, 'k', 2));
+        self::assertNull((new TaskClientCursor('another secret'))->decode($cursor, 'k', 3));
+        // A changed byte is refused.
+        $tampered     = $cursor;
+        $tampered[20] = $tampered[20] === 'A' ? 'B' : 'A';
+        self::assertNull($cursors->decode($tampered, 'k', 3));
+        foreach (['', '***', str_repeat('a', 1025), 'AAAA', $cursors->encode('k', ['x', 'y'])] as $bad) {
+            self::assertNull($cursors->decode($bad, 'k', 1), $bad);
         }
+        // Sealed but not a list of short strings and integers: refused too.
+        $shape = new ReflectionMethod(TaskClientCursor::class, 'encode');
+        self::assertNull($cursors->decode($shape->invoke($cursors, 'k', [str_repeat('x', 192)]), 'k', 1));
+        self::assertNull($cursors->decode($shape->invoke($cursors, 'k', [1.5]), 'k', 1));
     }
 
     public function testInputRules(): void

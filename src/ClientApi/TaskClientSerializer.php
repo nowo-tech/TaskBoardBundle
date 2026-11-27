@@ -102,13 +102,15 @@ final readonly class TaskClientSerializer
     }
 
     /**
-     * A board of the list: `{id, title, icon, color, archived, group, columns, counts, permissions}`.
+     * A board: `{id, title, icon, color, archived, group, columns, permissions}`, and `counts` when given (the open tasks
+     * the reader may open; only `GET boards/{id}` counts, audit ZCS-L2).
      *
+     * @param array{open: int, capped: bool}|null $counts
      * @param array{type: string, id: string, label: string}|null $group
      *
      * @return array<string, mixed>
      */
-    public function board(TaskBoard $board, object $reader, int $openCount, ?array $group): array
+    public function board(TaskBoard $board, object $reader, ?array $counts, ?array $group): array
     {
         $columns = ColumnTypes::ordered($board);
         $canEdit = $this->access->canEditBoard($reader, $board);
@@ -121,9 +123,8 @@ final readonly class TaskClientSerializer
             'archived'    => false,
             'group'       => $group,
             'columns'     => array_map(fn (BoardColumn $column): array => $this->column($column, $columns), $columns),
-            'counts'      => ['open' => $openCount],
             'permissions' => ['canCreate' => $canEdit, 'canMove' => $canEdit],
-        ];
+        ] + ($counts === null ? [] : ['counts' => $counts]);
     }
 
     /**

@@ -12,6 +12,7 @@ use Nowo\TaskBoardBundle\Api\Operation\TaskApiTaskOperations;
 use Nowo\TaskBoardBundle\Api\Operation\TaskApiTransaction;
 use Nowo\TaskBoardBundle\Api\Security\TaskApiGuard;
 use Nowo\TaskBoardBundle\Api\TaskApiCapability;
+use Nowo\TaskBoardBundle\Api\TaskApiPrincipal;
 use Nowo\TaskBoardBundle\Api\TaskApiRefusal;
 use Nowo\TaskBoardBundle\ClientApi\Contract\TaskClientSourceLinkInterface;
 use Nowo\TaskBoardBundle\ClientApi\Model\TaskClientSourceLink;
@@ -102,10 +103,10 @@ final readonly class TaskClientWriter
         TaskClientInput::only($body, self::CREATE_FIELDS);
         $principal = $call->principal;
         $this->audit->requireListener();
-        $board  = $this->guard->board($principal, TaskClientInput::id($body, 'boardId', true) ?? '', TaskApiCapability::EditTasks);
+        $board  = $this->board($principal, TaskClientInput::id($body, 'boardId', true) ?? '');
         $parent = null;
         if (isset($body['parentId'])) {
-            $parent = $this->guard->task($principal, (string) TaskClientInput::id($body, 'parentId'), TaskApiCapability::EditTasks);
+            $parent = $this->task($principal, (string) TaskClientInput::id($body, 'parentId'), TaskApiCapability::EditTasks);
             if ($parent->getBoard()->getId() !== $board->getId()) {
                 throw TaskClientApiException::invalidField('parentId');
             }
@@ -151,31 +152,20 @@ final readonly class TaskClientWriter
         TaskClientInput::only($body, self::PATCH_FIELDS);
         $principal = $call->principal;
         $this->audit->requireListener();
-        $task = $this->guard->task($principal, $taskId, TaskApiCapability::EditTasks);
-        $data = TaskFormData::fromTask($task);
-        // The column moves only through move(): update() never moves the task.
-        $data->columnId = $task->getColumn()?->getId();
-        if (isset($body['title'])) {
-            $data->title = $this->title($body['title']);
-        }
-        if (isset($body['tags'])) {
-            $data->tags = $this->tags(TaskClientInput::strings($body, 'tags', TaskApiTaskOperations::MAX_TAGS));
-        }
-        if (array_key_exists('color', $body)) {
-            $color = TaskClientInput::nullableString($body, 'color');
-            $this->validate($color, TaskConstraints::taskColor(), 'color');
-            $data->color = $color;
-        }
-        $this->fields($data, $body);
+        $task = $this->task($principal, $taskId, TaskApiCapability::EditTasks);
+        // Every field is checked before the transaction (a refusal writes nothing) …
+        $this->changed($task, $body);
         $archived = array_key_exists('archived', $body) ? TaskClientInput::bool($body, 'archived') : null;
         if ($archived === false && $task->isArchived() && !$task->isCompleted() && $this->tasks->activeTaskRefusal($task->getBoard(), 1) instanceof LimitRefusal) {
-            // The host's active-task limit (`sync.limit_checker`); the Task API's tests cover the same rule.
-            throw new TaskApiRefusal(403, 'PLAN_002', 'The limit of active tasks is reached'); // @codeCoverageIgnore
+            // The host's active-task limit (`sync.limit_checker`).
+            throw new TaskApiRefusal(403, 'PLAN_002', 'The limit of active tasks is reached');
         }
 
         // @igor-ignore - The closure runs once, now, inside run(); the stateless transaction keeps no reference to it.
-        return $this->transaction->run(function () use ($principal, $task, $data, $archived, $ifMatch): Task {
+        return $this->transaction->run(function () use ($principal, $task, $body, $archived, $ifMatch): Task {
             $this->requireRevision($task, $ifMatch);
+            // … and applied to the task as locked (audit ZCS-I1: the fields the client did not send are the row's).
+            $data    = $this->changed($task, $body);
             $changed = [];
             if ($archived === false && $this->withinPlan(fn (): bool => $this->tasks->restore($task, $principal->user), $task)) {
                 $changed[] = 'archived';
@@ -206,7 +196,7 @@ final readonly class TaskClientWriter
         TaskClientInput::only($body, ['columnId', 'beforeTaskId', 'afterTaskId']);
         $principal = $call->principal;
         $this->audit->requireListener();
-        $task   = $this->guard->task($principal, $taskId, TaskApiCapability::EditTasks);
+        $task   = $this->task($principal, $taskId, TaskApiCapability::EditTasks);
         $column = $this->column($task->getBoard(), TaskClientInput::id($body, 'columnId', true));
         $moves  = $task->getColumn()?->getId() !== $column->getId();
         if ($moves && $ifMatch === null) {
@@ -237,7 +227,7 @@ final readonly class TaskClientWriter
     {
         $principal = $call->principal;
         $this->audit->requireListener();
-        $task = $this->guard->task($principal, $taskId, TaskApiCapability::EditTasks);
+        $task = $this->task($principal, $taskId, TaskApiCapability::EditTasks);
         $user = $this->person($call, $userId);
         // An unknown person and one the board's assignee rule refuses: one answer.
         if ($role instanceof TaskMemberRole && ($user === null || !$this->members->canBeAssigned($task->getBoard(), $user) || !in_array($user, $this->members->assignableUsers($task->getBoard()) ?? [$user], true))) {
@@ -300,7 +290,7 @@ final readonly class TaskClientWriter
     {
         TaskClientInput::only($body, ['title', 'done']);
         $principal = $call->principal;
-        $task      = $this->guard->task($principal, $taskId, TaskApiCapability::WorkOnTask);
+        $task      = $this->task($principal, $taskId, TaskApiCapability::WorkOnTask);
         $item      = $this->checklists->itemOf($principal, $task, $itemId);
         $input     = [];
         if (isset($body['title'])) {
@@ -310,13 +300,70 @@ final readonly class TaskClientWriter
             $input['resolved'] = TaskClientInput::bool($body, 'done');
         }
 
+        // Audit ZCS-L3: the column a tick enters (the done column, or back to the first) is locked before the item's row,
+        // the fixed order of every other write.
+        $enters = match ($input['resolved'] ?? null) {
+            true    => $item->isCompleted() ? null : ColumnTypes::doneColumn($item->getBoard()),
+            false   => $item->isCompleted() ? $item->getBoard()->getColumns()->first() ?: null : null,
+            default => null,
+        };
         // @igor-ignore - The closure runs once, now, inside run(); the stateless transaction keeps no reference to it.
-        $this->transaction->run(function () use ($principal, $task, $item, $input, $ifMatch): void {
+        $this->transaction->run(function () use ($principal, $task, $item, $input, $ifMatch, $enters): void {
+            if ($enters instanceof BoardColumn) {
+                $this->rowLock?->lockColumns([$enters->getId()]);
+            }
             $this->requireRevision($item, $ifMatch);
             $this->checklists->updateItemTask($principal, $task, $item, $input);
         }, [$item]);
 
         return $item;
+    }
+
+    /**
+     * The task's form data with the body's fields applied (each checked with the forms' rules).
+     *
+     * @param array<string, mixed> $body
+     *
+     * @throws TaskClientApiException
+     */
+    private function changed(Task $task, array $body): TaskFormData
+    {
+        $data = TaskFormData::fromTask($task);
+        // The column moves only through move(): update() never moves the task.
+        $data->columnId = $task->getColumn()?->getId();
+        if (isset($body['title'])) {
+            $data->title = $this->title($body['title']);
+        }
+        if (isset($body['tags'])) {
+            $data->tags = $this->tags(TaskClientInput::strings($body, 'tags', TaskApiTaskOperations::MAX_TAGS));
+        }
+        if (array_key_exists('color', $body)) {
+            $color = TaskClientInput::nullableString($body, 'color');
+            $this->validate($color, TaskConstraints::taskColor(), 'color');
+            $data->color = $color;
+        }
+        $this->fields($data, $body);
+
+        return $data;
+    }
+
+    /**
+     * A task within reach for the capability, of exactly this id (REQ-SEC-006, audit ZCS-I2: a folding collation may
+     * load a look-alike), else `404`.
+     */
+    private function task(TaskApiPrincipal $principal, string $taskId, TaskApiCapability $capability): Task
+    {
+        $task = $this->guard->task($principal, $taskId, $capability);
+
+        return $task->getId() === $taskId ? $task : throw TaskClientApiException::notFound();
+    }
+
+    /** A board the person may edit, of exactly this id (audit ZCS-I2), else `404`. */
+    private function board(TaskApiPrincipal $principal, string $boardId): TaskBoard
+    {
+        $board = $this->guard->board($principal, $boardId, TaskApiCapability::EditTasks);
+
+        return $board->getId() === $boardId ? $board : throw TaskClientApiException::notFound();
     }
 
     /**
@@ -524,8 +571,8 @@ final readonly class TaskClientWriter
         try {
             return $write();
         } catch (TaskReopenRefusedException) {
-            // The host's reopen limit, as the Task API (covered there).
-            throw new TaskApiRefusal(403, 'PLAN_002', 'The limit of active tasks is reached'); // @codeCoverageIgnore
+            // The host's reopen limit, as the Task API.
+            throw new TaskApiRefusal(403, 'PLAN_002', 'The limit of active tasks is reached');
         } catch (ColumnTransitionRefusedException $refused) {
             throw TaskApiRefusal::transitionRefused($refused);
         } catch (TaskTreeRefusedException $refused) {

@@ -27,6 +27,7 @@ use function json_decode;
 use function json_encode;
 use function ksort;
 use function strlen;
+use function trim;
 
 use const JSON_THROW_ON_ERROR;
 use const JSON_UNESCAPED_SLASHES;
@@ -132,7 +133,7 @@ final readonly class TaskClientIdempotency
         }
     }
 
-    /** Method, path, query, the context and the body with its keys sorted. */
+    /** Method, path, query, the context, `If-Match` and the body with its keys sorted. */
     private function fingerprint(Request $request, TaskClientCall $call): string
     {
         $content = (string) $request->getContent();
@@ -143,7 +144,10 @@ final readonly class TaskClientIdempotency
         }
         $query = self::sorted($request->query->all());
 
-        return hash('sha256', 'client/v1' . "\n" . $request->getMethod() . "\n" . $request->getPathInfo() . "\n" . json_encode($query) . "\n" . $call->contextKey . "\n" . $content);
+        // Audit ZCS-I3: the revision a change was sent against is part of the request (a fresh If-Match needs a fresh key).
+        $ifMatch = trim((string) $request->headers->get('If-Match', ''));
+
+        return hash('sha256', 'client/v1' . "\n" . $request->getMethod() . "\n" . $request->getPathInfo() . "\n" . json_encode($query) . "\n" . $call->contextKey . "\n" . $ifMatch . "\n" . $content);
     }
 
     private static function sorted(mixed $value): mixed
