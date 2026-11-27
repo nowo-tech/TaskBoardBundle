@@ -2,7 +2,7 @@
 
 **Baseline spec**: [`spec.md`](spec.md)  
 **Package**: `nowo-tech/task-board-bundle`  
-**Last audited**: 2026-11-26 (3.3.0: native custom fields from the import and the Custom fields page, FR-FIELD-002); 2026-11-25 (3.2.0: ClickUp import plans, FR-SYNC-015); 2026-11-25 (3.1.0: ClickUp OAuth, FR-SYNC-014); 2026-11-24 (3.0.0: every tracked file of `src/`, releases 1.10–3.0; 2026-11-22: v2.30.0)
+**Last audited**: 2026-11-26 (3.4.0: client API v1, personal-data export, Forget this person, token page way back; FR-CLIENT-001, FR-PD-001, FR-SYNC-016, FR-SYNC-017); 2026-11-26 (3.3.0: native custom fields from the import and the Custom fields page, FR-FIELD-002); 2026-11-25 (3.2.0: ClickUp import plans, FR-SYNC-015); 2026-11-25 (3.1.0: ClickUp OAuth, FR-SYNC-014); 2026-11-24 (3.0.0: every tracked file of `src/`, releases 1.10–3.0; 2026-11-22: v2.30.0)
 
 Production scope excludes Vitest sources (`*.test.ts`).
 
@@ -1196,6 +1196,46 @@ removed (their rows are gone).
 | `Sync/Repository/ImportPlanStore.php` | FR-SYNC-015 |
 | `ValueObject/TenantRef.php` | FR-SYNC-015 |
 
+## Additions 3.4.0 (client API v1, personal-data export, Forget this person, token page way back)
+
+| Source file | Spec section | Requirement IDs |
+| --- | --- | --- |
+| `Bridge/UserKit/TaskBoardUserKitExportProvider.php` | Personal-data export (3.4.0, UserKit section task_board) | FR-PD-001 |
+| `ClientApi/Contract/TaskClientContextPolicyInterface.php` | Client API v1 (3.4.0, Beacon Desktop BD-3b) | FR-CLIENT-001 |
+| `ClientApi/Contract/TaskClientFileResolverInterface.php` | Client API v1 (3.4.0, Beacon Desktop BD-3b) | FR-CLIENT-001 |
+| `ClientApi/Contract/TaskClientPrincipalResolverInterface.php` | Client API v1 (3.4.0, Beacon Desktop BD-3b) | FR-CLIENT-001 |
+| `ClientApi/Contract/TaskClientReferenceResolverInterface.php` | Client API v1 (3.4.0, Beacon Desktop BD-3b) | FR-CLIENT-001 |
+| `ClientApi/Contract/TaskClientSourceLinkInterface.php` | Client API v1 (3.4.0, Beacon Desktop BD-3b) | FR-CLIENT-001 |
+| `ClientApi/Controller/TaskClientApiController.php` | Client API v1 (3.4.0, Beacon Desktop BD-3b) | FR-CLIENT-001 |
+| `ClientApi/Model/TaskClientContext.php` | Client API v1 (3.4.0, Beacon Desktop BD-3b) | FR-CLIENT-001 |
+| `ClientApi/Model/TaskClientPrincipal.php` | Client API v1 (3.4.0, Beacon Desktop BD-3b) | FR-CLIENT-001 |
+| `ClientApi/Model/TaskClientReference.php` | Client API v1 (3.4.0, Beacon Desktop BD-3b) | FR-CLIENT-001 |
+| `ClientApi/Model/TaskClientRequest.php` | Client API v1 (3.4.0, Beacon Desktop BD-3b) | FR-CLIENT-001 |
+| `ClientApi/Model/TaskClientSource.php` | Client API v1 (3.4.0, Beacon Desktop BD-3b) | FR-CLIENT-001 |
+| `ClientApi/Model/TaskClientSourceLink.php` | Client API v1 (3.4.0, Beacon Desktop BD-3b) | FR-CLIENT-001 |
+| `ClientApi/Security/TaskClientApiListener.php` | Client API v1 (3.4.0, Beacon Desktop BD-3b) | FR-CLIENT-001 |
+| `ClientApi/Security/TaskClientAuthenticator.php` | Client API v1 (3.4.0, Beacon Desktop BD-3b) | FR-CLIENT-001 |
+| `ClientApi/TaskClientApiException.php` | Client API v1 (3.4.0, Beacon Desktop BD-3b) | FR-CLIENT-001 |
+| `ClientApi/TaskClientCall.php` | Client API v1 (3.4.0, Beacon Desktop BD-3b) | FR-CLIENT-001 |
+| `ClientApi/TaskClientCursor.php` | Client API v1 (3.4.0, Beacon Desktop BD-3b) | FR-CLIENT-001 |
+| `ClientApi/TaskClientIdempotency.php` | Client API v1 (3.4.0, Beacon Desktop BD-3b) | FR-CLIENT-001 |
+| `ClientApi/TaskClientInput.php` | Client API v1 (3.4.0, Beacon Desktop BD-3b) | FR-CLIENT-001 |
+| `ClientApi/TaskClientQueries.php` | Client API v1 (3.4.0, Beacon Desktop BD-3b) | FR-CLIENT-001 |
+| `ClientApi/TaskClientReader.php` | Client API v1 (3.4.0, Beacon Desktop BD-3b) | FR-CLIENT-001 |
+| `ClientApi/TaskClientSerializer.php` | Client API v1 (3.4.0, Beacon Desktop BD-3b) | FR-CLIENT-001 |
+| `ClientApi/TaskClientWriter.php` | Client API v1 (3.4.0, Beacon Desktop BD-3b) | FR-CLIENT-001 |
+| `ClientApi/Text/TaskTextMemo.php` | Client API v1 (3.4.0, Beacon Desktop BD-3b) | FR-CLIENT-001 |
+| `ClientApi/Text/TaskTextTokens.php` | Client API v1 (3.4.0, Beacon Desktop BD-3b) | FR-CLIENT-001 |
+| `Event/TaskClientApiDeniedEvent.php` | Client API v1 (3.4.0, Beacon Desktop BD-3b) | FR-CLIENT-001 |
+| `Form/ConnectionPeopleForgetFormType.php` | Forget this person (3.4.0, Beacon spec 208 E) | FR-SYNC-016 |
+| `Link/TaskObjectLinkVisibilityInterface.php` | Client API v1 (3.4.0, Beacon Desktop BD-3b) | FR-CLIENT-001 |
+| `PersonalData/TaskBoardPersonalDataExporter.php` | Personal-data export (3.4.0, UserKit section task_board) | FR-PD-001 |
+| `PersonalData/TaskBoardPersonalDataExporterInterface.php` | Personal-data export (3.4.0, UserKit section task_board) | FR-PD-001 |
+| `Port/Internal/TenantCredentialReturnResolverInterface.php` | The token page's way back (3.4.0) | FR-SYNC-017 |
+| `Resources/views/manage/_connection_person_forget_dialog.html.twig` | Forget this person (3.4.0, Beacon spec 208 E) | FR-SYNC-016 |
+| `Sync/Event/SyncPersonForgetCheckEvent.php` | Forget this person (3.4.0, Beacon spec 208 E) | FR-SYNC-016 |
+| `Sync/Hook/TenantCredentialReturnAwareSourceInterface.php` | The token page's way back (3.4.0) | FR-SYNC-017 |
+
 ## Coverage summary
 
 | Section | Rows |
@@ -1209,7 +1249,8 @@ removed (their rows are gone).
 | Additions 1.23–2.20 (API, sync, ports, numbers, calendar, recurrence, folders, fields, templates) | 633 |
 | Additions 2.21-2.30 (locks, menus, API conflicts, questions, calendar sources, header search, host ports) | 135 |
 | Additions 2.31–3.0 (dialogs on demand, validators domain, edit-form revision lock, script banner, question counts, 3.0 port removal) | 19 |
-| **Rows in this file** | **1071** |
+| Additions 3.4.0 (client API v1, personal-data export, Forget this person, token page way back) | 35 |
+| **Rows in this file** | **1106** |
 
 Production files under `src/` (everything tracked except co-located Vitest files): **1071**, all named in this inventory, one row per file (rows = production files; the co-located Vitest files below have no row).
 

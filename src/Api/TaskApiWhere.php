@@ -96,4 +96,25 @@ final readonly class TaskApiWhere
 
         return false;
     }
+
+    /**
+     * Since 3.4.0 (client API v1): the tenants named, or null for everything the person can reach (then
+     * {@see self::reachesTenant()} decides, minus the removed tenants).
+     *
+     * @return list<string>|null
+     */
+    public function tenantKeys(): ?array
+    {
+        return $this->everything ? null : $this->tenantKeys;
+    }
+
+    /**
+     * Since 3.4.0 (client API v1): the boards named on their own (none for everything).
+     *
+     * @return list<string>
+     */
+    public function boardIds(): array
+    {
+        return $this->everything ? [] : $this->boardIds;
+    }
 }

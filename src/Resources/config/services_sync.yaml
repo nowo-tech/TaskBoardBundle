@@ -107,6 +107,9 @@ services:
             $pollInterval: '%nowo_task_board.sync.progress.poll_interval_ms%'
             $peopleStep: '%nowo_task_board.sync.people.step%'
             $peopleBulkFormer: '%nowo_task_board.sync.people_bulk_former%'
+            # Since 3.4.0 (Beacon spec 208 E): "Forget this person", allowed by a SYNC_PERSON_FORGET_CHECK listener.
+            $peopleForget: '%nowo_task_board.sync.people_forget%'
+            $events: '@?event_dispatcher'
             $unmatchedColumnsChoice: '%nowo_task_board.sync.unmatched_columns_choice%'
             $peoplePageSize: '%nowo_task_board.sync.people.page_size%'
 
@@ -127,6 +130,8 @@ services:
         public: true
         arguments:
             $eventDispatcher: '@?event_dispatcher'
+            # Since 3.4.0: resets a manager a failed "Forget this person" closed (worker mode, kernel reset off).
+            $managerRegistry: '@?doctrine'
 
     Nowo\TaskBoardBundle\Sync\People\PeopleProjection: ~
     Nowo\TaskBoardBundle\Sync\People\SyncPeopleWriter: ~

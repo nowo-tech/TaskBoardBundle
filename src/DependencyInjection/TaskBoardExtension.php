@@ -43,10 +43,23 @@ use Nowo\TaskBoardBundle\Bridge\TimeTrack\TimeTrackScopeKeys;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TimeTrackTaskTimeBillableDefaultProvider;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TimeTrackTaskTimePeriodLock;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\TimeTrackTaskTimerStarter;
+use Nowo\TaskBoardBundle\Bridge\UserKit\TaskBoardUserKitExportProvider;
 use Nowo\TaskBoardBundle\Calendar\CalendarDayAnnotationProviderInterface;
 use Nowo\TaskBoardBundle\Calendar\CalendarDayAnnotator;
 use Nowo\TaskBoardBundle\Calendar\CalendarEventCollector;
 use Nowo\TaskBoardBundle\Calendar\CalendarEventSourceInterface;
+use Nowo\TaskBoardBundle\ClientApi\Contract\TaskClientContextPolicyInterface;
+use Nowo\TaskBoardBundle\ClientApi\Contract\TaskClientPrincipalResolverInterface;
+use Nowo\TaskBoardBundle\ClientApi\Controller\TaskClientApiController;
+use Nowo\TaskBoardBundle\ClientApi\Security\TaskClientApiListener;
+use Nowo\TaskBoardBundle\ClientApi\Security\TaskClientAuthenticator;
+use Nowo\TaskBoardBundle\ClientApi\TaskClientCursor;
+use Nowo\TaskBoardBundle\ClientApi\TaskClientIdempotency;
+use Nowo\TaskBoardBundle\ClientApi\TaskClientQueries;
+use Nowo\TaskBoardBundle\ClientApi\TaskClientReader;
+use Nowo\TaskBoardBundle\ClientApi\TaskClientSerializer;
+use Nowo\TaskBoardBundle\ClientApi\TaskClientWriter;
+use Nowo\TaskBoardBundle\ClientApi\Text\TaskTextTokens;
 use Nowo\TaskBoardBundle\Comment\DefaultTaskMentionCandidatesResolver;
 use Nowo\TaskBoardBundle\Controller\TaskBoardManageController;
 use Nowo\TaskBoardBundle\Controller\TaskCopyController;
@@ -87,6 +100,8 @@ use Nowo\TaskBoardBundle\MultiBoard\NullMultiBoardScopeProvider;
 use Nowo\TaskBoardBundle\Number\TaskNumberBackfiller;
 use Nowo\TaskBoardBundle\Number\TaskNumberLedger;
 use Nowo\TaskBoardBundle\Number\TaskNumberListener;
+use Nowo\TaskBoardBundle\PersonalData\TaskBoardPersonalDataExporter;
+use Nowo\TaskBoardBundle\PersonalData\TaskBoardPersonalDataExporterInterface;
 use Nowo\TaskBoardBundle\Port\Internal\InlineImageRewriterInterface;
 use Nowo\TaskBoardBundle\Port\Internal\ProviderCredentialResolverInterface;
 use Nowo\TaskBoardBundle\Port\Internal\SyncActorResolverInterface;
@@ -159,6 +174,7 @@ use Nowo\TaskBoardBundle\Security\TaskBoardTeamMembershipResolverInterface;
 use Nowo\TaskBoardBundle\Service\OrderedRowLockInterface;
 use Nowo\TaskBoardBundle\Service\TaskBoardCreator;
 use Nowo\TaskBoardBundle\Service\TaskEventDeferral;
+use Nowo\TaskBoardBundle\Service\TaskLinkAttacher;
 use Nowo\TaskBoardBundle\Service\TaskTimeBillableDefaultProviderInterface;
 use Nowo\TaskBoardBundle\Service\TaskTimeBillableService;
 use Nowo\TaskBoardBundle\Service\TaskTimePeriodLockInterface;
@@ -180,6 +196,7 @@ use Nowo\TaskBoardBundle\Sync\OAuth\ClickUpOAuthClient;
 use Nowo\TaskBoardBundle\Sync\People\PeopleMappingService;
 use Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleReassigner;
 use Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleScanner;
+use Nowo\TaskBoardBundle\Sync\People\TaskSyncPersonRepository;
 use Nowo\TaskBoardBundle\Sync\Plan\ImportPlanPreviewer;
 use Nowo\TaskBoardBundle\Sync\Plan\ImportPlanRunner;
 use Nowo\TaskBoardBundle\Sync\Plan\ImportPlanRunnerInterface;
@@ -222,8 +239,10 @@ use Nowo\TimeTrackBundle\Service\TimerService;
 use Nowo\TimeTrackBundle\Timesheet\PeriodLockGuard;
 use Nowo\TimeTrackBundle\Timesheet\TimesheetScopeProviderInterface;
 use Nowo\TransactionDoctrine\Symfony\Conflict\ConflictResponseFormatterInterface;
+use Nowo\UserKitBundle\PersonalData\PersonalDataExportProviderInterface;
 use Symfony\Component\Config\Definition\Exception\InvalidConfigurationException;
 use Symfony\Component\Config\FileLocator;
+use Symfony\Component\Config\Resource\ClassExistenceResource;
 use Symfony\Component\DependencyInjection\Argument\IteratorArgument;
 use Symfony\Component\DependencyInjection\Argument\TaggedIteratorArgument;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
@@ -251,6 +270,9 @@ use function sprintf;
  */
 final class TaskBoardExtension extends Extension implements PrependExtensionInterface
 {
+    /** Since 3.4.0: UserKit's export section contract (optional dependency: a literal, so the bundle loads without it). */
+    public const USER_KIT_EXPORT_PROVIDER_INTERFACE = PersonalDataExportProviderInterface::class;
+
     private const TIPTAP_EXTENSION = 'nowo_tiptap_editor';
 
     /** Since 2.25.0: SearchKit's `EntitySearchDefinition::TAG` (a literal: SearchKit is optional). */
@@ -429,6 +451,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $this->registerBoardCreation($container, $config['board']);
         $this->registerHostHooks($container, $config);
         $this->registerApi($container, $loader, $config, $emName);
+        $this->registerClientApi($container, $config, $emName);
+        $this->registerPersonalData($container, $config, $emName);
         $this->registerPrivateEntityManager($container, $config['database']['private_entity_manager'], $emName);
         $this->registerHostCommitEvents($container, (bool) $config['events']['after_host_commit']);
         $this->registerRequestBoundary($container);
@@ -564,6 +588,118 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
                 ->setArgument('$commits', new Reference(TaskApiCommitWatermark::class))
                 ->addTag(ConflictResponseFormatterInterface::TAG));
         }
+    }
+
+    /**
+     * Since 3.4.0 (Beacon Desktop BD-3b, design `BEACON_DESKTOP_TASKS.md`): `client_api.*`. Without a
+     * `principal_resolver` nothing is registered: no route, service, listener or parameter. It needs `api.enabled` (it
+     * runs the Task API's guard, operations, audit and idempotency store) and a `context_policy`.
+     *
+     * @param array<string, mixed> $config
+     */
+    private function registerClientApi(ContainerBuilder $container, array $config, string $emName): void
+    {
+        $client = $config['client_api'];
+        if (!is_string($client['principal_resolver']) || $client['principal_resolver'] === '') {
+            return;
+        }
+        if (!$config['api']['enabled']) {
+            throw new LogicException('nowo_task_board.client_api.principal_resolver needs api.enabled: the client API runs the Task API\'s guard, operations, audit and idempotency store (set its hooks).');
+        }
+        if (!is_string($client['context_policy']) || $client['context_policy'] === '') {
+            throw new LogicException('nowo_task_board.client_api.principal_resolver needs client_api.context_policy: the service id of a Nowo\\TaskBoardBundle\\ClientApi\\Contract\\TaskClientContextPolicyInterface (every request names its context).');
+        }
+        $v1       = $client['prefix'] . '/v1';
+        $manager  = new Reference(sprintf('doctrine.orm.%s_entity_manager', $emName));
+        $optional = static fn (mixed $id): ?Reference => is_string($id) && $id !== '' ? new Reference($id) : null;
+        $container->setParameter('nowo_task_board.client_api.v1_path_prefix', $v1);
+        $container->setAlias(TaskClientPrincipalResolverInterface::class, $client['principal_resolver']);
+        $container->setAlias(TaskClientContextPolicyInterface::class, $client['context_policy']);
+
+        $container->setDefinition('nowo_task_board.client_api.authenticator', (new Definition(TaskClientAuthenticator::class))
+            ->setArgument('$resolver', new Reference(TaskClientPrincipalResolverInterface::class))
+            ->setArgument('$v1Prefix', $v1)
+            ->setArgument('$contextHeader', $client['context_header'])
+            ->setArgument('$events', new Reference('event_dispatcher', ContainerInterface::NULL_ON_INVALID_REFERENCE)));
+        $container->setAlias(TaskClientAuthenticator::class, 'nowo_task_board.client_api.authenticator');
+        $container->setDefinition(TaskClientApiListener::class, (new Definition(TaskClientApiListener::class))
+            ->setAutowired(true)
+            ->setArgument('$contexts', new Reference(TaskClientContextPolicyInterface::class))
+            ->setArgument('$v1Prefix', $v1)
+            ->setArgument('$contextHeader', $client['context_header'])
+            ->setArgument('$events', new Reference('event_dispatcher', ContainerInterface::NULL_ON_INVALID_REFERENCE))
+            ->setArgument('$logger', new Reference('logger', ContainerInterface::NULL_ON_INVALID_REFERENCE))
+            ->setArgument('$conflictPolicy', new Reference('nowo_transaction_doctrine.conflict_response_policy', ContainerInterface::NULL_ON_INVALID_REFERENCE))
+            ->addTag('kernel.event_subscriber'));
+        $container->setDefinition(TaskClientQueries::class, (new Definition(TaskClientQueries::class))
+            ->setArgument('$entityManager', $manager)
+            ->setArgument('$users', new Reference(TaskBoardUsers::class)));
+        // Audit ZCS-L2: cursors sealed with keys derived from kernel.secret.
+        $container->setDefinition(TaskClientCursor::class, (new Definition(TaskClientCursor::class))->setArgument('$secret', '%kernel.secret%'));
+        $container->setDefinition(TaskTextTokens::class, (new Definition(TaskTextTokens::class))
+            ->setArgument('$references', $optional($client['reference_resolver']))
+            ->setArgument('$files', $optional($client['file_resolver']))
+            ->setArgument('$fileScheme', $client['file_scheme']));
+        $container->setDefinition(TaskClientSerializer::class, (new Definition(TaskClientSerializer::class))
+            ->setAutowired(true)
+            ->setArgument('$linkVisibility', $optional($client['link_visibility']))
+            ->setArgument('$urls', new Reference('router', ContainerInterface::NULL_ON_INVALID_REFERENCE))
+            ->setArgument('$taskRoute', $config['routes']['task']['name']));
+        $container->setDefinition(TaskClientReader::class, (new Definition(TaskClientReader::class))
+            ->setAutowired(true)
+            ->setArgument('$contexts', new Reference(TaskClientContextPolicyInterface::class))
+            ->setArgument('$search', new Reference(TaskTextSearchInterface::class))
+            ->setArgument('$searchMaxMatches', '%nowo_task_board.search.max_matches%')
+            ->setArgument('$questions', $config['task_questions']['enabled'] ? new Reference(TaskApiQuestionOperations::class) : null)
+            ->setArgument('$questionQuery', $config['task_questions']['enabled'] ? new Reference(TaskQuestionQuery::class) : null)
+            ->setArgument('$questionManager', $config['task_questions']['enabled'] ? new Reference(TaskQuestionManager::class) : null)
+            ->setArgument('$timeTracking', $container->hasDefinition(TaskBoardTaskDirectory::class))
+            ->setArgument('$taskNumbers', (bool) $config['task_numbers']['enabled'])
+            ->setArgument('$subtaskDepth', $config['max_subtask_depth'] ?? null));
+        $container->setDefinition(TaskClientWriter::class, (new Definition(TaskClientWriter::class))
+            ->setAutowired(true)
+            ->setArgument('$rowLock', new Reference(OrderedRowLockInterface::class, ContainerInterface::NULL_ON_INVALID_REFERENCE))
+            ->setArgument('$sources', $optional($client['source_link']))
+            ->setArgument('$links', new Reference(TaskLinkAttacher::class)));
+        $container->setDefinition(TaskClientIdempotency::class, (new Definition(TaskClientIdempotency::class))
+            ->setAutowired(true)
+            ->setArgument('$logger', new Reference('logger', ContainerInterface::NULL_ON_INVALID_REFERENCE)));
+        $container->setDefinition(TaskClientApiController::class, (new Definition(TaskClientApiController::class))
+            ->setAutowired(true)
+            ->setPublic(true)
+            ->setArgument('$maxBodyBytes', $config['api']['max_body_bytes'])
+            ->addTag('controller.service_arguments'));
+        $container->getDefinition(TaskBoardRouteLoader::class)->setArgument('$clientApiPrefix', $v1);
+    }
+
+    /**
+     * Since 3.4.0 (Beacon WORKLIST, RGPD Art. 15 and 20): the personal-data exporter (a framework-free port, always),
+     * and the UserKit export section `task_board` when nowo-tech/user-kit-bundle is installed and `personal_data.user_kit`
+     * is true. Tagged explicitly (not autoconfigured), so it also runs when the host turned UserKit's autoconfiguration
+     * off; UserKit's own `personal_data.enabled` still decides whether its export runs.
+     *
+     * @param array<string, mixed> $config
+     */
+    private function registerPersonalData(ContainerBuilder $container, array $config, string $emName): void
+    {
+        $sync = (bool) $config['sync']['enabled'];
+        $container->setDefinition(TaskBoardPersonalDataExporter::class, (new Definition(TaskBoardPersonalDataExporter::class))
+            ->setArgument('$entityManager', new Reference(sprintf('doctrine.orm.%s_entity_manager', $emName)))
+            ->setArgument('$users', new Reference(TaskBoardUsers::class))
+            ->setArgument('$people', $sync ? new Reference(TaskSyncPersonRepository::class) : null)
+            ->setArgument('$importPlans', $sync && (bool) $config['sync']['plans']['enabled'])
+            ->setArgument('$questions', (bool) $config['task_questions']['enabled'])
+            ->setArgument('$recurrence', (bool) $config['recurrence']['enabled']));
+        $container->setAlias(TaskBoardPersonalDataExporterInterface::class, TaskBoardPersonalDataExporter::class)->setPublic(true);
+
+        // Rebuild the cached container when UserKit is installed or removed.
+        $container->addResource(new ClassExistenceResource(self::USER_KIT_EXPORT_PROVIDER_INTERFACE));
+        if (!$config['personal_data']['user_kit'] || !interface_exists(self::USER_KIT_EXPORT_PROVIDER_INTERFACE)) {
+            return;
+        }
+        $container->setDefinition(TaskBoardUserKitExportProvider::class, (new Definition(TaskBoardUserKitExportProvider::class))
+            ->setArgument('$exporter', new Reference(TaskBoardPersonalDataExporterInterface::class))
+            ->addTag('nowo_user_kit.personal_data.export_provider', ['priority' => TaskBoardUserKitExportProvider::PRIORITY]));
     }
 
     /**
@@ -885,6 +1021,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $container->setParameter('nowo_task_board.sync.badge.progress', (bool) $sync['badge']['progress']);
         $container->setParameter('nowo_task_board.sync.people.step', (bool) $sync['people']['step']);
         $container->setParameter('nowo_task_board.sync.people_bulk_former', (bool) $sync['people_bulk_former']);
+        $container->setParameter('nowo_task_board.sync.people_forget', (bool) $sync['people_forget']);
         $container->setParameter('nowo_task_board.sync.unmatched_columns_choice', (bool) $sync['unmatched_columns_choice']);
         $container->setParameter('nowo_task_board.sync.people.page_size', (int) $sync['people']['page_size']);
 

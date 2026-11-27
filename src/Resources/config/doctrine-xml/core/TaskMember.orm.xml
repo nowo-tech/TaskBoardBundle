@@ -4,6 +4,9 @@
                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                   xsi:schemaLocation="http://doctrine-project.org/schemas/orm/doctrine-mapping https://www.doctrine-project.org/schemas/orm/doctrine-mapping.xsd">
     <entity name="Nowo\TaskBoardBundle\Entity\TaskMember" table="task_board_task_members">
+        <indexes>
+            <index name="task_board_member_user_role_idx" columns="user_id,member_role"/>
+        </indexes>
         <unique-constraints>
             <unique-constraint name="task_board_member_unique" columns="task_id,user_id,member_role"/>
         </unique-constraints>

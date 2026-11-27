@@ -57,7 +57,9 @@ final class ApiKernel extends Kernel
      */
     public function __construct(private readonly array $api = [], private readonly array $taskBoard = [], private readonly bool $withFirewall = true)
     {
-        parent::__construct('test', true);
+        // Since 3.4.0: TASK_BOARD_TEST_DEBUG=0 builds the kernel as production does (no query logging or profiling), as
+        // FunctionalKernel: a worker test then measures the bundle's memory, not the debug collectors'.
+        parent::__construct('test', getenv('TASK_BOARD_TEST_DEBUG') !== '0');
     }
 
     public function registerBundles(): iterable
@@ -83,7 +85,7 @@ final class ApiKernel extends Kernel
 
     public function getCacheDir(): string
     {
-        return sys_get_temp_dir() . '/nowo-task-board-api/' . md5(serialize([$this->api, $this->taskBoard, $this->withFirewall, FunctionalKernel::databaseUrl(), TwinPortAdapters::enabled(), getenv('TASK_BOARD_TEST_XML_MAPPING') === '1'])) . '/cache';
+        return sys_get_temp_dir() . '/nowo-task-board-api/' . md5(serialize([$this->api, $this->taskBoard, $this->withFirewall, FunctionalKernel::databaseUrl(), TwinPortAdapters::enabled(), getenv('TASK_BOARD_TEST_XML_MAPPING') === '1', $this->debug])) . '/cache';
     }
 
     public function getLogDir(): string
@@ -139,11 +141,18 @@ final class ApiKernel extends Kernel
                 ]],
             ] + $this->nativeLazyObjects(),
         ]);
+        // Since 3.4.0: the client API's own stateless firewall, before the Task API's (the first pattern that matches wins).
+        $client = isset($this->taskBoard['client_api']) && $this->withFirewall
+            ? ['task_board_client' => ['pattern' => '^/api/task-board/v1/', 'stateless' => true, 'provider' => 'app', 'custom_authenticators' => ['nowo_task_board.client_api.authenticator'], 'entry_point' => 'nowo_task_board.client_api.authenticator']]
+            : [];
         $container->extension('security', [
             'providers' => ['app' => ['entity' => ['class' => AppUser::class, 'property' => 'email']]],
-            'firewalls' => ($this->withFirewall ? ['task_api' => ['pattern' => '^/api/', 'stateless' => true, 'provider' => 'app', 'custom_authenticators' => ['app.api_firewall']]] : [])
+            'firewalls' => $client + ($this->withFirewall ? ['task_api' => ['pattern' => '^/api/', 'stateless' => true, 'provider' => 'app', 'custom_authenticators' => ['app.api_firewall']]] : [])
                 + ['main' => ['lazy' => true, 'provider' => 'app']],
         ]);
+        if (isset($this->taskBoard['client_api'])) {
+            $services->set('app.client_host', ClientApiTestHost::class)->autowire()->public();
+        }
         $container->extension('twig', ['strict_variables' => true]);
         // Like Beacon: no resource scoping, the host's listeners decide (one configuration, so one container, for most tests).
         if (($this->taskBoard['__write_units'] ?? false) === true) {

@@ -6,7 +6,9 @@ namespace Nowo\TaskBoardBundle\Controller;
 
 use DateTimeImmutable;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Form\ConnectionLinkFormType;
+use Nowo\TaskBoardBundle\Form\ConnectionPeopleForgetFormType;
 use Nowo\TaskBoardBundle\Form\ConnectionPeopleFormerFormType;
 use Nowo\TaskBoardBundle\Form\ConnectionPeopleFormType;
 use Nowo\TaskBoardBundle\Form\ConnectionRefreshFormType;
@@ -25,8 +27,10 @@ use Nowo\TaskBoardBundle\Sync\Dto\SyncTrigger;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskBoardConnection;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncDirectory;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncItem;
+use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPerson;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncPersonMapping;
 use Nowo\TaskBoardBundle\Sync\Entity\TaskSyncRun;
+use Nowo\TaskBoardBundle\Sync\Event\SyncPersonForgetCheckEvent;
 use Nowo\TaskBoardBundle\Sync\Exception\ProviderException;
 use Nowo\TaskBoardBundle\Sync\Exception\SyncBusyException;
 use Nowo\TaskBoardBundle\Sync\Hook\ConnectionChoice;
@@ -74,6 +78,7 @@ use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Contracts\Cache\CacheInterface;
 use Symfony\Contracts\Cache\ItemInterface;
+use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
 use Twig\Environment;
 
@@ -145,6 +150,9 @@ final class TaskBoardConnectionController extends AbstractController
         private readonly bool $unmatchedColumnsChoice = false,
         // Since 2.0.0: the layout of the scaffolds (`web_ui.layout_template`).
         private readonly TaskBoardPages $pages = new TaskBoardPages(),
+        // Since 3.4.0 (Beacon spec 208 E): "Forget this person", allowed by a SYNC_PERSON_FORGET_CHECK listener.
+        private readonly bool $peopleForget = false,
+        private readonly ?EventDispatcherInterface $events = null,
     ) {
     }
 
@@ -542,6 +550,77 @@ final class TaskBoardConnectionController extends AbstractController
         $this->addFlash('success', $this->translator->trans('task_board.sync.people.flash.former', ['%count%' => (string) $changed], 'NowoTaskBoardBundle'));
 
         return $this->redirectToRoute($this->routes['board_connection_people']['name'], ['boardId' => $boardId]);
+    }
+
+    /**
+     * Since 3.4.0 (Beacon spec 208 E, owner decision 2026-11-26): "Forget this person" — the remote person's name and
+     * e-mail are cleared through {@see TaskSyncPeopleDirectoryService::anonymise()} (references and the mapping stay).
+     * Only with `sync.people_forget`, for whoever manages the board's connection and is allowed by a
+     * `SYNC_PERSON_FORGET_CHECK` listener (denied by default). CSRF POST behind the page's confirm dialog. Idempotent: an
+     * already forgotten person answers the same success and dispatches nothing again. Logged and audited by id only.
+     */
+    #[Route('/tools/task-board/board/{boardId}/connection/people/{personId}/forget', name: 'nowo_task_board_board_connection_people_forget', methods: ['POST'])]
+    public function peopleForget(string $boardId, string $personId, Request $request): RedirectResponse
+    {
+        $user       = $this->requireUser();
+        $board      = $this->findManagedBoard($boardId, $user);
+        $connection = $this->linkedConnection($board);
+        $directory  = $connection->getDirectory();
+        if (!$this->peopleForget || !$directory instanceof TaskSyncDirectory || !$this->peopleDirectories instanceof TaskSyncPeopleDirectoryService || !$this->peopleRepository instanceof TaskSyncPersonRepository) {
+            throw new NotFoundHttpException('No people for this connection.');
+        }
+        // REQ-SEC-006: the person of exactly this id, in exactly this directory (a collation may fold the lookup).
+        $person = $this->peopleRepository->findPerson($personId);
+        if (!$person instanceof TaskSyncPerson || $person->getId() !== $personId || $person->getDirectory()->getId() !== $directory->getId()) {
+            throw new NotFoundHttpException('Person not found.');
+        }
+        $form = $this->peopleForgetForm($board, $person);
+        $form->handleRequest($request);
+        if (!$form->isSubmitted() || !$form->isValid()) {
+            $this->logRefused('csrf_invalid');
+
+            throw $this->createAccessDeniedException('Invalid CSRF token.');
+        }
+        if (!$this->mayForget($user, $board, $directory, $person->getId())) {
+            $this->logRefused('people_forget_denied');
+
+            throw $this->createAccessDeniedException();
+        }
+        $already = $person->isAnonymised();
+        try {
+            $this->peopleDirectories->anonymise($person, $user);
+        } catch (PeopleMappingDeniedException) { // @codeCoverageIgnoreStart
+            // Another board joined the directory since the page was drawn and this person does not manage it.
+            throw new NotFoundHttpException('Board not found.');
+        } // @codeCoverageIgnoreEnd
+        $this->logWrite('sync_person_forget', ['board_id' => $boardId, 'directory_id' => $directory->getId(), 'person_id' => $person->getId(), 'already' => $already]);
+        $this->addFlash('success', $this->translator->trans('task_board.sync.people.flash.forgotten', [], 'NowoTaskBoardBundle'));
+
+        return $this->redirectToRoute($this->routes['board_connection_people']['name'], ['boardId' => $boardId, 'filter' => $this->peopleFilterName($request->query), 'page' => $this->peoplePage($request->query)]);
+    }
+
+    /** Since 3.4.0: the host's decision (deny by default); `$personId` null asks whether the page offers the action. */
+    private function mayForget(UserInterface $user, TaskBoard $board, TaskSyncDirectory $directory, ?string $personId): bool
+    {
+        if (!$this->peopleForget || !$this->events instanceof EventDispatcherInterface) {
+            return false;
+        }
+        $check = new SyncPersonForgetCheckEvent($user, $board->getId(), $board->getTenantKey(), $directory->getId(), $personId);
+        $this->events->dispatch($check, TaskBoardEvents::SYNC_PERSON_FORGET_CHECK);
+
+        return $check->isAllowed();
+    }
+
+    /**
+     * @param array<string, int|string> $query
+     *
+     * @return FormInterface<mixed>
+     */
+    private function peopleForgetForm(TaskBoard $board, TaskSyncPerson $person, array $query = []): FormInterface
+    {
+        return $this->container->get('form.factory')->createNamed(ConnectionPeopleForgetFormType::NAME, ConnectionPeopleForgetFormType::class, null, [
+            'action' => $this->generateUrl($this->routes['board_connection_people_forget']['name'], ['boardId' => $board->getId(), 'personId' => $person->getId()] + $query),
+        ]);
     }
 
     /** The one-line summary of a report, in the user's language (also the live region text). */
@@ -942,6 +1021,9 @@ final class TaskBoardConnectionController extends AbstractController
             $form    = $this->peopleForm($board, $user, $rows, $labels, ['filter' => $filter, 'page' => $page])->createView();
         }
 
+        // Since 3.4.0: one CSRF-only form per person shown who is not forgotten yet, when the host allows the action here.
+        $forgetForms = $this->peopleForgetForms($board, $directory, $user, $rows, ['filter' => $filter, 'page' => $page]);
+
         return [
             'board'              => $board,
             'connection'         => $connection,
@@ -956,10 +1038,33 @@ final class TaskBoardConnectionController extends AbstractController
             'peopleSummary'      => $this->peopleSummary($board, $connection),
             'pendingReassigns'   => $directory instanceof TaskSyncDirectory && $this->peopleRepository instanceof TaskSyncPersonRepository ? count($this->peopleRepository->pendingReassigns($directory)) : 0,
             'firstImportPending' => $this->firstImportPending($connection),
-            'peopleFormerForm'   => $this->peopleBulkFormer && $directory instanceof TaskSyncDirectory && $this->peopleRepository instanceof TaskSyncPersonRepository && $this->peopleRepository->unmappedCount($directory) > 0 ? $this->peopleFormerForm($board)->createView() : null,
-            'dashboardRoute'     => $this->dashboardRoute,
-            'templates'          => $this->templates,
+            // Since 3.4.0: one CSRF-only form per person shown who is not forgotten yet, when the host allows the action here.
+            'peopleForgetForms' => $forgetForms,
+            'peopleFormerForm'  => $this->peopleBulkFormer && $directory instanceof TaskSyncDirectory && $this->peopleRepository instanceof TaskSyncPersonRepository && $this->peopleRepository->unmappedCount($directory) > 0 ? $this->peopleFormerForm($board)->createView() : null,
+            'dashboardRoute'    => $this->dashboardRoute,
+            'templates'         => $this->templates,
         ];
+    }
+
+    /**
+     * @param list<PeopleMappingRow> $rows
+     * @param array{filter: string, page: int} $query
+     *
+     * @return array<string, FormView>
+     */
+    private function peopleForgetForms(TaskBoard $board, ?TaskSyncDirectory $directory, UserInterface $user, array $rows, array $query): array
+    {
+        if (!$directory instanceof TaskSyncDirectory || $rows === [] || !$this->mayForget($user, $board, $directory, null)) {
+            return [];
+        }
+        $forms = [];
+        foreach ($rows as $row) {
+            if (!$row->person->isAnonymised()) {
+                $forms[$row->person->getId()] = $this->peopleForgetForm($board, $row->person, $query)->createView();
+            }
+        }
+
+        return $forms;
     }
 
     /**

@@ -335,7 +335,10 @@ nowo_task_board:
   `tenantCredentialFormUrl()` and `tenantConnectUrl(TenantRef, provider, returnTo)` (the OAuth start; `returnTo` is
   the plan's Connect step, a same-origin path — check it with `OAuthReturnPath::isSafe()`). A reference given here must
   work in `credentialFor()` for every board of that tenant: the runner asks it per board. Without the interface the
-  plan pages answer 404.
+  plan pages answer 404. Since 3.4.0 the same service may also implement
+  `Sync\Hook\TenantCredentialReturnAwareSourceInterface::tenantCredentialFormUrlWithReturn(TenantRef, provider,
+  ?returnTo)`: the token page's link then carries the way back to the Connect step (a same-origin path the bundle
+  checked with `OAuthReturnPath::isSafe()`); without it the link is `tenantCredentialFormUrl()`, as before.
 - **Who may import** (Q-CU-10): the tenant action `import_plan` — event `TenantAccessCheckEvent` on
   `TaskBoardEvents::TENANT_ACCESS_CHECK`. Denied by default except to `security.manage_roles` holders; a listener
   calls `grant()` (Beacon: project managers and organisation admins) or `deny()`. Every plan route answers 404 when it

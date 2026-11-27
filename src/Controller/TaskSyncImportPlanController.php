@@ -495,7 +495,7 @@ final class TaskSyncImportPlanController extends AbstractController
             case ImportPlanStep::Connect:
                 $returnTo                  = $this->generateUrl($this->routes['import_plan']['name'], ['planId' => $plan->getId(), 'step' => ImportPlanStep::Connect->value]);
                 $vars['connectUrl']        = $this->hostUrl($this->plans->connectUrl($plan, $returnTo));
-                $vars['credentialFormUrl'] = $this->hostUrl($this->plans->credentialFormUrl($plan));
+                $vars['credentialFormUrl'] = $this->hostUrl($this->plans->credentialFormUrl($plan, $returnTo));
                 break;
             case ImportPlanStep::Tree:
                 $vars['tree']   = $this->tree($plan, $opened);

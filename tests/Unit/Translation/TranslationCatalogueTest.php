@@ -117,6 +117,7 @@ final class TranslationCatalogueTest extends TestCase
             'task_board.sync.trigger.manual',
         ],
         'fr' => [
+            'task_board.sync.people.col_actions',
             'task_board.custom_field.options',
             'task_board.custom_field.actions',
             'task_board.custom_field.form.type',

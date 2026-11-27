@@ -9,6 +9,7 @@
             <index name="task_board_tasks_board_archived_idx" columns="board_id,archived_at"/>
             <index name="task_board_tasks_board_open_due_idx" columns="board_id,completed_at,due_at"/>
             <index name="task_board_tasks_number_idx" columns="number"/>
+            <index name="task_board_tasks_board_updated_idx" columns="board_id,updated_at"/>
         </indexes>
         <lifecycle-callbacks>
             <lifecycle-callback type="preRemove" method="detachTimeEntries"/>

@@ -16,6 +16,7 @@ use Nowo\TaskBoardBundle\Entity\TaskDocument;
 use Nowo\TaskBoardBundle\Enum\TaskChangeType;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
+use Nowo\TaskBoardBundle\PersonalData\TaskBoardPersonalDataExporter;
 use Nowo\TaskBoardBundle\Port\Internal\SyncPersonResolverInterface;
 use Nowo\TaskBoardBundle\Question\TaskQuestionManager;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
@@ -54,6 +55,13 @@ final readonly class TaskSyncPeopleReassigner
     private const STALE_AFTER = 'PT10M';
 
     private TaskTimeEntrySnapshotPurger $timeEntries;
+
+    /**
+     * Since 3.4.0: the steps of {@see self::detachUser()}, in order — each changes what one section of the personal-data
+     * export lists ({@see TaskBoardPersonalDataExporter::ERASURE_SECTIONS}, pinned by a test). `TaskRecurrenceManager::
+     * forgetAuthor()` is the other eraser of an account (`recurrence`). A new step here needs its export section.
+     */
+    public const ERASURE_STEPS = ['sync_people', 'questions', 'import_plans', 'tasks', 'comments', 'boards', 'documents', 'history', 'last_writes', 'member_rows', 'time_entries'];
 
     public function __construct(
         private EntityManagerInterface $entityManager,

@@ -6,7 +6,7 @@
     maps the changed rows and re-applies them to the tasks already imported. During the People step (sync.people.step)
     the save starts the first import. Remote names and e-mails are untrusted text (escaped) and shown only to managers.
     board, connection, provider, directory, rows, peopleForm, filter, page, hasNext, peopleSummary, pendingReassigns,
-    firstImportPending. Override with templates.connection_people.
+    firstImportPending, peopleForgetForms (since 3.4.0; a forgotten person is no longer listed). Override with templates.connection_people.
     Since 2.5.0 (TB-12): UiKit only — the filter is the kit's `tabs` partial (level secondary), the person's initials the
     kit's `avatar` partial; no framework (Bootstrap) classes.
 #}
@@ -77,6 +77,9 @@
                                         <tr>
                                             <th scope="col">{{ 'task_board.sync.people.col_person'|trans({'%provider%': _provider}, 'NowoTaskBoardBundle') }}</th>
                                             <th scope="col">{{ 'task_board.sync.people.col_user'|trans({}, 'NowoTaskBoardBundle') }}</th>
+                                            {% if peopleForgetForms|default([]) is not empty %}
+                                                <th scope="col"><span class="nowo-task-sr-only">{{ 'task_board.sync.people.col_actions'|trans({}, 'NowoTaskBoardBundle') }}</span></th>
+                                            {% endif %}
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -107,6 +110,14 @@
                                                     </div>
                                                 </td>
                                                 <td>{{ form_widget(peopleForm['p_' ~ _person.id]) }}{{ form_errors(peopleForm['p_' ~ _person.id]) }}</td>
+                                                {% if peopleForgetForms|default([]) is not empty %}
+                                                    <td>
+                                                        {#- Since 3.4.0 (sync.people_forget, Beacon spec 208 E): opens this person's confirm dialog (below, outside the People form). -#}
+                                                        {% if peopleForgetForms[_person.id] is defined %}
+                                                            <button type="button" class="{{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_danger', 'NowoTaskBoardBundle') }}" data-nowo-ui-dialog-open="nowo-task-sync-person-forget-{{ _person.id }}" aria-describedby="nowo-task-sync-person-{{ _person.id }}" data-testid="nowo-task-sync-person-forget">{{ 'task_board.sync.people.forget.action'|trans({}, 'NowoTaskBoardBundle') }}</button>
+                                                        {% endif %}
+                                                    </td>
+                                                {% endif %}
                                             </tr>
                                         {% endfor %}
                                     </tbody>
@@ -124,6 +135,10 @@
                             {% endif %}
                         </div>
                     {{ form_end(peopleForm) }}
+
+                    {% for _person_id, _forget_form in peopleForgetForms|default([]) %}
+                        {{ include('@NowoTaskBoardBundle/manage/_connection_person_forget_dialog.html.twig', {personId: _person_id, forgetForm: _forget_form}, with_context: false) }}
+                    {% endfor %}
 
                     {% if peopleFormerForm|default(null) %}
                         {#- Since 1.28.0 (sync.people_bulk_former). -#}

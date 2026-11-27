@@ -12,6 +12,8 @@ use Nowo\TaskBoardBundle\Api\Controller\TaskApiReadController;
 use Nowo\TaskBoardBundle\Api\Controller\TaskApiTemplateController;
 use Nowo\TaskBoardBundle\Api\Controller\TaskApiWriteController;
 use Nowo\TaskBoardBundle\Api\Security\TaskApiRequestListener;
+use Nowo\TaskBoardBundle\ClientApi\Controller\TaskClientApiController;
+use Nowo\TaskBoardBundle\ClientApi\Security\TaskClientApiListener;
 use Nowo\TaskBoardBundle\Controller\TaskBoardConnectionController;
 use Nowo\TaskBoardBundle\Controller\TaskBoardManageController;
 use Nowo\TaskBoardBundle\Controller\TaskBoardMultiBoardController;
@@ -196,6 +198,8 @@ final class TaskBoardRouteLoader extends Loader
         private readonly bool $importPlansEnabled = false,
         // Since 3.3.0: the board's Custom fields page exists only with `web_ui.custom_fields_page`.
         private readonly bool $customFieldsEnabled = false,
+        // Since 3.4.0 (client API v1): `<client_api.prefix>/v1` when the client API is on; null: no client route.
+        private readonly ?string $clientApiPrefix = null,
     ) {
         parent::__construct();
         $this->attributeLoader = new ControllerAttributeRouteLoader();
@@ -290,6 +294,8 @@ final class TaskBoardRouteLoader extends Loader
             $this->addRoute($collection, $attributes, 'board_connection_people', TaskBoardConnectionController::class . '::people');
             $this->addRoute($collection, $attributes, 'board_connection_people_save', TaskBoardConnectionController::class . '::peopleSave');
             $this->addRoute($collection, $attributes, 'board_connection_people_former', TaskBoardConnectionController::class . '::peopleFormer');
+            // Since 3.4.0 (Beacon spec 208 E).
+            $this->addRoute($collection, $attributes, 'board_connection_people_forget', TaskBoardConnectionController::class . '::peopleForget');
             if ($this->importPlansEnabled) {
                 // Since 3.2.0 (CU-2): the guided import.
                 foreach (['import_plans' => 'plans', 'import_plan_new' => 'create', 'import_plan' => 'show', 'import_plan_step' => 'save', 'import_plan_start' => 'start', 'import_plan_progress' => 'progress', 'import_plan_cancel' => 'cancel', 'import_plan_resume' => 'resume', 'import_plan_delete' => 'delete', 'import_plan_report' => 'report'] as $key => $action) {
@@ -301,6 +307,7 @@ final class TaskBoardRouteLoader extends Loader
         $this->addTenantCopies($collection);
         $this->addMultiBoardRoutes($collection, $attributes);
         $this->addApiRoutes($collection, $attributes);
+        $this->addClientApiRoutes($collection);
 
         return $collection;
     }
@@ -403,6 +410,29 @@ final class TaskBoardRouteLoader extends Loader
         foreach ($routes as $name => $controller) {
             $attribute = $attributes[$controller] ?? throw new LogicException(sprintf('No #[Route] attribute on "%s".', $controller));
             $collection->add('nowo_task_board_api_' . $name, $this->fromAttribute($attributes, $controller, $this->apiPrefix . $attribute->getPath()));
+        }
+    }
+
+    /**
+     * Since 3.4.0 (client API v1): stateless, under `<client_api.prefix>/v1`, no route prefix and no tenant copies. Each
+     * route carries the scope it needs (`TaskClientApiListener::ROUTE_SCOPE`); ids are 1–64 characters `[A-Za-z0-9_-]`
+     * (`#` too for a task looked up by number), a person's public id at most 128 characters without a slash.
+     */
+    private function addClientApiRoutes(RouteCollection $collection): void
+    {
+        if ($this->clientApiPrefix === null) {
+            return;
+        }
+        foreach (TaskClientApiController::ROUTES as $name => [$method, $path, $action, $scope]) {
+            $collection->add('nowo_task_board_client_v1_' . $name, new Route(
+                $this->clientApiPrefix . $path,
+                ['_controller' => TaskClientApiController::class . '::' . $action, TaskClientApiListener::ROUTE_SCOPE => $scope, '_format' => 'json'],
+                ['boardId' => '[A-Za-z0-9_-]{1,64}', 'taskId' => '[A-Za-z0-9_#-]{1,64}', 'itemId' => '[A-Za-z0-9_-]{1,64}', 'userId' => '[^/]{1,128}'],
+                [],
+                '',
+                [],
+                [$method],
+            ));
         }
     }
 

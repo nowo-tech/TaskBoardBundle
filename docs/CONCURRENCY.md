@@ -276,3 +276,38 @@ Known limit (audit ZBYv-I1, planned for 3.2.x): item rows are still written thro
 slice that was taken over may write its current item's status once more before its next fenced write stops it. The
 board's run lock makes the live slice's item `busy` meanwhile, so no task is imported twice; at worst an item shows a
 stale status until the live slice reaches it.
+
+## Client API v1 (3.4)
+
+Every write of `/task-board/v1` ([CLIENT-API](CLIENT-API.md)) follows the Task API's rules:
+
+- **One short transaction per change** (`TaskApiTransaction`): rollback to the entry level, the connection closed when
+  that rollback fails (a MySQL / MariaDB deadlock ended the transaction), the original exception rethrown, the task
+  events held until the commit and dropped on a rollback, the touched tasks reloaded.
+- **Lock order**: the column a move enters (`OrderedRowLockInterface::lockColumns()`), then the task's row
+  (`lockedRevision()`, `SELECT … FOR UPDATE`), then `TaskManager::move()`'s own column scan (same order). `If-Match` is
+  compared on the locked row (database-incremented revision): a stale one is `409 conflict {currentRevision}` and
+  nothing is written. A reorder inside one column is last-writer-wins by design (`If-Match: *`, no revision bump).
+- **Checklist items** compare the item's own revision, after locking the column the tick enters (done, or back to the
+  first column: column before row, audit ZCS-L3); members compare the task's.
+- **The change is built from the row as locked** (audit ZCS-I1): a field the client did not send keeps the committed value.
+- **No I/O under the locks**: the host's `TaskClientSourceLinkInterface` is asked before the transaction; the audit
+  event and the answer are built after it.
+- **Idempotency**: creates require `Idempotency-Key` (the Task API's store: claim, 24 h; a replay re-checks reach; a lock
+  conflict after a partial commit keeps the `409 partial` answer so the key never writes twice).
+- Lock conflicts anywhere in the chain answer `409 unavailable` (`CONFLICT_001`, `Retry-After`) or `409 partial`
+  (`CONFLICT_002`).
+- Tests: `ClientApiRaceTest` (two connections: a web write between the device's read and write, two devices moving the
+  same task, a stale checklist tick), on MySQL 8.4, MariaDB 11.4 and PostgreSQL 16 in CI and locally.
+
+## Forget this person (3.4)
+
+`TaskSyncPeopleDirectoryService::anonymise()` (the People page action and any host caller) is one short transaction of
+its own (a savepoint inside the caller's): the directory's row is locked first (its counter numbers the former people),
+then the person's row; both are read as committed; the person is anonymised only when no concurrent call did it first
+(idempotent: a second call changes nothing and dispatches nothing); the audit event (`SYNC_PERSON_ANONYMISED`, ids only)
+is dispatched after this call's commit (inside a caller's transaction: after this call's savepoint, before the
+caller's commit, which may still roll back; audit ZCS-I8). A failure rolls back to the entry level (`TransactionRollback`), resets a closed manager
+and rethrows. The erasure path (`forget()`, inside `detachUser()`) keeps its caller's transaction. Test:
+`ForgetPersonTest::testTheCounterIsReadUnderTheLockAndAPersonForgottenMeanwhileIsLeftAlone`.
+

@@ -17,6 +17,9 @@ use Nowo\TaskBoardBundle\Api\TaskApiRefusal;
 use Nowo\TaskBoardBundle\Api\TaskApiWhere;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiTaskFilter;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiTimeQuery;
+use Nowo\TaskBoardBundle\ClientApi\Model\TaskClientPrincipal;
+use Nowo\TaskBoardBundle\ClientApi\TaskClientCall;
+use Nowo\TaskBoardBundle\ClientApi\TaskClientReader;
 use Nowo\TaskBoardBundle\Doctrine\TaskBoardEntityManager;
 use Nowo\TaskBoardBundle\Doctrine\Type\TaskBoardUserRefType;
 use Nowo\TaskBoardBundle\Dto\TaskBoardFormData;
@@ -25,8 +28,12 @@ use Nowo\TaskBoardBundle\Dto\TaskFormData;
 use Nowo\TaskBoardBundle\Entity\TaskMember;
 use Nowo\TaskBoardBundle\Entity\TaskTimeEntry;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
+use Nowo\TaskBoardBundle\Event\BoardAccessCheckEvent;
+use Nowo\TaskBoardBundle\Event\TaskAccessCheckEvent;
+use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\MultiBoard\DoctrineMultiBoardTaskQuery;
 use Nowo\TaskBoardBundle\MultiBoard\MultiBoardTaskFilter;
+use Nowo\TaskBoardBundle\PersonalData\TaskBoardPersonalDataExporterInterface;
 use Nowo\TaskBoardBundle\Port\Internal\TaskApiTimeEntriesInterface;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Service\TaskBoardCreatorInterface;
@@ -36,6 +43,8 @@ use Nowo\TaskBoardBundle\Service\TaskTimeLoggerInterface;
 use Nowo\TaskBoardBundle\Sync\People\TaskSyncPeopleReassigner;
 use Nowo\TaskBoardBundle\Sync\People\TaskSyncPersonRepository;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
+use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\KernelInterface;
 
 /**
@@ -51,8 +60,10 @@ final class DddHostLookAlikeTest extends KernelTestCase
     protected static function createKernel(array $options = []): KernelInterface
     {
         return new DddHostKernel([
-            'api'  => ['enabled' => true, 'hooks' => ['authenticator' => 'app.users', 'time_entries' => ManualTaskApiTimeEntries::class, 'users' => 'app.users']],
-            'sync' => ['enabled' => true, 'credential_resolver' => 'app.users'],
+            'api' => ['enabled' => true, 'hooks' => ['authenticator' => 'app.users', 'time_entries' => ManualTaskApiTimeEntries::class, 'users' => 'app.users', 'workspace' => 'app.ddd_client', 'plan_gate' => 'app.ddd_client']],
+            // Since 3.4.0: the client API's reader, for its exact "me" filter.
+            'client_api' => ['principal_resolver' => 'app.ddd_client', 'context_policy' => 'app.ddd_client'],
+            'sync'       => ['enabled' => true, 'credential_resolver' => 'app.users'],
         ]);
     }
 
@@ -124,6 +135,34 @@ final class DddHostLookAlikeTest extends KernelTestCase
         self::assertInstanceOf(DoctrineMultiBoardTaskQuery::class, $multi);
         self::assertSame([], $multi->workload([$board->getId()], new MultiBoardTaskFilter(assigneeId: 'U-BRUNO'), new DateTimeImmutable()));
         self::assertCount(1, $multi->workload([$board->getId()], new MultiBoardTaskFilter(assigneeId: 'u-bruno'), new DateTimeImmutable()));
+
+        // Since 3.4.0: the personal-data export of exactly this id.
+        $exporter = $container->get(TaskBoardPersonalDataExporterInterface::class);
+        self::assertInstanceOf(TaskBoardPersonalDataExporterInterface::class, $exporter);
+        self::assertSame([], $exporter->export($upper)['tasks_created']);
+        self::assertSame([], $exporter->export($upper)['time_entries']);
+        self::assertCount(1, $exporter->export($bruno)['tasks_created']);
+
+        // Since 3.4.0 (audit ZCS-I7): the client API's "assignee=me" keeps exactly the caller's assignments; the database
+        // also answers Bruno's row for the look-alike, and the reader drops it.
+        $reader = $container->get(TaskClientReader::class);
+        self::assertInstanceOf(TaskClientReader::class, $reader);
+        $dispatcher = $container->get('event_dispatcher');
+        self::assertInstanceOf(EventDispatcherInterface::class, $dispatcher);
+        $boards = static function (BoardAccessCheckEvent $event): void {
+            $event->grant();
+        };
+        $tasks = static function (TaskAccessCheckEvent $event): void {
+            $event->grant();
+        };
+        $dispatcher->addListener(TaskBoardEvents::BOARD_ACCESS_CHECK, $boards);
+        $dispatcher->addListener(TaskBoardEvents::TASK_ACCESS_CHECK, $tasks);
+        $call = static fn (object $user): TaskClientCall => new TaskClientCall(new TaskClientPrincipal($user, [TaskClientPrincipal::SCOPE_READ], 'tok'), new TaskApiPrincipal($user, TaskApiLevel::Read, TaskApiWhere::limitedTo([], [$board->getId()]), 'tok', 'Desk', 'app'), 'personal');
+        self::assertCount(1, $reader->boardTasks($call($bruno), $board->getId(), Request::create('/x?assignee=me'))['tasks']);
+        self::assertSame([], $reader->boardTasks($call($upper), $board->getId(), Request::create('/x?assignee=me'))['tasks']);
+        $dispatcher->removeListener(TaskBoardEvents::BOARD_ACCESS_CHECK, $boards);
+        $dispatcher->removeListener(TaskBoardEvents::TASK_ACCESS_CHECK, $tasks);
+        $em->clear();
 
         $people = $container->get(TaskSyncPersonRepository::class);
         self::assertInstanceOf(TaskSyncPersonRepository::class, $people);
