@@ -196,9 +196,8 @@ final readonly class TaskClientApiListener implements EventSubscriberInterface
             $this->deny('server_error', Response::HTTP_INTERNAL_SERVER_ERROR, $client, $ipPrefix, [], 'context_everything');
         }
         $level = $client->hasScope(TaskClientPrincipal::SCOPE_WRITE) ? TaskApiLevel::Tasks : TaskApiLevel::Read;
-        $call  = new TaskClientCall($client, new TaskApiPrincipal($client->user, $level, $where, $client->tokenId, $client->tokenName !== '' ? $client->tokenName : 'app', ColumnTransitionVia::APP), $context);
 
-        return $call;
+        return new TaskClientCall($client, new TaskApiPrincipal($client->user, $level, $where, $client->tokenId, $client->tokenName !== '' ? $client->tokenName : 'app', ColumnTransitionVia::APP), $context);
     }
 
     /**
