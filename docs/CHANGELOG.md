@@ -144,6 +144,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - PHP 8.6: `composer.json` allows PHP below 8.7 (was below 8.6). CI adds a forward-compatibility workflow with a
   PHP 8.6 cell and a Symfony 8.2 cell (release candidates, allowed to fail until 8.2.0 is stable).
+- PHP 8.6: `spl_object_hash()` (deprecated in PHP 8.6) is replaced by `spl_object_id()` in the sync writer's fallback
+  user id; a JSON error test accepts the PHP 8.6 message, which adds the error location.
 
 ## [3.5.0] - 2026-11-27
 

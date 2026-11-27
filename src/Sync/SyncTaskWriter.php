@@ -106,6 +106,7 @@ use function preg_split;
 use function rawurldecode;
 use function sha1;
 use function sort;
+use function spl_object_id;
 use function sprintf;
 use function str_contains;
 use function str_ends_with;
@@ -1704,7 +1705,7 @@ final readonly class SyncTaskWriter
         $ids = [];
         foreach ($users as $user) {
             $id    = method_exists($user, 'getId') ? $user->getId() : null;
-            $ids[] = is_scalar($id) || $id instanceof Stringable ? (string) $id : sha1(spl_object_hash($user));
+            $ids[] = is_scalar($id) || $id instanceof Stringable ? (string) $id : sha1((string) spl_object_id($user));
         }
         sort($ids);
 
