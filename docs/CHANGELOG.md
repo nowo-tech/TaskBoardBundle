@@ -139,6 +139,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Target: 3.5.0.
+
+### Changed
+
+- **Client API: a person who lost Tasks access gets `403 module_forbidden`, not `401 invalid_token`** (Beacon spec 262
+  block B, Desktop permission parity). When the token is valid but `TaskBoardAccessCheckerInterface::canAccess()` is
+  false, `/task-board/v1/*` answers `403 {ok: false, error: "module_forbidden", message: "Tasks is not available for this
+  account.", module: "tasks"}` with `Cache-Control: no-store, private` and no `WWW-Authenticate`, so a client hides the
+  module without signing out. `401 invalid_token` stays for missing, unknown, expired and revoked tokens (the 403 is
+  only reachable after the authenticator accepted the token: no oracle). `TaskClientApiDeniedEvent` keeps the reason
+  `account_inactive`. OpenAPI and `docs/CLIENT-API.md` updated. **Upgrade note:** clients that treated 401 as "no Tasks
+  access" must handle 403 `module_forbidden` (see UPGRADING).
+
+### Tests
+
+- Module refusal (403 body, headers, audit reason) and an unknown token still 401.
+
 ## [3.4.1] - 2026-11-27
 
 Patch 3.4.1: follow-ups of the 3.4.0 client API re-audit (ZCS-v). No BC break for a host with a `kernel.secret`.

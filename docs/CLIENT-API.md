@@ -183,8 +183,8 @@ conversion is linear: one pass over each line, only a span's inside read again.
 | Status | Codes |
 |---|---|
 | 400 | `invalid_context`, `context_required`, `invalid_cursor`, `invalid_limit`, `invalid_json`, `invalid_field` (`field`), `invalid_date`, `search_too_broad`, `parent_refused` (`reason`) |
-| 401 | `invalid_token` (+ `WWW-Authenticate: Bearer error="invalid_token"`) |
-| 403 | `insufficient_scope` (+ `WWW-Authenticate`), `context_forbidden`, `forbidden`, `plan_limit` (`reason`: `tasks_module`, `limit`), `transition_refused` (`policyCode`, `message`) |
+| 401 | `invalid_token` (missing, unknown, expired or revoked token; before 3.5 also a person without Tasks access) (+ `WWW-Authenticate: Bearer error="invalid_token"`) |
+| 403 | `insufficient_scope` (+ `WWW-Authenticate`), 3.5 `module_forbidden` (`message`, `module: tasks`; valid token, the person may not use Tasks now; no `WWW-Authenticate`: hide the module, do not sign out), `context_forbidden`, `forbidden`, `plan_limit` (`reason`: `tasks_module`, `limit`), `transition_refused` (`policyCode`, `message`) |
 | 404 | `not_found` |
 | 409 | `conflict` (`currentRevision`), `parent_refused` (`reason`), `idempotency_mismatch`, `idempotency_in_flight`, `unavailable` (`code: CONFLICT_001`, `Retry-After`), `partial` (`code: CONFLICT_002`: read again) |
 | 413 | `invalid_json` (a body over `api.max_body_bytes`) |

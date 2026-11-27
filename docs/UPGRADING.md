@@ -5,6 +5,7 @@ This document describes how to upgrade between versions of TaskBoard Bundle.
 ## Table of contents
 
 - [Unreleased](#unreleased)
+- [To 3.5.0](#to-350)
 - [To 3.4.1](#to-341)
   - [To 3.4.1](#to-341-1)
 - [To 3.4.0](#to-340)
@@ -241,6 +242,14 @@ This document describes how to upgrade between versions of TaskBoard Bundle.
   - [FormKitBundle (admin forms)](#formkitbundle-admin-forms)
 
 ## Unreleased
+
+## To 3.5.0
+
+From **3.4.x**, no code change on the host. Client API behaviour change (`/task-board/v1`): a person whose
+`TaskBoardAccessCheckerInterface::canAccess()` is false, with a valid token, now gets
+`403 {"ok": false, "error": "module_forbidden", "message": "...", "module": "tasks"}` (no `WWW-Authenticate`) instead of
+`401 invalid_token`. A client that treated 401 as "this person has no Tasks access" must handle 403 `module_forbidden`
+(refresh capabilities, hide Tasks, keep the session); 401 now only means a missing, unknown, expired or revoked token.
 
 ## To 3.4.1
 

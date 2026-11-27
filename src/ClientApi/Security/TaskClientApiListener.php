@@ -54,7 +54,9 @@ use function strlen;
  *
  * 1. the principal the authenticator resolved, behind the same security user (else the host forgot the firewall:
  *    `500 server_error`, logged; the API fails closed);
- * 2. the person may use the task board now (`TaskBoardAccessCheckerInterface::canAccess()`) — `401 invalid_token`;
+ * 2. the person may use the task board now (`TaskBoardAccessCheckerInterface::canAccess()`) — 3.5: `403 module_forbidden`
+ *    (`module: tasks`, no `WWW-Authenticate`; the token is valid, so a client hides the module without signing out;
+ *    before 3.5: `401 invalid_token`; the audit reason stays `account_inactive`);
  * 3. the route's scope (`task-board:read` for every GET, `task-board:write` for every write) — `403 insufficient_scope`;
  * 4. the context: the token's bound context, else the context header (`invalid_context` / `context_required`), checked
  *    by the host's `TaskClientContextPolicyInterface` on every request — `403 context_forbidden` (one answer); a
@@ -160,7 +162,9 @@ final readonly class TaskClientApiListener implements EventSubscriberInterface
         }
         $ipPrefix = TaskClientAuthenticator::ipPrefix($request->getClientIp());
         if (!$this->accessChecker->canAccess($client->user)) {
-            $this->deny('invalid_token', Response::HTTP_UNAUTHORIZED, $client, $ipPrefix, ['WWW-Authenticate' => 'Bearer error="invalid_token"'], 'account_inactive');
+            // 3.5: the token is valid (the authenticator accepted it), only Tasks is closed to this person: 403, never 401 (a
+            // 401 signs the client out). Reached only after token validation: unknown tokens still get 401 from the firewall.
+            $this->deny('module_forbidden', Response::HTTP_FORBIDDEN, $client, $ipPrefix, [], 'account_inactive', ['message' => 'Tasks is not available for this account.', 'module' => 'tasks']);
         }
         if (!$client->hasScope($scope)) {
             $this->deny('insufficient_scope', Response::HTTP_FORBIDDEN, $client, $ipPrefix, ['WWW-Authenticate' => sprintf('Bearer error="insufficient_scope", scope="%s"', $scope)]);
@@ -209,14 +213,15 @@ final readonly class TaskClientApiListener implements EventSubscriberInterface
 
     /**
      * @param array<string, string> $headers
+     * @param array<string, mixed> $extra Body fields (3.5: `message` and `module` of `module_forbidden`)
      *
      * @throws TaskClientApiException always
      */
-    private function deny(string $error, int $status, ?TaskClientPrincipal $client, ?string $ipPrefix, array $headers = [], ?string $reason = null): never
+    private function deny(string $error, int $status, ?TaskClientPrincipal $client, ?string $ipPrefix, array $headers = [], ?string $reason = null, array $extra = []): never
     {
         $this->events?->dispatch(new TaskClientApiDeniedEvent($reason ?? $error, $client?->tokenId, $client instanceof TaskClientPrincipal ? SyncUser::id($client->user) : null, $ipPrefix), TaskBoardEvents::CLIENT_API_DENIED);
 
-        throw new TaskClientApiException($error, $status, [], $headers);
+        throw new TaskClientApiException($error, $status, $extra, $headers);
     }
 
     private function isClientRequest(Request $request): bool

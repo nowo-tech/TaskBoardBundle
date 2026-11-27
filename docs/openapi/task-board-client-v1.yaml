@@ -380,7 +380,7 @@ components:
     IfMatch: {name: If-Match, in: header, required: true, description: 'The revision ("<n>"); * only for a reorder inside one column', schema: {type: string}}
   responses:
     Error:
-      description: 'A refusal: invalid_context, context_required, invalid_cursor, invalid_limit, invalid_json, invalid_field (field), invalid_date, search_too_broad; invalid_token; insufficient_scope, context_forbidden, forbidden, plan_limit (reason), transition_refused (policyCode, message); not_found; conflict (currentRevision), parent_refused (reason), idempotency_mismatch, idempotency_in_flight, unavailable (code, Retry-After), partial (code); source_not_visible; precondition_required; rate_limited (Retry-After); audit_unavailable, idempotency_unavailable; server_error'
+      description: 'A refusal: invalid_context, context_required, invalid_cursor, invalid_limit, invalid_json, invalid_field (field), invalid_date, search_too_broad; invalid_token; insufficient_scope, module_forbidden (3.5; message, module=tasks; no WWW-Authenticate), context_forbidden, forbidden, plan_limit (reason), transition_refused (policyCode, message); not_found; conflict (currentRevision), parent_refused (reason), idempotency_mismatch, idempotency_in_flight, unavailable (code, Retry-After), partial (code); source_not_visible; precondition_required; rate_limited (Retry-After); audit_unavailable, idempotency_unavailable; server_error'
       content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
   schemas:
     Error:

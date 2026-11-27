@@ -119,13 +119,26 @@ final class ClientApiAccessTest extends ClientApiTestCase
         self::assertSame('0', $this->client->getResponse()->headers->get('X-RateLimit-Remaining'));
     }
 
-    public function testAPersonWhoMayNoLongerUseTheBoardsIsAnInvalidToken(): void
+    public function testAPersonWhoMayNoLongerUseTheBoardsGetsModuleForbiddenNotASignOut(): void
     {
         $this->user('blocked@example.com', []);
         $this->clientToken(email: 'blocked@example.com');
         $this->call('GET', '/me');
-        $this->assertError(401, 'invalid_token');
+        $this->assertError(403, 'module_forbidden');
+        $response = $this->client->getResponse();
+        self::assertSame('tasks', $this->json()['module'] ?? null);
+        self::assertSame('Tasks is not available for this account.', $this->json()['message'] ?? null);
+        self::assertFalse($response->headers->has('WWW-Authenticate'));
+        self::assertStringContainsString('no-store', (string) $response->headers->get('Cache-Control'));
         self::assertSame('account_inactive', $this->denied[0]->reason);
+    }
+
+    public function testAnUnknownTokenIsStillA401WhateverThePersonMayDo(): void
+    {
+        // No oracle: the module refusal exists only behind a valid token.
+        $this->call('GET', '/me', token: 'unknown-token');
+        $this->assertError(401, 'invalid_token');
+        self::assertArrayNotHasKey('module', $this->json());
     }
 
     public function testAnUnknownPathUnderThePrefixIsTheApisOwn404(): void
