@@ -381,7 +381,7 @@ final class TaskBoardManageController extends AbstractController
      * errors: the index page with the New board dialog open, or only the create form when the request carries the
      * `board.create_dialog_header` header (a host dialog). It used to redirect to the index and lose them.
      */
-    #[Route('/tools/task-board/create', name: 'nowo_task_board_board_create', methods: ['POST'])]
+    #[Route('/tools/task-board/create', name: 'nowo_task_board_board_create', methods: ['GET', 'POST'])]
     public function createBoard(Request $request): Response
     {
         $user   = $this->requireUser();
@@ -394,6 +394,15 @@ final class TaskBoardManageController extends AbstractController
         }
 
         $form = $this->createBoardForm($user, $tenant?->key, $scopes);
+        // Since 3.6.0 (owner rule 2026-11-23, every dialog loads its content on demand): the GET is the New board dialog, a
+        // fragment for UiKit's remote dialog (`X-Nowo-Dialog: 1`) with the gates of the POST; any other GET opens the index with it.
+        if ($request->isMethod(Request::METHOD_GET)) {
+            if (!$this->remoteDialog()->isDialog($request)) {
+                return $this->redirectToRoute($this->routes['index']['name'], ['new' => 1]);
+            }
+
+            return $this->unstorable($this->remoteDialog()->fragment($this->render('@NowoTaskBoardBundle/manage/_board_create_form.html.twig', ['form' => $form->createView(), 'in_dialog' => true])));
+        }
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
@@ -416,7 +425,7 @@ final class TaskBoardManageController extends AbstractController
                 $board = $this->boardCreator->create($data, $user, $target?->key, $set);
                 $this->logWrite('board_create', ['board_id' => $board->getId(), 'column_set_id' => $set?->getId()]);
 
-                return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $board->getId()] + ($scopes !== [] && $target instanceof TaskBoardTenant && $this->tenantContext?->isEnabled() === true ? ['tenantSlug' => $target->slug] : []));
+                return $this->answerDialogWrite($request, $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $board->getId()] + ($scopes !== [] && $target instanceof TaskBoardTenant && $this->tenantContext?->isEnabled() === true ? ['tenantSlug' => $target->slug] : [])));
             }
         }
 
@@ -425,10 +434,12 @@ final class TaskBoardManageController extends AbstractController
         }
 
         if ($this->isDialogRequest($request)) {
-            return $this->unstorable($this->render('@NowoTaskBoardBundle/manage/_board_create_form.html.twig', [
+            $invalid = $this->unstorable($this->render('@NowoTaskBoardBundle/manage/_board_create_form.html.twig', [
                 'form'      => $form->createView(),
                 'in_dialog' => true,
             ], new Response(status: Response::HTTP_UNPROCESSABLE_ENTITY)));
+
+            return $this->remoteDialog()->isDialog($request) ? $this->remoteDialog()->fragment($invalid) : $invalid;
         }
 
         // The <noscript> copy of the form shows the same values and errors.
@@ -1045,10 +1056,18 @@ final class TaskBoardManageController extends AbstractController
                 ], 'NowoTaskBoardBundle'));
             }
 
-            return $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $boardId]);
+            return $this->answerDialogWrite($request, $this->redirectToRoute($this->routes['board']['name'], ['boardId' => $boardId]));
         }
 
         $view = $form->createView();
+
+        // Since 3.6.0 (owner rule 2026-11-23): UiKit's remote dialog gets the form as a fragment, 422 in place when invalid.
+        if ($this->remoteDialog()->isDialog($request)) {
+            return $this->remoteDialog()->fragment($this->render('@NowoTaskBoardBundle/manage/_import_dialog.html.twig', [
+                'board'      => $board,
+                'importForm' => $view,
+            ], new Response(status: $form->isSubmitted() ? Response::HTTP_UNPROCESSABLE_ENTITY : Response::HTTP_OK)));
+        }
 
         return $this->render($this->templates['import'], [
             'page' => new FormPage(
@@ -3042,7 +3061,8 @@ final class TaskBoardManageController extends AbstractController
      */
     private function isDialogRequest(Request $request): bool
     {
-        return $this->createDialogHeader !== null && $this->createDialogHeader !== '' && $request->headers->has($this->createDialogHeader);
+        // Since 3.6.0: UiKit's remote dialog (`X-Nowo-Dialog: 1`) is a dialog request too, whatever the host header.
+        return $this->remoteDialog()->isDialog($request) || $this->createDialogHeader !== null && $this->createDialogHeader !== '' && $request->headers->has($this->createDialogHeader);
     }
 
     /**
