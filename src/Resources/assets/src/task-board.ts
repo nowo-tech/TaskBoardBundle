@@ -4,7 +4,6 @@
 import { Application } from '@hotwired/stimulus';
 import BoardController from './board-controller';
 import AddTaskModalController from './add-task-modal-controller';
-import AddColumnModalController from './add-column-modal-controller';
 import ListFilterController from './list-filter-controller';
 import TaskNavController from './task-nav-controller';
 import SubtaskTreeController from './subtask-tree-controller';
@@ -46,7 +45,6 @@ const application = Application.start();
 application.register('nowo-task-board', BoardController);
 application.register('nowo-task-board-create-steps', BoardCreateStepsController);
 application.register('nowo-task-board-add-task-modal', AddTaskModalController);
-application.register('nowo-task-board-add-column-modal', AddColumnModalController);
 application.register('nowo-task-board-list-filter', ListFilterController);
 // Since 2.0.0: the filter fold works with no host peer (a bundle identifier, so a host's own peer never toggles it twice).
 application.register('nowo-task-board-filter-fold', FilterFoldController);

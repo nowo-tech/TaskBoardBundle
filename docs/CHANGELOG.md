@@ -140,6 +140,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Add task, add column and edit column load when they open** (owner rule 2026-11-23, every dialog loads its content on
+  demand; the task page did since 2.31.0). The board and the calendar print three empty remote dialogs and their openers; the
+  forms are the GET of three new routes, each with the access of its write: `task_new` (`/board/{boardId}/task/new`,
+  pre-filled from `?column=`, `?due=`, `?taskTemplate=`; `?calendar=1&_target_path=` bring it back to the calendar),
+  `column_new` and `column_edit` (`/board/{boardId}/column/{columnId}/edit`: the column's own values, its delete form and the
+  host's delete warnings; a column of another board is a 404). The page carries no per-column data attributes any more and the
+  board no longer builds `taskForm`, `columnForm`, `editColumnForm`, `columnDeleteForm` or `columnDeleteWarnings`.
+- **Writes from those dialogs answer `204` + `X-Nowo-Redirect`** (create task, create / update / delete column), so the dialog
+  closes and the page goes where the redirect went; a post without the dialog header keeps its redirect. The routes are in the
+  `routes` configuration as `task_new`, `column_new` and `column_edit`.
+- **Assets**: `AddColumnModalController` is removed; `AddTaskModalController` and `EditColumnModalController` keep only what
+  the fragment and the page need. Rebuild `task-board.js` if you build your own copy.
+
 ## [3.5.0] - 2026-11-27
 
 Target: 3.5.0.

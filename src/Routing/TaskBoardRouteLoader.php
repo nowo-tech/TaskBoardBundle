@@ -228,6 +228,10 @@ final class TaskBoardRouteLoader extends Loader
         $this->addRoute($collection, $attributes, 'task_priority', TaskBoardManageController::class . '::updatePriority');
         $this->addRoute($collection, $attributes, 'column_create', TaskBoardManageController::class . '::createColumn');
         $this->addRoute($collection, $attributes, 'column_update', TaskBoardManageController::class . '::updateColumn');
+        // Since 3.6.0: the dialogs of the board page, loaded on open.
+        $this->addRoute($collection, $attributes, 'task_new', TaskBoardManageController::class . '::newTaskDialog');
+        $this->addRoute($collection, $attributes, 'column_new', TaskBoardManageController::class . '::newColumnDialog');
+        $this->addRoute($collection, $attributes, 'column_edit', TaskBoardManageController::class . '::editColumnDialog');
         $this->addRoute($collection, $attributes, 'column_reorder', TaskBoardManageController::class . '::reorderColumns');
         $this->addRoute($collection, $attributes, 'board_import', TaskBoardManageController::class . '::importBoard');
         // Since 1.11.

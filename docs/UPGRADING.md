@@ -243,6 +243,12 @@ This document describes how to upgrade between versions of TaskBoard Bundle.
 
 ## Unreleased
 
+**Overrides of the board dialogs.** `_add_task_modal.html.twig`, `_add_column_modal.html.twig` and `_edit_column_modal.html.twig`
+are now fragments (the content of a remote dialog: body and a `[data-nowo-ui-dialog-actions]` footer), not `<dialog>` markup. A
+host that overrides them, or `_board_column.html.twig`, `_column_menu.html.twig` or the calendar partials, takes the new openers
+(`_dialog_openers.html.twig`) and shells (`_dialog_shells.html.twig`). A host that renders the board page from its own controller
+no longer passes `taskForm`, `columnForm`, `editColumnForm`, `columnDeleteForm` or `columnDeleteWarnings`.
+
 ## To 3.5.0
 
 From **3.4.1**:

@@ -1,0 +1,13 @@
+{#
+    Since 3.6.0 (owner rule 2026-11-23, every dialog loads its content on demand): the empty remote dialogs of the board page
+    (add task, add column, edit column) and of the calendar (add task). Each is filled when an opener (_dialog_openers.html.twig)
+    opens it, from the GET of its own route. Variables: add_task (bool), add_task_attr (extra attributes of its shell),
+    columns (bool: the add and edit column shells).
+#}
+{% if add_task|default(false) %}
+    {{ include(nowo_ui_partial('remote_form_dialog', 'NowoTaskBoardBundle'), {id: 'nowo-task-board-add-task-modal', size: 'wide', bundle: 'NowoTaskBoardBundle', attr: add_task_attr|default({})}, false) }}
+{% endif %}
+{% if columns|default(false) %}
+    {{ include(nowo_ui_partial('remote_form_dialog', 'NowoTaskBoardBundle'), {id: 'nowo-task-board-add-column-modal', size: 'md', bundle: 'NowoTaskBoardBundle'}, false) }}
+    {{ include(nowo_ui_partial('remote_form_dialog', 'NowoTaskBoardBundle'), {id: 'nowo-task-board-edit-column-modal', size: 'md', bundle: 'NowoTaskBoardBundle'}, false) }}
+{% endif %}

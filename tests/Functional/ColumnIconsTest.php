@@ -20,7 +20,6 @@ use function array_filter;
 use function array_map;
 use function array_values;
 use function preg_replace;
-use function substr_count;
 use function usort;
 
 /**
@@ -49,10 +48,13 @@ final class ColumnIconsTest extends FunctionalTestCase
         $html = $this->client->request('GET', self::BASE . '/board/' . $board->getId())->html();
 
         self::assertResponseIsSuccessful();
-        self::assertStringContainsString('nowo-task-picker__icons', $html);
-        self::assertStringNotContainsString('nowo-task-column__icon--emoji', $html);
+        self::assertStringNotContainsString('nowo-task-picker__icons', $html, 'Since 3.6.0 the grid comes with the dialog');
         self::assertStringNotContainsString('data-nowo-ui-emoji-picker', $html);
-        self::assertStringContainsString('data-column-icon="tabler:inbox"', $html);
+        // The stored icon comes with the edit dialog (the column_edit fragment), not with the page.
+        $dialog = $this->editDialog($board, $board->getColumns()->first());
+        self::assertStringContainsString('nowo-task-picker__icons', $dialog);
+        self::assertStringNotContainsString('data-nowo-ui-emoji-picker', $dialog);
+        self::assertStringContainsString('icon-value="tabler:inbox"', $dialog);
     }
 
     public function testAnEmojiPickerColumnIconIsSavedAndPrintedAsText(): void
@@ -62,9 +64,11 @@ final class ColumnIconsTest extends FunctionalTestCase
         $this->login($this->owner);
 
         $html = $this->client->request('GET', self::BASE . '/board/' . $board->getId())->html();
-        self::assertStringContainsString('data-nowo-ui-emoji-picker', $html);
+        self::assertStringNotContainsString('data-nowo-ui-emoji-picker', $html, 'Since 3.6.0 the widget comes with the dialog');
         self::assertStringNotContainsString('nowo-task-picker__icons', $html, 'the host widget replaces the grid');
-        self::assertStringContainsString('data-nowo-task-board-edit-column-modal-target="iconInput"', $html);
+        $dialog = $this->editDialog($board, $board->getColumns()->first());
+        self::assertStringContainsString('data-nowo-ui-emoji-picker', $dialog);
+        self::assertStringContainsString('data-nowo-task-board-edit-column-modal-target="iconInput"', $dialog);
 
         $this->post('/board/' . $board->getId() . '/column', ['name' => 'Review', 'icon' => '👀']);
         self::assertResponseRedirects(self::BASE . '/board/' . $board->getId());
@@ -74,7 +78,7 @@ final class ColumnIconsTest extends FunctionalTestCase
 
         $html = $this->client->request('GET', self::BASE . '/board/' . $board->getId())->html();
         self::assertStringContainsString('<span class="nowo-task-column__icon nowo-task-column__icon--emoji" aria-hidden="true">👀</span>', $html);
-        self::assertStringContainsString('data-column-icon="👀"', $html);
+        self::assertStringContainsString('icon-value="👀"', $this->editDialog($board, $review));
 
         foreach (['<b>x</b>', '👀👀', 'Done', 'tabler:inbox'] as $icon) {
             $this->post('/board/' . $board->getId() . '/column/' . $review->getId(), ['name' => 'Review', 'icon' => $icon]);
@@ -125,9 +129,8 @@ final class ColumnIconsTest extends FunctionalTestCase
         $this->em->flush();
         $this->login($this->owner);
 
-        $html = $this->client->request('GET', self::BASE . '/board/' . $board->getId())->html();
-        self::assertStringContainsString('data-column-icon="fa fa-bug" data-column-icon-storable="0"', $html);
-        self::assertSame(1, substr_count($html, 'data-column-icon-storable'), 'only the column whose icon would be dropped');
+        // The dialog opens without the icon a rename would drop ("No icon"), so saving it is not refused.
+        self::assertStringContainsString('icon-value=""', $this->editDialog($board, $todo));
 
         // A stale dialog (or one without the flag) posts the value back: accepted for this column, then dropped.
         $edit = '/board/' . $board->getId() . '/column/' . $todo->getId();
@@ -155,7 +158,7 @@ final class ColumnIconsTest extends FunctionalTestCase
         $this->em->flush();
         $this->login($this->owner);
 
-        self::assertStringContainsString('data-column-icon-storable="0"', $this->client->request('GET', self::BASE . '/board/' . $board->getId())->html());
+        self::assertStringContainsString('icon-value=""', $this->editDialog($board, $todo));
         $this->post('/board/' . $board->getId() . '/column/' . $todo->getId(), ['name' => 'Backlog', 'icon' => '']);
         self::assertSame(['Backlog', null], [$this->column('Backlog')->getName(), $this->column('Backlog')->getIcon()]);
     }
@@ -272,9 +275,15 @@ final class ColumnIconsTest extends FunctionalTestCase
         self::assertSame([null, null, null], $this->icons($board));
     }
 
-    /**
-     * @param array<string, mixed> $config
-     */
+    private function editDialog(TaskBoard $board, ?BoardColumn $column): string
+    {
+        self::assertInstanceOf(BoardColumn::class, $column);
+        $this->client->request('GET', self::BASE . '/board/' . $board->getId() . '/column/' . $column->getId() . '/edit', server: ['HTTP_X_NOWO_DIALOG' => '1', 'HTTP_X_REQUESTED_WITH' => 'XMLHttpRequest', 'HTTP_ACCEPT' => 'text/html']);
+        self::assertResponseIsSuccessful();
+
+        return (string) $this->client->getResponse()->getContent();
+    }
+
     private function boot(array $config): void
     {
         self::$taskBoardConfig = $config;

@@ -1,3 +1,4 @@
+{% import '@NowoTaskBoardBundle/manage/_dialog_openers.html.twig' as dialogOpeners %}
 {#
     Kanban column with its cards (since 1.10 a partial). Variables: column, tasks (the board's cards), taskTree,
     canEditBoard (default true), panelTargetPath (since 1.11, for the cards' data-task-panel-url).
@@ -51,15 +52,10 @@
             class="nowo-task-board__column-edit nowo-task-column__edit"
             title="{{ 'task_board.board.edit_column'|trans({}, 'NowoTaskBoardBundle') }}"
             aria-label="{{ 'task_board.board.edit_column_named'|trans({'%column%': column.name}, 'NowoTaskBoardBundle') }}"
-            data-action="click->nowo-task-board-edit-column-modal#open mousedown->nowo-task-board-edit-column-modal#stopDrag"
-            {#- Since 2.10.0 (spec 216): the host's delete warnings of this column, one per line. #}
-            {%- set _deleteWarnings = (columnDeleteWarnings ?? {})[column.id] ?? [] %}
-            {% if _deleteWarnings is not empty %}data-column-delete-warning="{{ _deleteWarnings|join('\n') }}"{% endif %}
+            data-action="mousedown->nowo-task-board-edit-column-modal#stopDrag"
             data-column-id="{{ column.id }}"
-            data-column-name="{{ column.name|e('html_attr') }}"
-            data-column-color="{{ columnColor|default('#206bc4')|e('html_attr') }}"
-            data-column-humans-only="{{ column.humansOnly ? '1' : '0' }}"
-            data-column-icon="{{ column.icon|default('') }}"{{ column.icon is not empty and not nowo_task_board_column_icon_storable(column.icon) ? ' data-column-icon-storable="0"' : '' }}
+            {#- Since 3.6.0: the dialog is the GET of column_edit, loaded on open (the host's delete warnings come with it). #}
+            {{ dialogOpeners.edit_column(column.board.id, column.id, column.name) }}
         >
             {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'pencil'}) }}
         </button>
@@ -84,9 +80,8 @@
     <button
         type="button"
         class="{{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_sm', 'NowoTaskBoardBundle') }} nowo-task-w-full nowo-task-board__add-task-btn nowo-task-column__add-task"
-        data-action="click->nowo-task-board-add-task-modal#open"
         data-column-id="{{ column.id }}"
-        data-column-name="{{ column.name|e('html_attr') }}"
+        {{ dialogOpeners.add_task(column.board.id, column.id, column.name) }}
     >
         {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}{{ 'task_board.action.add_task'|trans({}, 'NowoTaskBoardBundle') }}
     </button>

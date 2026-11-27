@@ -1,3 +1,4 @@
+{% import '@NowoTaskBoardBundle/manage/_dialog_openers.html.twig' as dialogOpeners %}
 {#
     Since 2.22.0: the menu («⋮») of a board column header, drawn with UiKit's `menu` partial; with the context menus on
     (taskContextMenu) a right-click, Shift+F10 / the ContextMenu key or a long press on the header opens the same items.
@@ -15,7 +16,7 @@
     <li><button type="button" class="{{ _item }}" data-nowo-task-menu="rename" data-nowo-task-column-rename="{{ column.id }}">{{ 'task_board.menu.rename_column'|trans({}, _b) }}</button></li>
     {%- endif %}
     {%- if menuContext.canEditBoard %}
-    <li><button type="button" class="{{ _item }}" data-nowo-task-menu="add-task" data-action="click->nowo-task-board-add-task-modal#open" data-column-id="{{ column.id }}" data-column-name="{{ column.name }}">{{ 'task_board.action.add_task'|trans({}, _b) }}</button></li>
+    <li><button type="button" class="{{ _item }}" data-nowo-task-menu="add-task" data-column-id="{{ column.id }}" {{ dialogOpeners.add_task(column.board.id, column.id, column.name) }}>{{ 'task_board.action.add_task'|trans({}, _b) }}</button></li>
     {%- endif %}
     <li><button type="button" class="{{ _item }}" data-nowo-task-menu="collapse" data-nowo-task-column-collapse="{{ column.id }}" aria-expanded="true" data-label-collapse="{{ 'task_board.menu.collapse_column'|trans({}, _b) }}" data-label-expand="{{ 'task_board.menu.expand_column'|trans({}, _b) }}">{{ 'task_board.menu.collapse_column'|trans({}, _b) }}</button></li>
 </ul>

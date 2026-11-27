@@ -33,7 +33,9 @@ final class TaskTemplatePickerTest extends FunctionalTestCase
         $foreign  = $this->manager()->createForBoard($this->owner, $this->board('Other'), new TaskTemplateData('Foreign', 'Secret body'));
         $this->login($this->owner);
 
-        $this->client->request('GET', self::BASE . '/board/' . $this->roadmap->getId());
+        // Since 3.6.0 the dialog is the fragment of task_new; the board only reopens it after a template was picked.
+        $dialog = ['HTTP_X_NOWO_DIALOG' => '1', 'HTTP_X_REQUESTED_WITH' => 'XMLHttpRequest', 'HTTP_ACCEPT' => 'text/html'];
+        $this->client->request('GET', self::BASE . '/board/' . $this->roadmap->getId() . '/task/new', server: $dialog);
         self::assertResponseIsSuccessful();
         self::assertSelectorExists('[data-testid="nowo-task-template-picker"] option[value="' . $template->getId() . '"]');
         self::assertSelectorNotExists('[data-nowo-task-board-add-task-modal-open-on-connect-value]');
@@ -41,6 +43,10 @@ final class TaskTemplatePickerTest extends FunctionalTestCase
         $this->client->request('GET', self::BASE . '/board/' . $this->roadmap->getId(), ['taskTemplate' => $template->getId(), 'taskTitle' => '  Nueva historia ', 'view' => 'board']);
         self::assertResponseIsSuccessful();
         self::assertSelectorExists('[data-nowo-task-board-add-task-modal-open-on-connect-value="true"]');
+        self::assertStringContainsString('taskTemplate=' . $template->getId(), (string) $this->client->getCrawler()->filter('button[data-nowo-task-board-add-task-modal-target="opener"]')->attr('data-nowo-ui-dialog-src'));
+
+        $this->client->request('GET', self::BASE . '/board/' . $this->roadmap->getId() . '/task/new', ['taskTemplate' => $template->getId(), 'taskTitle' => '  Nueva historia '], server: $dialog);
+        self::assertResponseIsSuccessful();
         self::assertSelectorExists('[data-testid="nowo-task-template-picker"] option[value="' . $template->getId() . '"][selected]');
         $form = $this->client->getCrawler()->filter('#nowo-task-board-add-task-form');
         self::assertSame('Nueva historia', $form->filter('input[name="task_form[title]"]')->attr('value'));
@@ -52,6 +58,7 @@ final class TaskTemplatePickerTest extends FunctionalTestCase
         $this->client->request('GET', self::BASE . '/board/' . $this->roadmap->getId(), ['taskTemplate' => $foreign->getId()]);
         self::assertResponseIsSuccessful();
         self::assertSelectorNotExists('[data-nowo-task-board-add-task-modal-open-on-connect-value]');
+        $this->client->request('GET', self::BASE . '/board/' . $this->roadmap->getId() . '/task/new', ['taskTemplate' => $foreign->getId()], server: $dialog);
         self::assertStringNotContainsString('Secret body', (string) $this->client->getResponse()->getContent());
     }
 

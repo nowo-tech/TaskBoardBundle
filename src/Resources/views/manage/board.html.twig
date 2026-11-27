@@ -42,6 +42,7 @@
 {% endblock %}
 
 {% block nowo_ui_content %}
+    {% import '@NowoTaskBoardBundle/manage/_dialog_openers.html.twig' as dialogOpeners %}
     {# Since 2.22.0: UiKit 2.55's focus mode toggle (nothing while the host has focus mode off). #}
     {% block nowo_task_board_focus_mode %}{{ include('@NowoTaskBoardBundle/manage/_focus_mode_toggle.html.twig') }}{% endblock %}
     {% if board.description and board.descriptionFormat == 'markdown' %}
@@ -67,12 +68,8 @@
     {% set taskMenuFormReady = _taskMenuForm is not null %}
     {% if _taskMenuForm %}{{ form_start(_taskMenuForm, {attr: {id: 'nowo-task-menu-form', hidden: 'hidden', 'data-testid': 'nowo-task-menu-form'}}) }}{{ form_end(_taskMenuForm) }}{{ include('@NowoTaskBoardBundle/manage/_task_menu_shared.html.twig', {board: board}, with_context: false) }}{% endif %}
     <div
-        data-controller="nowo-task-board-add-task-modal nowo-task-board-add-column-modal nowo-task-board-edit-column-modal"
-        data-nowo-task-board-add-task-modal-title-format-value="{{ 'task_board.board.add_task_modal_title'|trans({}, 'NowoTaskBoardBundle')|e('html_attr') }}"
+        data-controller="nowo-task-board-add-task-modal nowo-task-board-edit-column-modal"
         {% if openAddTask|default(false) %}data-nowo-task-board-add-task-modal-open-on-connect-value="true"{% endif %}
-        data-nowo-task-board-edit-column-modal-update-url-template-value="{{ path(nowo_task_board_route('column_update'), {boardId: board.id, columnId: 'COLUMN_ID'})|e('html_attr') }}"
-        data-nowo-task-board-edit-column-modal-title-template-value="{{ 'task_board.board.edit_column_title'|trans({'%column%': '%column%'}, 'NowoTaskBoardBundle')|e('html_attr') }}"
-        data-nowo-task-board-edit-column-modal-delete-url-template-value="{{ path(nowo_task_board_route('column_delete'), {boardId: board.id, columnId: 'COLUMN_ID'})|e('html_attr') }}"
     >
         {# Since 2.0.0 (TB-10): board.toolbar: false leaves the strip out; the column-set dialogs stay for a host's buttons. #}
         {% if nowo_task_board_ui.board_toolbar %}
@@ -124,7 +121,7 @@
                 <button
                     type="button"
                     class="{{ nowo_ui_class('btn_icon', 'NowoTaskBoardBundle') }} {{ nowo_ui_class('btn_secondary', 'NowoTaskBoardBundle') }} nowo-task-board__add-column-btn"
-                    data-action="click->nowo-task-board-add-column-modal#open"
+                    {{ dialogOpeners.add_column(board.id) }}
                     title="{{ 'task_board.board.add_column'|trans({}, 'NowoTaskBoardBundle') }}"
                     aria-label="{{ 'task_board.board.add_column'|trans({}, 'NowoTaskBoardBundle') }}"
                 >
@@ -135,11 +132,9 @@
         </div>
 
         {% if (canEditBoard ?? true) %}
-            {{ include('@NowoTaskBoardBundle/manage/_add_task_modal.html.twig') }}
-            {% if _manageColumns %}
-                {{ include('@NowoTaskBoardBundle/manage/_add_column_modal.html.twig') }}
-                {{ include('@NowoTaskBoardBundle/manage/_edit_column_modal.html.twig') }}
-            {% endif %}
+            {#- Since 3.6.0: empty remote dialogs; each loads its content when it opens. The hidden opener re-opens the add task dialog after a template was picked. -#}
+            {{ include('@NowoTaskBoardBundle/manage/_dialog_shells.html.twig', {add_task: true, columns: _manageColumns}) }}
+            {% if openAddTask|default(false) %}<button type="button" hidden data-nowo-task-board-add-task-modal-target="opener" {{ dialogOpeners.add_task(board.id, null, null, addTaskOpenQuery|default({})) }}></button>{% endif %}
         {% endif %}
     </div>
 {% endblock %}

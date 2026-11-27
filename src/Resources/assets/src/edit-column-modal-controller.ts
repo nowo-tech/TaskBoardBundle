@@ -1,13 +1,5 @@
 import { Controller } from '@hotwired/stimulus';
-import { openKitDialog } from './dialog-utils';
 
-/** An icon id (`<set>:<name>`, or a bare name stored before 2.9.0), drawn through the icon set rather than as text. */
-const ICON_ID = /^[a-z0-9-]+(:[a-z0-9-]+)?$/;
-
-/**
- * Opens the edit-column dialog and posts the updated name / color / icon (since 1.11); the delete form (since 1.11) posts to
- * the column's delete URL, asking first through `data-confirm`.
- */
 /** Marks the option and the grid button {@link showCurrentIcon} adds, so the next opening removes them. */
 const CURRENT = 'data-nowo-task-current-icon';
 
@@ -83,94 +75,31 @@ export function humansOnly(trigger: HTMLElement): boolean {
     return trigger.dataset.columnHumansOnly === '1';
 }
 
+/**
+ * Since 3.6.0 (owner rule 2026-11-23, every dialog loads its content on demand) the edit-column dialog is the fragment of the
+ * `column_edit` route: the server fills the name, colour, humans-only flag, update URL and delete form. This controller is the
+ * fragment's (it carries the column's icon as `data-nowo-task-board-edit-column-modal-icon-value`) and shows a stored icon the
+ * grid does not offer as the current choice; on the board page the same identifier only keeps the pencil from starting a column drag.
+ */
 export default class EditColumnModalController extends Controller<HTMLElement> {
-    static targets = ['modal', 'form', 'nameInput', 'colorInput', 'iconInput', 'humansOnlyInput', 'deleteForm', 'deleteWarning', 'title'];
+    static targets = ['iconInput'];
 
-    static values = {
-        updateUrlTemplate: String,
-        deleteUrlTemplate: String,
-        titleTemplate: String,
-    };
+    static values = { icon: String };
 
     declare readonly iconInputTarget: HTMLSelectElement | HTMLInputElement;
 
     declare readonly hasIconInputTarget: boolean;
 
-    declare readonly deleteFormTarget: HTMLFormElement;
+    declare readonly hasIconValue: boolean;
 
-    declare readonly hasDeleteFormTarget: boolean;
+    declare readonly iconValue: string;
 
-    declare readonly deleteWarningTarget: HTMLElement;
-
-    declare readonly hasDeleteWarningTarget: boolean;
-
-    declare deleteUrlTemplateValue: string;
-
-    declare readonly modalTarget: HTMLDialogElement;
-
-    declare readonly formTarget: HTMLFormElement;
-
-    declare readonly nameInputTarget: HTMLInputElement;
-
-    declare readonly colorInputTarget: HTMLInputElement;
-
-    declare readonly titleTarget: HTMLElement;
-
-    declare readonly hasColorInputTarget: boolean;
-
-    declare readonly humansOnlyInputTarget: HTMLInputElement;
-
-    declare readonly hasHumansOnlyInputTarget: boolean;
-
-    declare updateUrlTemplateValue: string;
-
-    declare titleTemplateValue: string;
-
-    open(event: Event): void {
-        const trigger = event.currentTarget as HTMLElement;
-        const columnId = trigger.dataset.columnId ?? '';
-        const columnName = trigger.dataset.columnName ?? '';
-        const columnColor = trigger.dataset.columnColor ?? '#206bc4';
-
-        if (columnId === '') {
-            return;
-        }
-
-        this.formTarget.action = this.updateUrlTemplateValue.replace('COLUMN_ID', columnId);
-        this.nameInputTarget.value = columnName;
-
-        if (this.hasColorInputTarget) {
-            this.colorInputTarget.value = columnColor !== '' ? columnColor : '#206bc4';
-            this.colorInputTarget.dispatchEvent(new Event('change', { bubbles: true }));
-        }
-
-        if (this.hasIconInputTarget) {
-            const icon = dialogIcon(trigger);
-            // Since 2.9.0: a host widget (board.column_icon_form_type, e.g. an emoji picker) is a text field that would
-            // refuse an icon id such as tabler:bug: it opens empty for such a column, so the dialog can still be saved.
-            this.iconInputTarget.value = this.iconInputTarget instanceof HTMLSelectElement || !ICON_ID.test(icon) ? icon : '';
-            if (this.iconInputTarget instanceof HTMLSelectElement) {
-                showCurrentIcon(this.iconInputTarget, icon);
-            }
+    connect(): void {
+        if (this.hasIconValue && this.hasIconInputTarget && this.iconInputTarget instanceof HTMLSelectElement) {
+            showCurrentIcon(this.iconInputTarget, this.iconValue);
             // The icon grid (picker controller) follows the field.
             this.iconInputTarget.dispatchEvent(new Event('change', { bubbles: true }));
         }
-
-        // Since 2.16.0 (spec 234): the column's humans-only flag (`data-column-humans-only="1"`).
-        if (this.hasHumansOnlyInputTarget) {
-            this.humansOnlyInputTarget.checked = humansOnly(trigger);
-        }
-
-        if (this.hasDeleteFormTarget && this.deleteUrlTemplateValue !== '') {
-            this.deleteFormTarget.action = this.deleteUrlTemplateValue.replace('COLUMN_ID', columnId);
-            showDeleteWarning(this.deleteFormTarget, this.hasDeleteWarningTarget ? this.deleteWarningTarget : null, trigger.dataset.columnDeleteWarning ?? '');
-        }
-
-        if (this.hasTitleTarget && this.titleTemplateValue !== '') {
-            this.titleTarget.textContent = this.titleTemplateValue.replace('%column%', columnName);
-        }
-
-        openKitDialog(this.modalTarget, trigger, this.nameInputTarget);
     }
 
     stopDrag(event: Event): void {
