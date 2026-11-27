@@ -138,6 +138,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Patch 3.4.1: follow-ups of the 3.4.0 client API re-audit (ZCS-v). No BC break for a host with a `kernel.secret`.
+
+### Security
+
+- **The client API refuses an empty `kernel.secret`** (audit ZCS-v-I4). Its cursors are sealed with keys derived from
+  the secret; with an empty secret those keys are public, so anyone could read and forge cursors. With
+  `client_api.principal_resolver` set, a literal empty (or missing) `kernel.secret` now fails the container build
+  (`ClientApiSecretPass`), and a secret read from an env var that turns out empty fails when the cursor service is built
+  (the first client API request), with a `LogicException` naming `framework.secret` / `APP_SECRET`. Hosts with a secret
+  are not affected; hosts without one and the client API on were not safe (see UPGRADING).
+- **Cursor length no longer tells a value's digit count** (audit ZCS-v-I2): the sealed plaintext is padded with JSON
+  whitespace to a multiple of 32 bytes. Cursors issued by 3.4.0 still decode.
+
+### Fixed
+
+- **Emphasis conversion is linear** (audit ZCS-v-I1): `TaskTextTokens` keeps each emphasis pattern's leftmost match and
+  asks a pattern again only when a span went past it; a pattern with no match is not asked again on that text. An
+  unclosed marker beside closed ones (`~~a _b_ ` repeated) no longer re-walks the rest of the line on every span: 64 KB
+  of it now takes about 6 ms instead of about 0.55 s. The wall-clock unit test (0.5 s, flaky on slow runners) is
+  replaced by a deterministic bound on the start positions the patterns walk over.
+
 ## [3.4.0] - 2026-11-27
 
 Beacon's requests for 3.4.0 (owner-approved): the client API v1 for Beacon Desktop's Tasks module (BD-3b of

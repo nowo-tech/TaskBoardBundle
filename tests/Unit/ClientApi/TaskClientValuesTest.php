@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\Tests\Unit\ClientApi;
 
 use DateTimeImmutable;
 use InvalidArgumentException;
+use LogicException;
 use Nowo\TaskBoardBundle\ClientApi\Model\TaskClientContext;
 use Nowo\TaskBoardBundle\ClientApi\Model\TaskClientPrincipal;
 use Nowo\TaskBoardBundle\ClientApi\Model\TaskClientSource;
@@ -18,6 +19,7 @@ use stdClass;
 use Symfony\Component\HttpFoundation\Request;
 
 use function str_repeat;
+use function strlen;
 use function strtr;
 
 /**
@@ -47,6 +49,43 @@ final class TaskClientValuesTest extends TestCase
         self::assertSame(['key' => 'org:1', 'label' => 'Acme Inc'], (new TaskClientContext('org:1', "Acme\u{202E}\nInc"))->toArray());
         $this->expectException(InvalidArgumentException::class);
         new TaskClientContext('bad key', 'x');
+    }
+
+    /**
+     * Audit ZCS-v-I4: an empty secret would make the keys public.
+     */
+    public function testACursorNeedsASecret(): void
+    {
+        foreach (['', " \n"] as $secret) {
+            try {
+                new TaskClientCursor($secret);
+                self::fail('An empty secret must be refused.');
+            } catch (LogicException $exception) {
+                self::assertStringContainsString('non-empty kernel.secret', $exception->getMessage());
+            }
+        }
+    }
+
+    /**
+     * Audit ZCS-v-I2: the sealed length does not tell a value's digit count; a 3.4.0 (unpadded) cursor still decodes.
+     */
+    public function testCursorsArePaddedAndOldOnesStillDecode(): void
+    {
+        $cursors = new TaskClientCursor('secret');
+        $short   = (string) base64_decode(strtr($cursors->encode('k', [1, 'a']), '-_', '+/'), true);
+        $long    = (string) base64_decode(strtr($cursors->encode('k', [123456789, 'a']), '-_', '+/'), true);
+        self::assertSame(strlen($short), strlen($long));
+        self::assertSame(0, (strlen($short) - 28) % 32);
+        self::assertSame([123456789, 'a'], $cursors->decode($cursors->encode('k', [123456789, 'a']), 'k', 2));
+
+        // A 3.4.0 cursor: the same construction without padding.
+        $encrypt = hash_hmac('sha256', 'nowo_task_board.client_api.cursor.encrypt', 'secret', true);
+        $mac     = hash_hmac('sha256', 'nowo_task_board.client_api.cursor.mac', 'secret', true);
+        $nonce   = str_repeat("\1", 12);
+        $plain   = '[7,"b"]';
+        $cipher  = $plain ^ substr(hash_hmac('sha256', $nonce . pack('N', 0), $encrypt, true), 0, strlen($plain));
+        $tag     = substr(hash_hmac('sha256', 'v1|k|' . $nonce . $cipher, $mac, true), 0, 16);
+        self::assertSame([7, 'b'], $cursors->decode(rtrim(strtr(base64_encode($nonce . $tag . $cipher), '+/', '-_'), '='), 'k', 2));
     }
 
     public function testCursorsAreSealedAndBoundToTheirKindAndShape(): void

@@ -5,6 +5,7 @@ This document describes how to upgrade between versions of TaskBoard Bundle.
 ## Table of contents
 
 - [Unreleased](#unreleased)
+  - [To 3.4.1](#to-341)
 - [To 3.4.0](#to-340)
   - [Schema change: two indexes](#schema-change-two-indexes)
   - [Personal-data export (UserKit section `task_board`)](#personal-data-export-userkit-section-task_board)
@@ -239,6 +240,21 @@ This document describes how to upgrade between versions of TaskBoard Bundle.
   - [FormKitBundle (admin forms)](#formkitbundle-admin-forms)
 
 ## Unreleased
+
+### To 3.4.1
+
+```bash
+composer require nowo-tech/task-board-bundle:^3.4.1
+```
+
+- **Client API: `kernel.secret` must not be empty** (audit ZCS-v-I4). With `client_api.principal_resolver` set, an
+  empty or missing `kernel.secret` fails the container build; when it comes from an env var (`APP_SECRET`) that is empty
+  at runtime, the first client API request fails with a `LogicException`. Set `framework.secret` (normally
+  `APP_SECRET`) to a long random value. Nothing changes for a host that already has a secret, and cursors already handed
+  out stay valid (3.4.0 cursors still decode). A host that ran the client API with an empty secret was exposed: its
+  cursors could be read and forged; setting a secret invalidates them (the app reloads its lists).
+- **Beacon Desktop**: the board list (`GET boards`) has no `counts`; only `GET boards/{id}` returns `counts.open`
+  (audit ZCS-v-I3, accepted deviation from `BEACON_DESKTOP_TASKS.md` §4.2). The board picker must not expect counts.
 
 ## To 3.4.0
 

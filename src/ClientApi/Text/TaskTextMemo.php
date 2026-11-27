@@ -25,4 +25,7 @@ final class TaskTextMemo
 
     /** Since 3.4.0 (audit ZCS-M1): emphasis spans found so far. */
     public int $marks = 0;
+
+    /** Since 3.4.1 (audit ZCS-v-I1): bytes the emphasis searches walked over (from their offset to their match or the end). */
+    public int $emphasisScanned = 0;
 }
