@@ -7,8 +7,10 @@ namespace Nowo\TaskBoardBundle\Tests\Unit\ClientApi;
 use Nowo\TaskBoardBundle\ClientApi\Contract\TaskClientFileResolverInterface;
 use Nowo\TaskBoardBundle\ClientApi\Contract\TaskClientReferenceResolverInterface;
 use Nowo\TaskBoardBundle\ClientApi\Model\TaskClientReference;
+use Nowo\TaskBoardBundle\ClientApi\Text\TaskTextMemo;
 use Nowo\TaskBoardBundle\ClientApi\Text\TaskTextTokens;
 use PHPUnit\Framework\TestCase;
+use ReflectionMethod;
 use stdClass;
 
 use function ini_get;
@@ -19,6 +21,9 @@ use function strlen;
  */
 final class TaskTextTokensTest extends TestCase
 {
+    /** Closed, unclosed and mixed markers, and the two re-scan worst cases of audit ZCS-v. */
+    private const ADVERSARIAL = ['*a* ', '**a ', '_a ', '~~a ', '*a* **b** _c_ ', '**a *b* ', '~~a _b_ '];
+
     public function testEmptyTextHasNoBlocks(): void
     {
         self::assertSame(['format' => 'tokens/1', 'blocks' => []], (new TaskTextTokens())->of(null, new stdClass()));
@@ -125,22 +130,19 @@ final class TaskTextTokensTest extends TestCase
     }
 
     /**
-     * Audit ZCS-M1: adversarial emphasis stays linear and bounded — 64 KB in one line, in 4 KB lines, closed and unclosed
-     * markers — under a 128 MB limit and in well under a second each.
+     * Audit ZCS-M1: adversarial emphasis stays bounded — 64 KB in one line, in 4 KB lines, closed and unclosed markers —
+     * under a 128 MB limit. Audit ZCS-v-I1: no wall clock (it flakes on a slow runner); the work is counted instead.
      */
     public function testAdversarialEmphasisIsBounded(): void
     {
         $limit = ini_get('memory_limit');
         ini_set('memory_limit', '128M');
         try {
-            foreach (['*a* ', '**a ', '_a ', '~~a ', '*a* **b** _c_ '] as $unit) {
+            foreach (self::ADVERSARIAL as $unit) {
                 $line  = str_repeat($unit, intdiv(65536, strlen($unit)));
-                $lines = implode("\n", str_split(str_repeat($unit, intdiv(65536, strlen($unit))), 4000));
+                $lines = implode("\n", str_split($line, 4000));
                 foreach ([$line, $lines] as $text) {
-                    $started = microtime(true);
-                    $blocks  = (new TaskTextTokens())->of($text, new stdClass())['blocks'];
-                    self::assertNotSame([], $blocks);
-                    self::assertLessThan(0.5, microtime(true) - $started, $unit);
+                    self::assertNotSame([], (new TaskTextTokens())->of($text, new stdClass())['blocks']);
                 }
             }
             self::assertLessThan(128 * 1024 * 1024, memory_get_peak_usage());
@@ -151,6 +153,28 @@ final class TaskTextTokensTest extends TestCase
         $tokens = (new TaskTextTokens())->of(str_repeat('*a* ', 300), new stdClass())['blocks'][0]['tokens'];
         self::assertSame(['type' => 'text', 'text' => 'a', 'marks' => ['italic']], $tokens[0]);
         self::assertStringContainsString('*a*', (string) $tokens[array_key_last($tokens)]['text']);
+    }
+
+    /**
+     * Audit ZCS-v-I1: a deterministic bound instead of a timer. Each of the four patterns walks over each byte of a line
+     * at most once per nesting level (a kept match is reused, a pattern that found nothing is not asked again), so the
+     * start positions tried stay within 8 × the line (the line, plus the one-level insides of these inputs). Before the
+     * fix an unclosed marker (`~~a _b_ `) re-walked the rest of the line on every span: hundreds of times the line.
+     */
+    public function testTheEmphasisLoopIsLinear(): void
+    {
+        $inline = new ReflectionMethod(TaskTextTokens::class, 'inline');
+        foreach (self::ADVERSARIAL as $unit) {
+            $line = substr(str_repeat($unit, intdiv(TaskTextTokens::MAX_EMPHASIS_LINE, strlen($unit))), 0, TaskTextTokens::MAX_EMPHASIS_LINE);
+            $memo = new TaskTextMemo();
+            $inline->invoke(new TaskTextTokens(), $line, new stdClass(), $memo);
+            self::assertLessThanOrEqual(8 * strlen($line), $memo->emphasisScanned, $unit);
+        }
+        // The unclosed strike is asked once on the line, not once per italic span (before: about 2.4 million positions).
+        $memo = new TaskTextMemo();
+        $inline->invoke(new TaskTextTokens(), str_repeat('~~a _b_ ', 400), new stdClass(), $memo);
+        self::assertSame(256, $memo->marks);
+        self::assertLessThanOrEqual(4 * 3200 + 4 * 256, $memo->emphasisScanned);
     }
 
     public function testALongTextIsCutOnACharacterAndSaysSo(): void

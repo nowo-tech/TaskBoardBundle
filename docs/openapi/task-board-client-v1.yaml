@@ -75,7 +75,7 @@ paths:
       description: 'Scope: task-board:read.'
       parameters:
         - {$ref: '#/components/parameters/Context'}
-        - {name: since, in: query, description: 'nextCursor of the previous poll; none starts at now', schema: {type: string}}
+        - {name: since, in: query, description: 'nextCursor of the previous poll; none starts at now', schema: {type: string, maxLength: 3072}}
         - {$ref: '#/components/parameters/Limit'}
       responses:
         '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Changes'}}}}
@@ -258,7 +258,7 @@ paths:
       description: 'Scope: task-board:read.'
       parameters:
         - {$ref: '#/components/parameters/Context'}
-        - {name: before, in: query, description: 'nextCursor of the previous page', schema: {type: string}}
+        - {name: before, in: query, description: 'nextCursor of the previous page', schema: {type: string, maxLength: 3072}}
         - {$ref: '#/components/parameters/Limit'}
       responses:
         '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Comments'}}}}
@@ -373,7 +373,7 @@ components:
     bearer: {type: http, scheme: bearer, description: 'A device token of the host''s tasks family (task-board:read, task-board:write).'}
   parameters:
     Context: {name: X-Beacon-Context, in: header, description: 'personal or org:<uuid> (required unless the token is bound to a context)', schema: {type: string, maxLength: 128}}
-    Cursor: {name: cursor, in: query, description: 'nextCursor of the previous page (opaque, sealed)', schema: {type: string, maxLength: 1024}}
+    Cursor: {name: cursor, in: query, description: 'nextCursor of the previous page (opaque, sealed)', schema: {type: string, maxLength: 3072}}
     Limit: {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 100}}
     IdempotencyKey: {name: Idempotency-Key, in: header, schema: {type: string, maxLength: 255}}
     IdempotencyKeyRequired: {name: Idempotency-Key, in: header, required: true, schema: {type: string, maxLength: 255}}

@@ -307,14 +307,25 @@ final readonly class TaskTextTokens
     {
         // Audit ZCS-M1: the spans of one level in one pass over offsets (no copy of the rest of the line per span, no
         // recursion on it); only a span's inside is read again, and at most MAX_MARKS spans per text.
+        // Audit ZCS-v-I1: each pattern's leftmost match is kept; it is asked again only when a span went past its start,
+        // and a pattern that found nothing is never asked again on this text. A match does not depend on the offset it
+        // was searched from (lookbehinds read the whole subject), so a kept match at or after the offset is the one a
+        // new search would return. Each pattern so tries each start position of the text at most once per level (each
+        // start reads a span body of at most 2000 characters, a constant): the loop is linear.
         $tokens = [];
         $offset = 0;
         $length = strlen($text);
+        /** @var array<string, array<int, array{0: string, 1: int}>|false> $found */
+        $found = [];
         while ($offset < $length && $memo->marks < self::MAX_MARKS) {
             $best = null;
             foreach (self::EMPHASIS as $mark => $pattern) {
-                if (preg_match($pattern, $text, $match, PREG_OFFSET_CAPTURE, $offset) === 1 && ($best === null || $match[0][1] < $best[1][0][1])) {
-                    $best = [$mark === 'em' ? 'italic' : $mark, $match];
+                if (!isset($found[$mark]) || ($found[$mark] !== false && $found[$mark][0][1] < $offset)) {
+                    $found[$mark] = preg_match($pattern, $text, $match, PREG_OFFSET_CAPTURE, $offset) === 1 ? $match : false;
+                    $memo->emphasisScanned += ($found[$mark] === false ? $length : $found[$mark][0][1]) - $offset;
+                }
+                if ($found[$mark] !== false && ($best === null || $found[$mark][0][1] < $best[1][0][1])) {
+                    $best = [$mark === 'em' ? 'italic' : $mark, $found[$mark]];
                 }
             }
             if ($best === null) {

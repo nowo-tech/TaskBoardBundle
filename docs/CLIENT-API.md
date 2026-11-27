@@ -97,7 +97,9 @@ device label. The person's budgets come from `api.hooks.rate_limiter` (`consume(
 - **Cursors** are opaque and **sealed** (audit ZCS-L2): the sort values of the last scanned row are encrypted and
   authenticated with keys derived from `kernel.secret` (HMAC-SHA-256 in counter mode, a random nonce, a 128-bit tag),
   bound to their list, sort and context; a changed cursor, one of another list or one made with another secret is `400
-  invalid_cursor`. Rotating `kernel.secret` invalidates the cursors in flight (the app reloads the list). `limit` 1–100.
+  invalid_cursor`. Rotating `kernel.secret` invalidates the cursors in flight (the app reloads the list). Since 3.4.1
+  the client API refuses an empty `kernel.secret` (build or first request) and pads the sealed values to 32 bytes, so
+  a cursor's length does not tell a value's digit count. `limit` 1–100.
   A page may hold fewer rows than `limit` when rows it scanned are not visible to the reader. `nextCursor: null` at the
   end.
 - **Repeatable query parameters** (`priority`, `tag`) are read as `?tag=a&tag=b` or `?tag[]=a&tag[]=b`.

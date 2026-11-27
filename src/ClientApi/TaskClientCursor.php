@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\ClientApi;
 
+use LogicException;
+
 use function array_is_list;
 use function base64_decode;
 use function base64_encode;
 use function count;
 use function hash_equals;
 use function hash_hmac;
+use function intdiv;
 use function is_array;
 use function is_int;
 use function is_string;
@@ -19,9 +22,11 @@ use function pack;
 use function preg_match;
 use function random_bytes;
 use function rtrim;
+use function str_pad;
 use function strlen;
 use function strtr;
 use function substr;
+use function trim;
 
 use const JSON_UNESCAPED_SLASHES;
 use const JSON_UNESCAPED_UNICODE;
@@ -39,19 +44,35 @@ use const JSON_UNESCAPED_UNICODE;
  */
 final readonly class TaskClientCursor
 {
-    /** Longest cursor accepted (bytes). */
-    public const MAX_LENGTH = 1024;
+    /**
+     * Longest cursor accepted (bytes). Since 3.4.1 (audit ZCY-L1): 3072, so a board cursor keyed by a 255-character name
+     * in 4-byte characters (with JSON escapes, the id, the padding, the nonce and the tag) still fits.
+     */
+    public const MAX_LENGTH = 3072;
+
+    /** Since 3.4.1 (audit ZCY-L1): longest string value of a cursor (bytes); 3.4.0 refused more than 191. */
+    public const MAX_VALUE_BYTES = 1024;
 
     private const NONCE = 12;
 
     private const TAG = 16;
 
+    /** Since 3.4.1 (audit ZCS-v-I2): the plaintext is padded to a multiple of this many bytes. */
+    private const PAD = 32;
+
     private string $encryptionKey;
 
     private string $macKey;
 
+    /**
+     * @throws LogicException when the secret is empty (audit ZCS-v-I4): the keys would be public, so anyone could read
+     *                        and forge cursors
+     */
     public function __construct(string $secret)
     {
+        if (trim($secret) === '') {
+            throw new LogicException('The TaskBoard client API needs a non-empty kernel.secret (framework.secret, usually APP_SECRET): its cursors are sealed with keys derived from it.');
+        }
         $this->encryptionKey = hash_hmac('sha256', 'nowo_task_board.client_api.cursor.encrypt', $secret, true);
         $this->macKey        = hash_hmac('sha256', 'nowo_task_board.client_api.cursor.mac', $secret, true);
     }
@@ -61,7 +82,10 @@ final readonly class TaskClientCursor
      */
     public function encode(string $kind, array $values): string
     {
-        $plain  = (string) json_encode($values, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        $plain = (string) json_encode($values, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        // Audit ZCS-v-I2: padded with spaces (JSON whitespace) to a multiple of PAD bytes, so the length does not tell
+        // how many digits a value has. Unpadded cursors of 3.4.0 still decode.
+        $plain  = str_pad($plain, intdiv(strlen($plain) + self::PAD - 1, self::PAD) * self::PAD);
         $nonce  = random_bytes(self::NONCE);
         $cipher = $plain ^ $this->stream($nonce, strlen($plain));
 
@@ -94,7 +118,7 @@ final readonly class TaskClientCursor
             return null;
         }
         foreach ($values as $value) {
-            if (!is_int($value) && (!is_string($value) || strlen($value) > 191)) {
+            if (!is_int($value) && (!is_string($value) || strlen($value) > self::MAX_VALUE_BYTES)) {
                 return null;
             }
         }

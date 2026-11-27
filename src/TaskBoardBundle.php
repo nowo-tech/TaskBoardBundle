@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle;
 
+use Nowo\TaskBoardBundle\DependencyInjection\Compiler\ClientApiSecretPass;
 use Nowo\TaskBoardBundle\DependencyInjection\Compiler\PrivateEntityManagerPass;
 use Nowo\TaskBoardBundle\DependencyInjection\Compiler\PrivateEntityManagerReferencesPass;
 use Nowo\TaskBoardBundle\DependencyInjection\Compiler\RemovedPortsPass;
@@ -35,6 +36,8 @@ final class TaskBoardBundle extends Bundle
         $container->addCompilerPass(new PrivateEntityManagerReferencesPass(), PassConfig::TYPE_BEFORE_REMOVING);
         // Since 3.0.0 (audit ZAS-3): TimeTrack 2.0 must serve its scope port under the id the bridge asks for.
         $container->addCompilerPass(new TimeTrackScopePortPass(), PassConfig::TYPE_BEFORE_OPTIMIZATION, -100);
+        // Since 3.4.1 (audit ZCS-v-I4): the client API refuses an empty kernel.secret.
+        $container->addCompilerPass(new ClientApiSecretPass());
     }
 
     public function getContainerExtension(): ExtensionInterface
