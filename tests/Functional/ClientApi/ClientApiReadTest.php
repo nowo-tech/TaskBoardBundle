@@ -95,7 +95,10 @@ final class ClientApiReadTest extends ClientApiTestCase
     public function testTheBoardListPagesPastALongName(): void
     {
         $long = str_repeat("\u{4E00}", 255);
-        $this->board($long, tenantKey: 'tenant-a');
+        // The helper's slug is the name plus a suffix (over 255): this board gets a short slug.
+        $board = $this->board('Long', tenantKey: 'tenant-a');
+        $board->setName($long);
+        $this->em->flush();
         $this->board("\u{9FA5}", tenantKey: 'tenant-a');
         $this->call('GET', '/boards?limit=2');
         self::assertResponseIsSuccessful();
