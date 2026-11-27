@@ -5,7 +5,8 @@ This document describes how to upgrade between versions of TaskBoard Bundle.
 ## Table of contents
 
 - [Unreleased](#unreleased)
-  - [To 3.4.1](#to-341)
+- [To 3.4.1](#to-341)
+  - [To 3.4.1](#to-341-1)
 - [To 3.4.0](#to-340)
   - [Schema change: two indexes](#schema-change-two-indexes)
   - [Personal-data export (UserKit section `task_board`)](#personal-data-export-userkit-section-task_board)
@@ -240,6 +241,14 @@ This document describes how to upgrade between versions of TaskBoard Bundle.
   - [FormKitBundle (admin forms)](#formkitbundle-admin-forms)
 
 ## Unreleased
+
+## To 3.4.1
+
+From **3.4.0**:
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
 
 ### To 3.4.1
 
