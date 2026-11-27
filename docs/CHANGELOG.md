@@ -139,6 +139,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Target: 3.5.0.
+
+### Added
+
+- **`TaskBoardModuleForbiddenException`** (`Nowo\TaskBoardBundle\ClientApi\Exception`, BC-promised): the host's explicit
+  signal "valid token, this person lost the Tasks permission" (Beacon spec 262 block B, Desktop permission parity). Throw
+  it from `TaskClientPrincipalResolverInterface::resolve()` only, with the token's principal (never from
+  `TaskBoardAccessCheckerInterface::canAccess()`: that port is shared with the web UI and commands). The client API then answers
+  `403 {ok: false, error: "module_forbidden", message: "Tasks is not available for this account.", module: "tasks"}` with
+  `Cache-Control: no-store, private` and no `WWW-Authenticate`, so the client hides the module and keeps its session.
+  The audit event `TaskClientApiDeniedEvent` carries the reason `module_forbidden` (and the token id).
+
+### Changed
+
+- **The person's budget is consumed right after the token resolved** (audit ZDF-L1), before the access, scope and
+  context refusals, so a client looping on a 401 or 403 is bounded per token. A request refused by one of those checks
+  now spends one request of the budget (before: only requests that passed them).
+- A disabled or anonymised account (`canAccess()` false, or the resolver returns null) still gets `401 invalid_token`,
+  audit reason `account_inactive`, unchanged (audit ZDF-M1: only the explicit signal is a 403), and the account check
+  always runs: an inactive account is a 401 even when the resolver signals (audit ZDH-L1).
+- For client API calls, `TaskApiRateLimiterInterface::consume()` now receives the token's principal with an empty
+  `where` (no context yet), since the budget is spent before the context is resolved (a limiter keyed on the token id
+  is unaffected).
+
+### Tests
+
+- Inactive account 401; the signal 403 on a read and a write route, with audit reason and token id; the budget consumed
+  before the refusal (and 429 first when spent); signal plus inactive account is 401; a signal with a principal whose
+  user is not a security user is 401; a checker-thrown signal is still read as 403 (safety net, unit).
+
 ## [3.4.1] - 2026-11-27
 
 Patch 3.4.1: follow-ups of the 3.4.0 client API re-audit (ZCS-v). No BC break for a host with a `kernel.secret`.

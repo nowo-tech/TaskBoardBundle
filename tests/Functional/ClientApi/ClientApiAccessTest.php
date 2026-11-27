@@ -119,13 +119,60 @@ final class ClientApiAccessTest extends ClientApiTestCase
         self::assertSame('0', $this->client->getResponse()->headers->get('X-RateLimit-Remaining'));
     }
 
-    public function testAPersonWhoMayNoLongerUseTheBoardsIsAnInvalidToken(): void
+    public function testADisabledOrAnonymisedAccountStillGets401(): void
     {
         $this->user('blocked@example.com', []);
         $this->clientToken(email: 'blocked@example.com');
         $this->call('GET', '/me');
         $this->assertError(401, 'invalid_token');
+        self::assertSame('Bearer error="invalid_token"', $this->client->getResponse()->headers->get('WWW-Authenticate'));
         self::assertSame('account_inactive', $this->denied[0]->reason);
+        // 3.5 (ZDF-L1): the person's budget was spent before the refusal.
+        self::assertSame(1, ApiTestHost::$consumed);
+    }
+
+    public function testTheHostsExplicitSignalIs403OnAReadRouteAndAWriteRouteAndKeepsTheSession(): void
+    {
+        $this->clientToken();
+        ClientApiTestHost::$tokens[self::CLIENT_TOKEN]['forbidden'] = true;
+
+        $this->call('GET', '/me');
+        $this->assertError(403, 'module_forbidden');
+        $response = $this->client->getResponse();
+        self::assertSame('tasks', $this->json()['module'] ?? null);
+        self::assertSame('Tasks is not available for this account.', $this->json()['message'] ?? null);
+        self::assertFalse($response->headers->has('WWW-Authenticate'));
+        self::assertStringContainsString('no-store', (string) $response->headers->get('Cache-Control'));
+
+        $this->call('POST', '/tasks', ['boardId' => 'x', 'title' => 'No'], ['HTTP_IDEMPOTENCY_KEY' => 'k1']);
+        $this->assertError(403, 'module_forbidden');
+
+        self::assertSame(['module_forbidden', 'module_forbidden'], array_map(static fn (TaskClientApiDeniedEvent $event): string => $event->reason, $this->denied));
+        self::assertSame('tok-' . self::CLIENT_TOKEN, $this->denied[0]->tokenId);
+        // The budget was consumed before each refusal; a spent budget answers 429 first.
+        self::assertSame(2, ApiTestHost::$consumed);
+        ApiTestHost::$tokenLimitAccepts = false;
+        $this->call('GET', '/me');
+        $this->assertError(429, 'rate_limited');
+    }
+
+    public function testAnInactiveAccountIs401EvenWhenTheResolverSignals(): void
+    {
+        $this->user('blocked@example.com', []);
+        $this->clientToken(email: 'blocked@example.com');
+        ClientApiTestHost::$tokens[self::CLIENT_TOKEN]['forbidden'] = true;
+        $this->call('GET', '/me');
+        $this->assertError(401, 'invalid_token');
+        self::assertSame('Bearer error="invalid_token"', $this->client->getResponse()->headers->get('WWW-Authenticate'));
+        self::assertSame('account_inactive', $this->denied[0]->reason);
+    }
+
+    public function testAnUnknownTokenIsStillA401WhateverThePersonMayDo(): void
+    {
+        // No oracle: the module refusal exists only behind a valid token.
+        $this->call('GET', '/me', token: 'unknown-token');
+        $this->assertError(401, 'invalid_token');
+        self::assertArrayNotHasKey('module', $this->json());
     }
 
     public function testAnUnknownPathUnderThePrefixIsTheApisOwn404(): void

@@ -8,8 +8,10 @@ use Nowo\TaskBoardBundle\Api\Hook\TaskApiRateLimiterInterface;
 use Nowo\TaskBoardBundle\Api\TaskApiLevel;
 use Nowo\TaskBoardBundle\Api\TaskApiPrincipal;
 use Nowo\TaskBoardBundle\Api\TaskApiRefusal;
+use Nowo\TaskBoardBundle\Api\TaskApiWhere;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiRateLimitState;
 use Nowo\TaskBoardBundle\ClientApi\Contract\TaskClientContextPolicyInterface;
+use Nowo\TaskBoardBundle\ClientApi\Exception\TaskBoardModuleForbiddenException;
 use Nowo\TaskBoardBundle\ClientApi\Model\TaskClientPrincipal;
 use Nowo\TaskBoardBundle\ClientApi\TaskClientApiException;
 use Nowo\TaskBoardBundle\ClientApi\TaskClientCall;
@@ -54,12 +56,16 @@ use function strlen;
  *
  * 1. the principal the authenticator resolved, behind the same security user (else the host forgot the firewall:
  *    `500 server_error`, logged; the API fails closed);
- * 2. the person may use the task board now (`TaskBoardAccessCheckerInterface::canAccess()`) — `401 invalid_token`;
+ * 2. the person may use the task board now (`TaskBoardAccessCheckerInterface::canAccess()`) — `401 invalid_token` (audit reason
+ *    `account_inactive`: a disabled or anonymised account); 3.5: when the account is active and the host's resolver
+ *    signalled a lost Tasks permission with {@see TaskBoardModuleForbiddenException}, `403 module_forbidden` (`module: tasks`,
+ *    no `WWW-Authenticate`, audit reason `module_forbidden`: the client hides the module and keeps its session);
  * 3. the route's scope (`task-board:read` for every GET, `task-board:write` for every write) — `403 insufficient_scope`;
  * 4. the context: the token's bound context, else the context header (`invalid_context` / `context_required`), checked
  *    by the host's `TaskClientContextPolicyInterface` on every request — `403 context_forbidden` (one answer); a
  *    `whereFor()` of `everything()` is a host error — `500 server_error`, logged (audit ZCS-L1);
- * 5. the person's budget (`api.hooks.rate_limiter`, shared with their personal tokens) — `429 rate_limited`.
+ * 5. (3.5, audit ZDF-L1) the person's budget (`api.hooks.rate_limiter`, shared with their personal tokens) is consumed
+ *    right after step 1, before steps 2 to 4 — `429 rate_limited`.
  *
  * Then the call holds a `TaskApiPrincipal` (level `Read` for `task-board:read`, `Tasks` with `task-board:write`, never
  * `Full` or `My tasks`; `where` from the context; channel `app`), so the existing guard and operations decide everything
@@ -159,8 +165,24 @@ final readonly class TaskClientApiListener implements EventSubscriberInterface
             throw new TaskClientApiException('server_error', Response::HTTP_INTERNAL_SERVER_ERROR);
         }
         $ipPrefix = TaskClientAuthenticator::ipPrefix($request->getClientIp());
-        if (!$this->accessChecker->canAccess($client->user)) {
+        // Audit ZDF-L1: the token's budget comes first, so a client looping on a refusal (401 or 403) is bounded per token.
+        $this->spend($request, $client, $ipPrefix);
+        $forbidden = $request->attributes->get(TaskClientAuthenticator::MODULE_FORBIDDEN) === true;
+        // Audit ZDH-L1: the account check always runs, so an inactive account is a 401 even when the resolver signalled.
+        try {
+            $active = $this->accessChecker->canAccess($client->user);
+        } catch (TaskBoardModuleForbiddenException) {
+            // Safety net only: the resolver is the supported signal (audit ZDH-M1); a checker that throws it is read as one.
+            $active    = true;
+            $forbidden = true;
+        }
+        if (!$active) {
+            // A disabled or anonymised account: 401 as before 3.5 (the client signs out).
             $this->deny('invalid_token', Response::HTTP_UNAUTHORIZED, $client, $ipPrefix, ['WWW-Authenticate' => 'Bearer error="invalid_token"'], 'account_inactive');
+        }
+        if ($forbidden) {
+            // 3.5 (audit ZDF-M1): only the host's explicit signal means "permission lost": 403, the client keeps its session.
+            $this->deny('module_forbidden', Response::HTTP_FORBIDDEN, $client, $ipPrefix, [], null, ['message' => 'Tasks is not available for this account.', 'module' => 'tasks']);
         }
         if (!$client->hasScope($scope)) {
             $this->deny('insufficient_scope', Response::HTTP_FORBIDDEN, $client, $ipPrefix, ['WWW-Authenticate' => sprintf('Bearer error="insufficient_scope", scope="%s"', $scope)]);
@@ -174,15 +196,24 @@ final readonly class TaskClientApiListener implements EventSubscriberInterface
             $this->deny('server_error', Response::HTTP_INTERNAL_SERVER_ERROR, $client, $ipPrefix, [], 'context_everything');
         }
         $level = $client->hasScope(TaskClientPrincipal::SCOPE_WRITE) ? TaskApiLevel::Tasks : TaskApiLevel::Read;
-        $call  = new TaskClientCall($client, new TaskApiPrincipal($client->user, $level, $where, $client->tokenId, $client->tokenName !== '' ? $client->tokenName : 'app', ColumnTransitionVia::APP), $context);
 
-        $state = $this->rateLimiter->consume($call->principal);
+        return new TaskClientCall($client, new TaskApiPrincipal($client->user, $level, $where, $client->tokenId, $client->tokenName !== '' ? $client->tokenName : 'app', ColumnTransitionVia::APP), $context);
+    }
+
+    /**
+     * Consumes one request of the token's budget (audit ZDF-L1: before every refusal that follows the token's validation);
+     * the budget is the token's and the person's, so it does not depend on the context.
+     *
+     * @throws TaskClientApiException 429 when spent
+     */
+    private function spend(Request $request, TaskClientPrincipal $client, ?string $ipPrefix): void
+    {
+        $level = $client->hasScope(TaskClientPrincipal::SCOPE_WRITE) ? TaskApiLevel::Tasks : TaskApiLevel::Read;
+        $state = $this->rateLimiter->consume(new TaskApiPrincipal($client->user, $level, TaskApiWhere::limitedTo([], []), $client->tokenId, $client->tokenName !== '' ? $client->tokenName : 'app', ColumnTransitionVia::APP));
         $request->attributes->set(self::RATE_LIMIT, $state);
         if (!$state->accepted) {
             $this->deny('rate_limited', Response::HTTP_TOO_MANY_REQUESTS, $client, $ipPrefix, ['Retry-After' => (string) max(1, $state->resetAt - $this->clock->now()->getTimestamp())]);
         }
-
-        return $call;
     }
 
     /**
@@ -209,14 +240,15 @@ final readonly class TaskClientApiListener implements EventSubscriberInterface
 
     /**
      * @param array<string, string> $headers
+     * @param array<string, mixed> $extra Body fields (3.5: `message` and `module` of `module_forbidden`)
      *
      * @throws TaskClientApiException always
      */
-    private function deny(string $error, int $status, ?TaskClientPrincipal $client, ?string $ipPrefix, array $headers = [], ?string $reason = null): never
+    private function deny(string $error, int $status, ?TaskClientPrincipal $client, ?string $ipPrefix, array $headers = [], ?string $reason = null, array $extra = []): never
     {
         $this->events?->dispatch(new TaskClientApiDeniedEvent($reason ?? $error, $client?->tokenId, $client instanceof TaskClientPrincipal ? SyncUser::id($client->user) : null, $ipPrefix), TaskBoardEvents::CLIENT_API_DENIED);
 
-        throw new TaskClientApiException($error, $status, [], $headers);
+        throw new TaskClientApiException($error, $status, $extra, $headers);
     }
 
     private function isClientRequest(Request $request): bool

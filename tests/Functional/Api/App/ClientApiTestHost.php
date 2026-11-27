@@ -15,6 +15,7 @@ use Nowo\TaskBoardBundle\ClientApi\Contract\TaskClientFileResolverInterface;
 use Nowo\TaskBoardBundle\ClientApi\Contract\TaskClientPrincipalResolverInterface;
 use Nowo\TaskBoardBundle\ClientApi\Contract\TaskClientReferenceResolverInterface;
 use Nowo\TaskBoardBundle\ClientApi\Contract\TaskClientSourceLinkInterface;
+use Nowo\TaskBoardBundle\ClientApi\Exception\TaskBoardModuleForbiddenException;
 use Nowo\TaskBoardBundle\ClientApi\Model\TaskClientContext;
 use Nowo\TaskBoardBundle\ClientApi\Model\TaskClientPrincipal;
 use Nowo\TaskBoardBundle\ClientApi\Model\TaskClientReference;
@@ -34,7 +35,7 @@ use function in_array;
  */
 final class ClientApiTestHost implements TaskApiIdempotencyStoreInterface, TaskClientPrincipalResolverInterface, TaskClientContextPolicyInterface, TaskClientReferenceResolverInterface, TaskObjectLinkVisibilityInterface, TaskClientFileResolverInterface, TaskClientSourceLinkInterface
 {
-    /** @var array<string, array{email: string, scopes: list<string>, id: string, context?: string|null}> by bearer */
+    /** @var array<string, array{email: string, scopes: list<string>, id: string, context?: string|null, forbidden?: bool}> by bearer */
     public static array $tokens = [];
 
     /** @var array<string, array<string, list<string>>> context key => tenant keys, by e-mail */
@@ -94,7 +95,15 @@ final class ClientApiTestHost implements TaskApiIdempotencyStoreInterface, TaskC
         }
         $user = $this->entityManager->getRepository(AppUser::class)->findOneBy(['email' => $token['email']]);
 
-        return $user === null ? null : new TaskClientPrincipal($user, $token['scopes'], $token['id'], 'Beacon Desktop · Test', $token['context'] ?? null);
+        if ($user === null) {
+            return null;
+        }
+        $principal = new TaskClientPrincipal($user, $token['scopes'], $token['id'], 'Beacon Desktop · Test', $token['context'] ?? null);
+        if ($token['forbidden'] ?? false) {
+            throw new TaskBoardModuleForbiddenException($principal);
+        }
+
+        return $principal;
     }
 
     public function contextsFor(TaskClientPrincipal $principal): array
