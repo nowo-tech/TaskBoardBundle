@@ -245,6 +245,12 @@ This document describes how to upgrade between versions of TaskBoard Bundle.
 
 ## To 3.5.0
 
+From **3.4.1**:
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
+
 From **3.4.x**, no code change is required. Beacon Desktop permission parity (spec 262 block B): the client API
 (`/task-board/v1`) can now tell a client that the person lost the Tasks permission without signing it out.
 
