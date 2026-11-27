@@ -34,8 +34,6 @@
     {% if _canDelete %}
         {{ form_start(columnDeleteForm, {attr: {
             id: 'nowo-task-board-column-delete-form',
-            {#- Audit ZDJ-TB-H1: a native post, so the data-confirm question (and the host's warnings) is asked before anything is sent; UiKit's remote dialog would post it at once. -#}
-            'data-nowo-ui-remote-form-native': true,
             class: 'nowo-task-column-delete-form',
             hidden: 'hidden',
             'data-confirm': ('task_board.board.delete_column_confirm'|trans({}, 'NowoTaskBoardBundle')) ~ ((columnDeleteWarning|default('')) != '' ? "\n\n" ~ columnDeleteWarning : ''),
