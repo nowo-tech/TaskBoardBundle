@@ -115,6 +115,8 @@ final readonly class TaskClientReader
         private bool $timeTracking = false,
         private bool $taskNumbers = false,
         private ?int $subtaskDepth = null,
+        // Since 3.7.0: whether `POST logout` revokes the token on the server (`client_api.token_revoker`).
+        private bool $serverLogout = false,
     ) {
     }
 
@@ -149,6 +151,8 @@ final readonly class TaskClientReader
                 'subtaskDepth' => $this->subtaskDepth,
                 'files'        => false,
                 'activity'     => false,
+                // 3.7.0: whether `POST logout` revokes the token on the server (else the client only forgets it).
+                'serverLogout' => $this->serverLogout,
             ],
             'limits' => ['pageSize' => 100, 'columnPageSize' => self::COLUMN_PAGE, 'changes' => self::CHANGES_LIMIT, 'myTasksScan' => TaskClientQueries::MY_TASKS_SCAN],
             'enums'  => [

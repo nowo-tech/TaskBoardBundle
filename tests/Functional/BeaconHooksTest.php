@@ -97,17 +97,28 @@ final class BeaconHooksTest extends FunctionalTestCase
             $event->addWarning('not-a-column', 'ignored');
         });
         $this->login($this->owner);
+        $dialog = ['HTTP_X_NOWO_DIALOG' => '1', 'HTTP_X_REQUESTED_WITH' => 'XMLHttpRequest', 'HTTP_ACCEPT' => 'text/html'];
 
-        $crawler = $this->client->request('GET', '/tools/task-board/board/' . $board->getId() . '?view=board');
+        // Since 3.6.0 the warnings come with the column's edit dialog (asked once per dialog), not with the page.
+        $this->client->request('GET', '/tools/task-board/board/' . $board->getId() . '?view=board');
         self::assertResponseIsSuccessful();
-        self::assertCount(1, $checked, 'asked once per page');
+        self::assertCount(0, $checked, 'the page asks nothing');
+        self::assertSelectorNotExists('[data-column-delete-warning]');
+
+        $crawler = $this->client->request('GET', '/tools/task-board/board/' . $board->getId() . '/column/' . $review?->getId() . '/edit', server: $dialog);
+        self::assertResponseIsSuccessful();
+        self::assertCount(1, $checked, 'asked once per dialog');
         self::assertCount(3, $checked[0]);
-        $warnings = $crawler->filter('[data-column-delete-warning]');
-        self::assertCount(1, $warnings);
-        self::assertSame((string) $review?->getId(), $warnings->attr('data-column-id'));
-        self::assertSame("2 automation rules use this column; they will pause.\n<b>Second</b> line", $warnings->attr('data-column-delete-warning'));
-        self::assertSelectorExists('[data-testid="nowo-task-column-delete-warning"][hidden]');
+        $warning = $crawler->filter('[data-testid="nowo-task-column-delete-warning"]');
+        self::assertCount(1, $warning);
+        self::assertStringContainsString('2 automation rules use this column; they will pause.', $warning->text());
+        self::assertStringContainsString("2 automation rules use this column; they will pause.\n<b>Second</b> line", (string) $crawler->filter('form#nowo-task-board-column-delete-form')->attr('data-confirm'));
         self::assertStringNotContainsString('<b>Second</b>', (string) $this->client->getResponse()->getContent());
+
+        // A column without warnings shows none.
+        $first   = $board->getColumns()->first();
+        $crawler = $this->client->request('GET', '/tools/task-board/board/' . $board->getId() . '/column/' . $first?->getId() . '/edit', server: $dialog);
+        self::assertCount(0, $crawler->filter('[data-testid="nowo-task-column-delete-warning"]'));
     }
 
     public function testABoardWithOneColumnAsksNothing(): void
@@ -119,10 +130,11 @@ final class BeaconHooksTest extends FunctionalTestCase
         });
         $this->login($this->owner);
 
-        $this->client->request('GET', '/tools/task-board/board/' . $board->getId() . '?view=board');
+        $only = $board->getColumns()->first();
+        $this->client->request('GET', '/tools/task-board/board/' . $board->getId() . '/column/' . $only?->getId() . '/edit', server: ['HTTP_X_NOWO_DIALOG' => '1', 'HTTP_X_REQUESTED_WITH' => 'XMLHttpRequest', 'HTTP_ACCEPT' => 'text/html']);
         self::assertResponseIsSuccessful();
         self::assertSame(0, $asked);
-        self::assertSelectorNotExists('[data-column-delete-warning]');
+        self::assertSelectorNotExists('[data-testid="nowo-task-column-delete-warning"]');
     }
 
     public function testArchiveRestoreAndCommentDeletionDispatchIdOnlyEvents(): void

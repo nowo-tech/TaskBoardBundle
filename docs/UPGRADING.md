@@ -4,7 +4,8 @@ This document describes how to upgrade between versions of TaskBoard Bundle.
 
 ## Table of contents
 
-- [Unreleased](#unreleased)
+- [To 3.7.0](#to-370)
+- [To 3.6.0](#to-360)
 - [To 3.5.0](#to-350)
 - [To 3.4.1](#to-341)
   - [To 3.4.1](#to-341-1)
@@ -241,7 +242,67 @@ This document describes how to upgrade between versions of TaskBoard Bundle.
 - [Future 1.x releases](#future-1x-releases)
   - [FormKitBundle (admin forms)](#formkitbundle-admin-forms)
 
-## Unreleased
+## To 3.7.0
+
+```bash
+composer update nowo-tech/task-board-bundle
+```
+
+No BC break: every new constructor argument is optional and appended, every new option is off. It pulls in
+`nowo-tech/correlation-contract` ^0.1 (no dependency beyond PHP). What changes:
+
+- **Schema change for every host (Beacon spec 235, FR-004): one nullable column and its index.** Nothing is rewritten.
+  Run the migration **before** the deploy (the new code selects the column). The demo ships it as
+  `demo/symfony8/migrations/Version20261128120000.php`; `doctrine:migrations:diff` writes the same (replace the table
+  name if you use `table_prefix`). The XML mapping (`database.mapping: xml`) maps it too.
+
+  ```sql
+  -- MySQL / MariaDB
+  ALTER TABLE task_board_task_change_history ADD correlation_id VARCHAR(64) DEFAULT NULL;
+  CREATE INDEX task_board_change_history_correlation_idx ON task_board_task_change_history (correlation_id);
+  -- PostgreSQL
+  ALTER TABLE task_board_task_change_history ADD correlation_id VARCHAR(64) DEFAULT NULL;
+  CREATE INDEX task_board_change_history_correlation_idx ON task_board_task_change_history (correlation_id);
+  -- SQLite (add the column in place, no table rebuild)
+  ALTER TABLE task_board_task_change_history ADD COLUMN correlation_id VARCHAR(64) DEFAULT NULL;
+  CREATE INDEX task_board_change_history_correlation_idx ON task_board_task_change_history (correlation_id);
+  ```
+
+- **Correlation id.** Register your `Nowo\CorrelationContract\CorrelationIdProviderInterface` (an alias or a service
+  with that id; AuditKit's provider in Beacon) and every new history row keeps the id of its request, message or command.
+  Without one the column stays `NULL`. No option to set.
+- **Channel without a provenance provider.** The `channel` columns of history rows, tasks and comments used to stay
+  `NULL` when `write_provenance_provider` was not set (or answered null). They now get the channel the bundle's entry
+  point declares: `web` (board pages), `api` (Task API writes), `app` (client API), `cli` (`nowo:task-board:import`,
+  `nowo:task-board:sync`). So the Task API's `channel` field and the "via …" line of the history show a value for new
+  writes. A host provider that answers keeps winning, whole. A new `WriteChannel::Cli` case (`cli`) exists: a `match`
+  over `WriteChannel` in host code needs an arm (or a default) for it; translations `task_board.history.channel.cli` are
+  shipped in the 7 locales. Host entry points declare their own channel with `Provenance\WriteChannelScope::run()` or
+  `#[Provenance\Attribute\AsWriteChannel]` ([USAGE](USAGE.md#member-badges-and-write-provenance-since-218)).
+- **Client API sign-out (Beacon Desktop BDA13-L2).** `POST <prefix>/v1/logout` (route
+  `nowo_task_board_client_v1_logout`) answers `204` and, with the new optional `client_api.token_revoker` (a
+  `ClientApi\Contract\TaskClientTokenRevokerInterface`), revokes the presented token server-side; `me.features.serverLogout`
+  says which. Beacon: implement the revoker over TimeTrack's `ClientFamilyTokenAuthenticator` (`tasks` family, this token
+  only, idempotent, committed before it returns) and set the option; Desktop then calls it on "Disconnect" / "Sign out".
+  The route sits under the client API's existing stateless firewall: nothing to change in `security.yaml`. Audit it from
+  `TaskBoardEvents::CLIENT_API_LOGGED_OUT`. Logout spends `api.hooks.rate_limiter`: `failedTokenState()` /
+  `registerFailedToken()` for the IP, and `consume()` with token id `logout:<tokenId>` (a key apart from the token's
+  reads). A firewall `user_checker` that refuses a disabled account makes logout `401`: revoke client tokens on disable.
+  See [CLIENT-API](CLIENT-API.md#routes).
+- **`cli` in the Task API.** The OpenAPI `channel` (tasks, comments) and question `via` enums gain `cli`; a client
+  generated with strict enums needs regenerating.
+- **AuditKit timeline source (optional).** With nowo-tech/audit-kit-bundle ^2.2 installed, the task changes and comments
+  join AuditKit's timeline (`TimelineSubject('task', $taskId)`, source `task_board`), filtered by the signed-in user's
+  access to the task. Nothing to configure; without AuditKit nothing is registered
+  ([USAGE](USAGE.md#member-badges-and-write-provenance-since-218)).
+
+## To 3.6.0
+
+**Overrides of the board dialogs.** `_add_task_modal.html.twig`, `_add_column_modal.html.twig` and `_edit_column_modal.html.twig`
+are now fragments (the content of a remote dialog: body and a `[data-nowo-ui-dialog-actions]` footer), not `<dialog>` markup. A
+host that overrides them, or `_board_column.html.twig`, `_column_menu.html.twig` or the calendar partials, takes the new openers
+(`_dialog_openers.html.twig`) and shells (`_dialog_shells.html.twig`). A host that renders the board page from its own controller
+no longer passes `taskForm`, `columnForm`, `editColumnForm`, `columnDeleteForm` or `columnDeleteWarnings`.
 
 ## To 3.5.0
 

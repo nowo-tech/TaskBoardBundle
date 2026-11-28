@@ -60,27 +60,31 @@ test('board: dialogs fill and open, the column delete asks through the kit, drag
   const errors = watch(page);
   await openBoard(page);
 
-  await page.locator('[data-action*="nowo-task-board-add-column-modal#open"]').click();
-  const addColumn = page.locator('dialog[data-nowo-task-board-add-column-modal-target="modal"]');
+  // Since 3.6.0 every dialog loads its content when it opens: the shells are empty until an opener is used.
+  const addColumn = page.locator('dialog#nowo-task-board-add-column-modal');
+  await expect(page.locator('form#nowo-task-board-add-column-form')).toHaveCount(0);
+  await page.locator('[data-nowo-ui-dialog-open="nowo-task-board-add-column-modal"]').click();
   await expect(addColumn).toBeVisible();
   await expect(addColumn.locator('input[name$="[name]"]')).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(addColumn).toBeHidden();
 
-  // The Add task dialog: the board uses inline add, so a host's button opens it.
+  // The Add task dialog: the board uses inline add, so a host's button opens it (the same opener attributes as the bundle's).
   await page.evaluate(() => {
     const scope = document.querySelector('[data-controller~="nowo-task-board-add-task-modal"]');
+    const board = document.querySelector<HTMLElement>('[data-board-id]');
     const firstColumn = document.querySelector<HTMLElement>('.nowo-task-board__column');
     const button = document.createElement('button');
     button.type = 'button';
     button.id = 'host-add-task';
-    button.dataset.action = 'click->nowo-task-board-add-task-modal#open';
-    button.dataset.columnId = firstColumn?.dataset.columnId ?? '';
-    button.dataset.columnName = 'Host column';
+    button.dataset.nowoUiDialogOpen = 'nowo-task-board-add-task-modal';
+    button.dataset.nowoUiDialogSrc = `/tools/task-board/board/${board?.dataset.boardId ?? ''}/task/new?column=${firstColumn?.dataset.columnId ?? ''}`;
+    button.dataset.nowoUiDialogForm = '';
+    button.dataset.nowoUiDialogTitle = 'Add task to Host column';
     scope?.prepend(button);
   });
   await page.locator('#host-add-task').click();
-  const addTask = page.locator('dialog[data-nowo-task-board-add-task-modal-target="modal"]');
+  const addTask = page.locator('dialog#nowo-task-board-add-task-modal');
   await expect(addTask).toBeVisible();
   await expect(addTask.locator('h2')).toContainText('Host column');
   const newTask = `Dialog ${test.info().project.name} ${Date.now()}`;
@@ -95,8 +99,9 @@ test('board: dialogs fill and open, the column delete asks through the kit, drag
   await apply.locator('footer [data-nowo-ui-dialog-close]').click();
   await expect(apply).toBeHidden();
 
-  await page.locator('[data-action*="nowo-task-board-edit-column-modal#open"]').first().click();
-  const edit = page.locator('dialog[data-nowo-task-board-edit-column-modal-target="modal"]');
+  const columnCount = await page.locator('.nowo-task-board__column').count();
+  await page.locator('.nowo-task-column__edit').first().click();
+  const edit = page.locator('dialog#nowo-task-board-edit-column-modal');
   await expect(edit).toBeVisible();
   await edit.locator('button[form="nowo-task-board-column-delete-form"]').click();
   const confirm = page.locator('dialog.nowo-ui-confirm, dialog[data-nowo-ui-confirm]').last();
@@ -105,6 +110,8 @@ test('board: dialogs fill and open, the column delete asks through the kit, drag
   await page.keyboard.press('Escape');
   await expect(confirm).toBeHidden();
   await expect(edit).toBeVisible();
+  // Audit ZDJ-TB-H1: the question came before anything was posted; the column is still there.
+  await expect(page.locator('.nowo-task-board__column')).toHaveCount(columnCount);
   await page.keyboard.press('Escape');
   await expect(edit).toBeHidden();
 
@@ -112,9 +119,10 @@ test('board: dialogs fill and open, the column delete asks through the kit, drag
   // The board's HTML5 drag does not move under touch emulation: the test on a real device decides it, with the move to `sortable`.
   test.skip(isMobile, 'Drag on touch: a real device test decides it.');
   const columns = page.locator('.nowo-task-board__column');
-  const card = columns.first().locator('.nowo-task-card').first();
-  const title = (await card.getAttribute('data-nowo-task-title')) ?? '';
+  const title = (await columns.first().locator('.nowo-task-card').first().getAttribute('data-nowo-task-title')) ?? '';
   expect(title).not.toBe('');
+  // By title, not by position: cards of equal position may be listed in another order on the next render.
+  const card = columns.first().locator(`.nowo-task-card[data-nowo-task-title="${title}"]`).first();
   const moved = page.waitForResponse((r) => /\/move/.test(r.url()) && r.request().method() === 'POST');
   await card.dragTo(columns.nth(1));
   expect((await moved).status()).toBeLessThan(400);

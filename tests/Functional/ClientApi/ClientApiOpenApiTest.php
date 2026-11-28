@@ -51,7 +51,7 @@ final class ClientApiOpenApiTest extends ClientApiTestCase
         }
         sort($routes);
         sort($documented);
-        self::assertCount(19, $routes);
+        self::assertCount(20, $routes);
         self::assertSame($routes, $documented);
 
         $text = (string) file_get_contents(self::FILE);

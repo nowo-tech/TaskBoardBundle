@@ -244,4 +244,10 @@ final class TaskBoardEvents
      * on (ids and codes only).
      */
     public const CLIENT_API_DENIED = 'nowo_task_board.client_api_denied';
+
+    /**
+     * Since 3.7.0 (client API v1, Beacon Desktop BDA13-L2): {@see TaskClientLoggedOutEvent}, a client signed out through
+     * `POST <prefix>/v1/logout` with a token the host's resolver accepted (ids only).
+     */
+    public const CLIENT_API_LOGGED_OUT = 'nowo_task_board.client_api_logged_out';
 }

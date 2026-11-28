@@ -24,8 +24,8 @@ final class WriteProvenanceTest extends TestCase
 {
     public function testTheChannelsAreAnAllowList(): void
     {
-        self::assertSame(['web', 'app', 'api', 'mcp'], array_map(static fn (WriteChannel $channel): string => $channel->value, WriteChannel::cases()));
-        self::assertNull(WriteChannel::tryFrom('cli'));
+        self::assertSame(['web', 'app', 'api', 'mcp', 'cli'], array_map(static fn (WriteChannel $channel): string => $channel->value, WriteChannel::cases()));
+        self::assertNull(WriteChannel::tryFrom('worker'));
     }
 
     public function testTheLabelIsPlainTextOfAtMost120Characters(): void

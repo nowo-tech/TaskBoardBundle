@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[3.7.0] - 2026-11-28](#370---2026-11-28)
+- [[3.6.0] - 2026-11-27](#360---2026-11-27)
 - [[3.5.0] - 2026-11-27](#350---2026-11-27)
 - [[3.4.1] - 2026-11-27](#341---2026-11-27)
 - [[3.4.0] - 2026-11-27](#340---2026-11-27)
@@ -146,6 +148,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   PHP 8.6 cell and a Symfony 8.2 cell (both stable, no allowed failures).
 - PHP 8.6: `spl_object_hash()` (deprecated in PHP 8.6) is replaced by `spl_object_id()` in the sync writer's fallback
   user id; a JSON error test accepts the PHP 8.6 message, which adds the error location.
+
+## [3.7.0] - 2026-11-28
+
+### Added
+
+- **Correlation id on task history (Beacon spec 235 T003 / FR-004).** `TaskChangeHistory` gets a nullable
+  `correlation_id` (`VARCHAR(64)`, indexed `task_board_change_history_correlation_idx`; `getCorrelationId()`), filled
+  from the host's `Nowo\CorrelationContract\CorrelationIdProviderInterface::current()` (nowo-tech/correlation-contract
+  ^0.1, new dependency), autowired when the host registers one; `NULL` otherwise. Not personal data: kept by an erasure.
+  Schema change in UPGRADING.
+- **Declared write channel.** When the host's `write_provenance_provider` says nothing, history rows, tasks and comments
+  store the channel the bundle's entry point declares: board pages `web`, Task API writes `api`, client API `app`,
+  import / sync commands `cli` (new `WriteChannel::Cli`). Call-scoped `Provenance\WriteChannelScope` (popped in
+  `finally`, `kernel.reset` and the unit-of-work boundaries clear it), `#[Provenance\Attribute\AsWriteChannel]` on
+  controllers (applied by `WriteChannelControllerListener`), `ScopedWriteProvenance` (the host's provider first). Every
+  value fits the existing 8-character columns. Translations `task_board.history.channel.cli` (7 locales).
+- **Client API `POST logout` (Beacon Desktop BDA13-L2).** `nowo_task_board_client_v1_logout`: `204` always when a Bearer
+  token is sent (never an oracle), the host's new optional `client_api.token_revoker`
+  (`ClientApi\Contract\TaskClientTokenRevokerInterface`) revokes that token only, then `TaskClientLoggedOutEvent`
+  (`TaskBoardEvents::CLIENT_API_LOGGED_OUT`, ids only). No scope, account, context or budget check; a failing revoker is
+  an error answer (retry). `me.features.serverLogout`. OpenAPI document updated (`ClientApiOpenApiTest`: 20 routes).
+- **AuditKit timeline source (Beacon spec 235 T003).** `Bridge\AuditKit\TaskTimelineSource` (source `task_board`,
+  subject type `task`) gives a task's history rows (`task.<change type>`, with `changes`, channel, token label and
+  correlation id) and comments (`comment.added`, no body) to AuditKit 2.2's timeline merger. Soft dependency: registered
+  and tagged `nowo_audit_kit.timeline_source` only when `Nowo\AuditKitBundle\Timeline\TimelineSourceInterface` exists
+  (composer `suggest` nowo-tech/audit-kit-bundle ^2.2). The signed-in user must pass the task page's checks (task board
+  access, the request's tenant, `canViewTask()`); other subject types (`user`, `scope`, `correlation`) give nothing, so
+  it never reads across tasks or tenants. Keyset per `TimelineCursor::boundFor()` at whole seconds in the server's
+  timezone; `TimelineCriteria` kinds, dates and correlation id (byte for byte; comments have none). Audit ZDX: up to
+  1000 entries per call so the merger's 500 + 1 sees its next page, look-alike correlation ids never take a slot
+  (keyset refill), rows read as arrays (nothing in the identity map), comments only with the comments repository.
+- **Audit ZDX follow-ups.** Logout budgets as ChatKit's: per-IP failed-token budget before the resolver (`429`), a refused
+  token counted and reported (`TaskClientApiDeniedEvent` reason `logout_unknown_token`, still `204`), a per-token logout
+  budget (`logout:<tokenId>`, `429` + `Retry-After`). `cli` added to the Task API OpenAPI `channel` and `via` enums and to
+  `TaskQuestionAnswer::VIAS`. `#[SensitiveParameter]` on `$bearer` of `TaskClientPrincipalResolverInterface::resolve()`
+  and `TaskClientTokenRevokerInterface::revoke()` (no BC break for implementers).
+
+## [3.6.0] - 2026-11-27
+
+### Changed
+
+- **Add task, add column and edit column load when they open** (owner rule 2026-11-23, every dialog loads its content on
+  demand; the task page did since 2.31.0). The board and the calendar print three empty remote dialogs and their openers; the
+  forms are the GET of three new routes, each with the access of its write: `task_new` (`/board/{boardId}/task/new`,
+  pre-filled from `?column=`, `?due=`, `?taskTemplate=`; `?calendar=1&_target_path=` bring it back to the calendar),
+  `column_new` and `column_edit` (`/board/{boardId}/column/{columnId}/edit`: the column's own values, its delete form and the
+  host's delete warnings; a column of another board is a 404). The page carries no per-column data attributes any more and the
+  board no longer builds `taskForm`, `columnForm`, `editColumnForm`, `columnDeleteForm` or `columnDeleteWarnings`.
+- **Writes from those dialogs answer `204` + `X-Nowo-Redirect`** (create task, create / update / delete column), so the dialog
+  closes and the page goes where the redirect went; a post without the dialog header keeps its redirect. The routes are in the
+  `routes` configuration as `task_new`, `column_new` and `column_edit`.
+- **New board and Import from file can load when they open**: `board_create` and `board_import` answer `GET` with their form as a
+  fragment for a host that opens them in a UiKit remote dialog (the bundle's own index still renders the New board dialog
+  pre-built, and the board header's Import stays a page link). The fragment is served when UiKit's remote dialog header (`X-Nowo-Dialog: 1`) is present (a plain `GET` of `board_create` goes to the index with the
+  dialog open, the import page is unchanged), with the gates of their `POST`; an invalid post answers `422` with the form and its
+  errors, a saved one `204` + `X-Nowo-Redirect`. A UiKit dialog request counts as a host dialog request for the create form
+  (`board.create_dialog_header` stays for hosts with their own dialog).
+- **Assets**: `AddColumnModalController` is removed; `AddTaskModalController` and `EditColumnModalController` keep only what
+  the fragment and the page need. Rebuild `task-board.js` if you build your own copy.
 
 ## [3.5.0] - 2026-11-27
 
@@ -4094,7 +4155,7 @@ First stable release of **TaskBoard Bundle**.
 - Doctrine ORM ^2.15 || ^3.0
 - `nowo-tech/time-track-bundle` ^1.0 (required in 1.0.x; optional from 1.1.0)
 
-[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v3.5.0...HEAD
+[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v3.7.0...HEAD
 [1.9.0]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.4...v1.9.0
 [1.8.4]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.3...v1.8.4
 [1.8.3]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.2...v1.8.3

@@ -595,13 +595,17 @@ final class TaskBoardManageControllerAccessTest extends TestCase
         $this->controller($this->owner, columnSets: $this->columnSets([$set]), currentRequest: Request::create('/board?x=1'))->board($this->board->getId());
 
         self::assertSame(['tabler:bug'], $this->rendered['columnIcons']);
-        self::assertNotNull($this->rendered['columnDeleteForm']);
+        // Since 3.6.0 the delete form comes with the column_edit dialog.
+        self::assertArrayNotHasKey('columnDeleteForm', $this->rendered);
         self::assertSame('/board?x=1', $this->rendered['panelTargetPath']);
         self::assertSame([$set], $this->rendered['columnSets']);
         self::assertArrayHasKey($set->getId(), $this->rendered['columnSetDeletable']);
         self::assertNotNull($this->rendered['columnSetDeleteForm']);
         self::assertArrayNotHasKey('columnSetDeleteForms', $this->rendered, 'removed in 3.0');
-        self::assertSame(['tabler:bug'], $this->findCreatedForm(BoardColumnFormType::class)['options']['icon_choices']);
+        // Since 3.6.0 the column forms are built by the dialog routes, not by the board page.
+        foreach ($this->createdForms as $created) {
+            self::assertNotSame(BoardColumnFormType::class, $created['type']);
+        }
     }
 
     public function testBoardAndListPassOneInlineTaskFormPerColumnToEditors(): void
@@ -637,7 +641,7 @@ final class TaskBoardManageControllerAccessTest extends TestCase
     {
         $this->controller($this->attacker, dispatcher: $this->readOnlyDispatcher(), columnSets: $this->columnSets([new ColumnSet('Other')]))->board($this->board->getId());
 
-        self::assertNull($this->rendered['columnDeleteForm']);
+        self::assertArrayNotHasKey('columnDeleteForm', $this->rendered);
         self::assertArrayNotHasKey('columnSets', $this->rendered);
     }
 

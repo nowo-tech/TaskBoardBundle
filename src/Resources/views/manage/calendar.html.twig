@@ -53,13 +53,12 @@
     {% set _base = {boardId: board.id}|merge(calendarQuery) %}
     <div
         class="nowo-task-cal nowo-task-cal--{{ _mode }}"
-        data-controller="nowo-task-board-calendar nowo-task-board-add-task-modal"
+        data-controller="nowo-task-board-calendar"
         data-nowo-task-board-calendar-csrf-token-value="{{ csrf_token('task_board_task_schedule') }}"
         data-nowo-task-board-calendar-failed-value="{{ 'task_board.calendar.failed'|trans({}, 'NowoTaskBoardBundle')|e('html_attr') }}"
         data-nowo-task-board-calendar-undo-value="{{ 'task_board.calendar.undo'|trans({}, 'NowoTaskBoardBundle')|e('html_attr') }}"
         data-nowo-task-board-calendar-undone-value="{{ 'task_board.calendar.undone'|trans({}, 'NowoTaskBoardBundle')|e('html_attr') }}"
         data-nowo-task-board-calendar-filtered-value="{{ calendarFiltered ? 'true' : 'false' }}"{% if skipNonWorkingDays|default(false) %} data-nowo-task-board-calendar-skip-non-working-value="true"{% endif %}{% if eventMoveForm|default(null) %} data-nowo-task-board-calendar-event-url-value="{{ path(nowo_task_board_route('calendar_event_reschedule'), {boardId: board.id}) }}" data-nowo-task-board-calendar-event-csrf-token-value="{{ csrf_token('task_board_calendar_event_reschedule') }}"{% endif %}
-        data-nowo-task-board-add-task-modal-title-format-value="{{ 'task_board.calendar.add_modal_title'|trans({}, 'NowoTaskBoardBundle')|e('html_attr') }}"
     >
         {% block nowo_task_board_calendar_filters %}
         {% set _filters_class = ('nowo-ui-filter-bar nowo-task-board-list-filters nowo-task-cal__filters ' ~ nowo_task_board_filters_form_class|default(''))|trim %}
@@ -111,8 +110,9 @@
 
         {% if scheduleForm %}{{ include('@NowoTaskBoardBundle/manage/_calendar_reschedule_dialog.html.twig') }}{% endif %}
         {% if eventMoveForm|default(null) %}{{ include('@NowoTaskBoardBundle/manage/_calendar_event_move_dialog.html.twig') }}{% endif %}
-        {% if canEditBoard and taskForm %}
-            {{ include('@NowoTaskBoardBundle/manage/_add_task_modal.html.twig', {addTaskQuery: {calendar: 1, _target_path: panelTargetPath}}) }}
+        {#- Since 3.6.0: an empty remote dialog; the add task form loads when a day's "+" opens it. -#}
+        {% if canEditBoard %}
+            {{ include('@NowoTaskBoardBundle/manage/_dialog_shells.html.twig', {add_task: true, add_task_attr: {'data-testid': 'nowo-task-cal-add-dialog'}}) }}
         {% endif %}
     </div>
 {% endblock %}

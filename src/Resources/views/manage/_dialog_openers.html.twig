@@ -1,0 +1,22 @@
+{#
+    Since 3.6.0 (owner rule 2026-11-23, every dialog loads its content on demand): the attributes that make a button open
+    one of the board's on-demand dialogs (UiKit's remote form dialog opener: the dialog id, the URL of the fragment and its
+    title). The shells are rendered once per page by _dialog_shells.html.twig.
+    Macros: add_task(boardId, columnId, columnName), add_task_on_day(boardId, date, targetPath), add_column(boardId),
+    edit_column(boardId, columnId, columnName).
+#}
+{% macro add_task(boardId, columnId, columnName, query) %}
+    {{- nowo_ui_html_attrs(nowo_ui_remote_form_opener('nowo-task-board-add-task-modal', columnName ? ('task_board.board.add_task_modal_title'|trans({}, 'NowoTaskBoardBundle'))|replace({'%column%': columnName}) : 'task_board.board.add_task'|trans({}, 'NowoTaskBoardBundle'), false, path(nowo_task_board_route('task_new'), {boardId: boardId}|merge(columnId ? {column: columnId} : {})|merge(query|default({}))))) -}}
+{% endmacro %}
+
+{% macro add_task_on_day(boardId, date, targetPath) %}
+    {{- nowo_ui_html_attrs(nowo_ui_remote_form_opener('nowo-task-board-add-task-modal', ('task_board.calendar.add_modal_title'|trans({}, 'NowoTaskBoardBundle'))|replace({'%column%': date}), false, path(nowo_task_board_route('task_new'), {boardId: boardId, due: date, calendar: 1}|merge(targetPath ? {_target_path: targetPath} : {})))) -}}
+{% endmacro %}
+
+{% macro add_column(boardId) %}
+    {{- nowo_ui_html_attrs(nowo_ui_remote_form_opener('nowo-task-board-add-column-modal', 'task_board.board.add_column'|trans({}, 'NowoTaskBoardBundle'), false, path(nowo_task_board_route('column_new'), {boardId: boardId}))) -}}
+{% endmacro %}
+
+{% macro edit_column(boardId, columnId, columnName) %}
+    {{- nowo_ui_html_attrs(nowo_ui_remote_form_opener('nowo-task-board-edit-column-modal', 'task_board.board.edit_column_title'|trans({'%column%': columnName}, 'NowoTaskBoardBundle'), false, path(nowo_task_board_route('column_edit'), {boardId: boardId, columnId: columnId}))) -}}
+{% endmacro %}

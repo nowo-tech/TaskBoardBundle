@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\EventListener;
 
 use Nowo\TaskBoardBundle\Avatar\TaskMemberAvatars;
+use Nowo\TaskBoardBundle\Provenance\WriteChannelScope;
 use Nowo\TaskBoardBundle\Recurrence\TaskRecurrenceView;
 use Nowo\TaskBoardBundle\Service\TaskChangeContext;
 use Nowo\TaskBoardBundle\Service\TaskEventDeferral;
@@ -31,7 +32,7 @@ use const PHP_INT_MAX;
 /**
  * Since 2.11.1 (REQ-RUNTIME-002): every unit of work starts and ends with empty request memos — the avatar URLs
  * ({@see TaskMemberAvatars}), the repeat icons ({@see TaskRecurrenceView}),
- * the synced people ({@see SyncPeopleViewProvider}), the change cause
+ * the synced people ({@see SyncPeopleViewProvider}), the change cause, the write channel ({@see WriteChannelScope})
  * ({@see TaskChangeContext}) and the held task events
  * ({@see TaskEventDeferral}).
  *

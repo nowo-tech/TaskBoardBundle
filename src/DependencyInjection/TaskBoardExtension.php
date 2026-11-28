@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\DependencyInjection;
 
 use LogicException;
+use Nowo\AuditKitBundle\Timeline\TimelineSourceInterface;
 use Nowo\OutboundUrlGuardBundle\Guard\OutboundUrlGuard;
 use Nowo\SearchKitBundle\Provider\Entity\EntitySearchDefinition;
 use Nowo\TaskBoardBundle\Api\Controller\TaskApiQuestionController;
@@ -34,6 +35,7 @@ use Nowo\TaskBoardBundle\Api\Repository\TaskApiQueryRepository;
 use Nowo\TaskBoardBundle\Api\Security\TaskApiActors;
 use Nowo\TaskBoardBundle\Api\Security\TaskApiCommitWatermark;
 use Nowo\TaskBoardBundle\Api\Security\TaskApiConflictResponseFormatter;
+use Nowo\TaskBoardBundle\Bridge\AuditKit\TaskTimelineSource;
 use Nowo\TaskBoardBundle\Bridge\SearchKit\BoardSearchDefinition;
 use Nowo\TaskBoardBundle\Bridge\SearchKit\TaskSearchDefinition;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\ImportedTimeAggregatorListener;
@@ -116,6 +118,8 @@ use Nowo\TaskBoardBundle\Port\Internal\TaskBoardDefaultViewResolverInterface;
 use Nowo\TaskBoardBundle\Port\Internal\TaskBoardTargetsInterface;
 use Nowo\TaskBoardBundle\Port\Internal\TaskMentionCandidatesResolverInterface;
 use Nowo\TaskBoardBundle\Provenance\NoWriteProvenance;
+use Nowo\TaskBoardBundle\Provenance\ScopedWriteProvenance;
+use Nowo\TaskBoardBundle\Provenance\WriteChannelScope;
 use Nowo\TaskBoardBundle\Provenance\WriteProvenanceProviderInterface;
 use Nowo\TaskBoardBundle\Question\DefaultTaskQuestionRecipientResolver;
 use Nowo\TaskBoardBundle\Question\TaskQuestionManager;
@@ -273,6 +277,12 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
     /** Since 3.4.0: UserKit's export section contract (optional dependency: a literal, so the bundle loads without it). */
     public const USER_KIT_EXPORT_PROVIDER_INTERFACE = PersonalDataExportProviderInterface::class;
 
+    /** Since 3.7.0: AuditKit's timeline source contract (nowo-tech/audit-kit-bundle >= 2.2, optional). */
+    public const AUDIT_KIT_TIMELINE_SOURCE = TimelineSourceInterface::class;
+
+    /** Since 3.7.0: the tag AuditKit's timeline merger collects. */
+    public const AUDIT_KIT_TIMELINE_SOURCE_TAG = 'nowo_audit_kit.timeline_source';
+
     private const TIPTAP_EXTENSION = 'nowo_tiptap_editor';
 
     /** Since 2.25.0: SearchKit's `EntitySearchDefinition::TAG` (a literal: SearchKit is optional). */
@@ -306,6 +316,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         // Since 2.28.0: TimeTrack's deprecated 1.x scope port (removed in TimeTrack 2.0), a string so a TimeTrack without it
         // still loads: while it exists it is the service TimeTrack registers, else its framework-free twin is asked.
         private readonly string $timeTrackLegacyScopeProvider = self::TIME_TRACK_LEGACY_SCOPE_PROVIDER,
+        // Since 3.7.0 (Beacon spec 235): interface whose presence (AuditKit >= 2.2) registers the task timeline source.
+        private readonly string $timelineSourceInterface = self::AUDIT_KIT_TIMELINE_SOURCE,
     ) {
     }
 
@@ -427,6 +439,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         // Since 2.16.0 (spec 234, FR-014): whether a task may enter a column; default: always.
         $container->setAlias(ColumnTransitionPolicyInterface::class, $this->serviceOr($config['column_transition_policy'], AllowAllColumnTransitionPolicy::class));
         $this->registerMemberBadgesAndProvenance($container, $config);
+        $this->registerTimelineSource($container, $emName);
         $this->registerWeekStartResolver($container, $config['gantt']);
         $this->registerMentionResolver($container, $config['comments']['mention_resolver']);
         // Since 1.24: the host's default board view per user, else the board view.
@@ -599,8 +612,13 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
      */
     private function registerClientApi(ContainerBuilder $container, array $config, string $emName): void
     {
-        $client = $config['client_api'];
+        $client  = $config['client_api'];
+        $revoker = is_string($client['token_revoker']) && $client['token_revoker'] !== '' ? $client['token_revoker'] : null;
         if (!is_string($client['principal_resolver']) || $client['principal_resolver'] === '') {
+            if ($revoker !== null) {
+                throw new LogicException('nowo_task_board.client_api.token_revoker needs client_api.principal_resolver (the client API is off without it).');
+            }
+
             return;
         }
         if (!$config['api']['enabled']) {
@@ -620,7 +638,9 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             ->setArgument('$resolver', new Reference(TaskClientPrincipalResolverInterface::class))
             ->setArgument('$v1Prefix', $v1)
             ->setArgument('$contextHeader', $client['context_header'])
-            ->setArgument('$events', new Reference('event_dispatcher', ContainerInterface::NULL_ON_INVALID_REFERENCE)));
+            ->setArgument('$events', new Reference('event_dispatcher', ContainerInterface::NULL_ON_INVALID_REFERENCE))
+            // Since 3.7.0 (audit ZDX-TB-L2): the failed-token budget per IP of POST logout.
+            ->setArgument('$rateLimiter', new Reference(TaskApiRateLimiterInterface::class, ContainerInterface::NULL_ON_INVALID_REFERENCE)));
         $container->setAlias(TaskClientAuthenticator::class, 'nowo_task_board.client_api.authenticator');
         $container->setDefinition(TaskClientApiListener::class, (new Definition(TaskClientApiListener::class))
             ->setAutowired(true)
@@ -655,7 +675,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             ->setArgument('$questionManager', $config['task_questions']['enabled'] ? new Reference(TaskQuestionManager::class) : null)
             ->setArgument('$timeTracking', $container->hasDefinition(TaskBoardTaskDirectory::class))
             ->setArgument('$taskNumbers', (bool) $config['task_numbers']['enabled'])
-            ->setArgument('$subtaskDepth', $config['max_subtask_depth'] ?? null));
+            ->setArgument('$subtaskDepth', $config['max_subtask_depth'] ?? null)
+            ->setArgument('$serverLogout', $revoker !== null));
         $container->setDefinition(TaskClientWriter::class, (new Definition(TaskClientWriter::class))
             ->setAutowired(true)
             ->setArgument('$rowLock', new Reference(OrderedRowLockInterface::class, ContainerInterface::NULL_ON_INVALID_REFERENCE))
@@ -668,6 +689,9 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             ->setAutowired(true)
             ->setPublic(true)
             ->setArgument('$maxBodyBytes', $config['api']['max_body_bytes'])
+            // Since 3.7.0 (Beacon Desktop BDA13-L2): POST logout.
+            ->setArgument('$revoker', $revoker === null ? null : new Reference($revoker))
+            ->setArgument('$events', new Reference('event_dispatcher', ContainerInterface::NULL_ON_INVALID_REFERENCE))
             ->addTag('controller.service_arguments'));
         $container->getDefinition(TaskBoardRouteLoader::class)->setArgument('$clientApiPrefix', $v1);
     }
@@ -1206,7 +1230,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
 
     /**
      * Since 2.18.0 (Beacon spec 234): `member_badge_provider` (default: none, nothing is asked) and
-     * `write_provenance_provider` (default {@see NoWriteProvenance}: the columns stay NULL).
+     * `write_provenance_provider` (default {@see NoWriteProvenance}: the columns stay NULL). Since 3.7.0 the bundle's
+     * services receive {@see ScopedWriteProvenance}: the host's answer, else the channel of {@see WriteChannelScope}.
      *
      * @param array<string, mixed> $config
      */
@@ -1215,7 +1240,32 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $badges = $config['member_badge_provider'] ?? null;
         $container->setAlias(MemberBadgeProviderInterface::class, $this->serviceOr($badges, NoMemberBadges::class));
         $container->getDefinition(MemberBadges::class)->setArgument('$provider', is_string($badges) && $badges !== '' ? new Reference($badges) : null);
-        $container->setAlias(WriteProvenanceProviderInterface::class, $this->serviceOr($config['write_provenance_provider'] ?? null, NoWriteProvenance::class));
+        // Since 3.7.0 (Beacon spec 235): the host's provider answers first; else the channel the entry point declared.
+        $container->setDefinition(ScopedWriteProvenance::class, (new Definition(ScopedWriteProvenance::class))
+            ->setArgument('$host', new Reference($this->serviceOr($config['write_provenance_provider'] ?? null, NoWriteProvenance::class)))
+            ->setArgument('$scope', new Reference(WriteChannelScope::class)));
+        $container->setAlias(WriteProvenanceProviderInterface::class, ScopedWriteProvenance::class);
+    }
+
+    /**
+     * Since 3.7.0 (Beacon spec 235 T003): the task changes and comments as an AuditKit timeline source, only when
+     * AuditKit's `TimelineSourceInterface` exists (a soft dependency: nowo-tech/audit-kit-bundle ^2.2 is suggested, not
+     * required). Tagged explicitly, so it is found also with autoconfiguration off.
+     */
+    private function registerTimelineSource(ContainerBuilder $container, string $emName): void
+    {
+        $container->addResource(new ClassExistenceResource($this->timelineSourceInterface));
+        if (!interface_exists($this->timelineSourceInterface)) {
+            return;
+        }
+        $container->setDefinition(TaskTimelineSource::class, (new Definition(TaskTimelineSource::class))
+            ->setArgument('$entityManager', new Reference(sprintf('doctrine.orm.%s_entity_manager', $emName)))
+            ->setArgument('$tokenStorage', new Reference('security.token_storage'))
+            ->setArgument('$access', new Reference(TaskBoardAccessCheckerInterface::class))
+            ->setArgument('$resourceAccess', new Reference(TaskBoardResourceAccessChecker::class))
+            ->setArgument('$tenantContext', new Reference(TaskBoardTenantContext::class, ContainerInterface::NULL_ON_INVALID_REFERENCE))
+            ->setArgument('$commentRepository', new Reference(TaskCommentRepositoryInterface::class, ContainerInterface::NULL_ON_INVALID_REFERENCE))
+            ->addTag(self::AUDIT_KIT_TIMELINE_SOURCE_TAG));
     }
 
     private function serviceOr(mixed $id, string $default): string

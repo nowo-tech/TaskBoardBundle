@@ -1,20 +1,20 @@
 {#
-    Edit column dialog: name, colour and (since 1.11, with board.column_icons) icon; since 1.11 also "Delete column"
-    (columnDeleteForm, its tasks move to the first remaining column) when the board has more than one column.
-    Since 1.13 a native <dialog> styled by task-board.css, with the colour palette and icon grid of
-    _column_fields.html.twig. Since 1.26 (dialog rule v2) one primary: the footer, outside the scrolling form, holds
-    Delete column (secondary, danger outline, bound with form="nowo-task-board-column-delete-form" to the hidden delete
-    form, which keeps its confirm) on the left, then Cancel and Save (form="nowo-task-board-edit-column-form").
-    Since 2.10.0 (spec 216, FR-010): the host's warnings of the column (`columnDeleteWarnings`, from COLUMN_DELETE_CHECK, carried
-    by the column's pencil as `data-column-delete-warning`) are shown above the buttons and repeated in the confirmation.
+    Edit column dialog: name, colour and (with board.column_icons) icon; "Delete column" (columnDeleteForm, its tasks move
+    to the first remaining column) when the board has more than one column. Since 3.6.0 (owner rule 2026-11-23, every dialog
+    loads its content on demand) the content of the GET of `column_edit`, answered as a fragment for UiKit's remote dialog,
+    with the column's own values, its update URL (editColumnUrl) and the host's delete warnings of the column
+    (columnDeleteWarning, from COLUMN_DELETE_CHECK, one per line: shown above the buttons and repeated in the confirmation).
+    Since 1.26 (dialog rule v2) one primary: the footer, outside the scrolling form, holds Delete column (secondary, danger
+    outline, bound with form="nowo-task-board-column-delete-form" to the hidden delete form, which keeps its confirm) on the
+    left, then Cancel and Save (form="nowo-task-board-edit-column-form").
 #}
 {% set _canDelete = (columnDeleteForm ?? null) is not null and board.columns|length > 1 %}
 {% set _body %}
     {{ form_start(editColumnForm, {
+        action: editColumnUrl,
         attr: {
             id: 'nowo-task-board-edit-column-form',
             class: 'nowo-task-dialog__body',
-            'data-nowo-task-board-edit-column-modal-target': 'form',
         },
     }) }}
         {{ include('@NowoTaskBoardBundle/manage/_column_fields.html.twig', {form: editColumnForm, controller: 'nowo-task-board-edit-column-modal'}) }}
@@ -25,17 +25,18 @@
         {% endfor %}
         {% if _canDelete %}
             <p class="nowo-task-dialog__help nowo-task-dialog__danger-help" id="nowo-task-board-column-delete-help">{{ 'task_board.board.delete_column_help'|trans({}, 'NowoTaskBoardBundle') }}</p>
-            {# Since 2.10.0 (spec 216): the host's warnings for the column being edited (COLUMN_DELETE_CHECK), filled on open. #}
-            <p class="nowo-task-dialog__help nowo-task-dialog__danger-help nowo-task-column-delete-warning" role="note" data-nowo-task-board-edit-column-modal-target="deleteWarning" data-testid="nowo-task-column-delete-warning" hidden></p>
+            {# Since 2.10.0 (spec 216): the host's warnings for the column being edited (COLUMN_DELETE_CHECK). #}
+            {% if columnDeleteWarning|default('') != '' %}
+                <p class="nowo-task-dialog__help nowo-task-dialog__danger-help nowo-task-column-delete-warning" role="note" data-testid="nowo-task-column-delete-warning">{{ columnDeleteWarning|nl2br }}</p>
+            {% endif %}
         {% endif %}
     {{ form_end(editColumnForm) }}
     {% if _canDelete %}
-        {{ form_start(columnDeleteForm, {action: '#', attr: {
+        {{ form_start(columnDeleteForm, {attr: {
             id: 'nowo-task-board-column-delete-form',
             class: 'nowo-task-column-delete-form',
             hidden: 'hidden',
-            'data-nowo-task-board-edit-column-modal-target': 'deleteForm',
-            'data-confirm': 'task_board.board.delete_column_confirm'|trans({}, 'NowoTaskBoardBundle'),
+            'data-confirm': ('task_board.board.delete_column_confirm'|trans({}, 'NowoTaskBoardBundle')) ~ ((columnDeleteWarning|default('')) != '' ? "\n\n" ~ columnDeleteWarning : ''),
         }}) }}
             {% for child in columnDeleteForm %}
                 {% if not child.rendered %}
@@ -60,14 +61,7 @@
             </button>
         </div>
 {% endset %}
-{{ include(nowo_ui_partial('dialog', 'NowoTaskBoardBundle'), {
-    id: 'nowo-task-board-edit-column-modal',
-    title: 'task_board.board.edit_column'|trans({}, 'NowoTaskBoardBundle'),
-    bundle: 'NowoTaskBoardBundle',
-    root_class: 'nowo-task-dialog nowo-task-dialog--native',
-    attr: {'data-nowo-task-board-edit-column-modal-target': 'modal'},
-    title_attr: {'data-nowo-task-board-edit-column-modal-target': 'title'},
-    body: _body,
-    footer: _footer,
-    footer_attr: {class: 'nowo-task-dialog__footer nowo-task-dialog__actions' ~ (_canDelete ? ' nowo-task-dialog__actions--split' : '')},
-}, false) }}
+<div data-controller="nowo-task-board-edit-column-modal" data-nowo-task-board-edit-column-modal-icon-value="{{ column.icon is not empty and nowo_task_board_column_icon_storable(column.icon) ? column.icon : '' }}">
+    {{ _body }}
+</div>
+<div class="nowo-task-dialog__footer nowo-task-dialog__actions{{ _canDelete ? ' nowo-task-dialog__actions--split' : '' }}" data-nowo-ui-dialog-actions>{{ _footer }}</div>

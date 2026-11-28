@@ -1,7 +1,10 @@
 {#
-    Add task dialog on the board. Since 1.14 a native <dialog> styled by task-board.css (no CSS framework modal):
-    title, priority and column, description, estimate and due date, tags and the task colour. Since 1.26 (dialog
-    rule v2) Cancel and Add task sit in the footer, outside the scrolling form (form="nowo-task-board-add-task-form").
+    Add task dialog of the board and the calendar. Since 3.6.0 (owner rule 2026-11-23, every dialog loads its content on
+    demand) the content of the GET of `task_new`, answered as a fragment for UiKit's remote dialog (`X-Nowo-Dialog: 1`); the
+    page holds one empty shell and the openers (links). Title, priority and column, description, estimate and due date,
+    tags and the task colour; Cancel and Add task sit in the footer, outside the scrolling form
+    (form="nowo-task-board-add-task-form"). Variables: board, taskForm, addTaskQuery (calendar, _target_path),
+    taskTemplatePicker (optional).
 #}
 {% set _body %}
     {# Since 2.16.0 (FR-061): the Template picker, a GET form of its own (before the task form, never inside it). #}
@@ -17,12 +20,12 @@
         method: 'POST',
         attr: {id: 'nowo-task-board-add-task-form', class: 'nowo-task-dialog__body'},
     }) }}
-        <div class="nowo-task-field">{{ form_row(taskForm.title, {attr: {'data-nowo-task-board-add-task-modal-target': 'titleInput', maxlength: 255}}) }}</div>
+        <div class="nowo-task-field">{{ form_row(taskForm.title, {attr: {'data-nowo-task-board-add-task-modal-target': 'titleInput', maxlength: 255, autofocus: 'autofocus'}}) }}</div>
         <div class="nowo-task-dialog__grid">
             <div class="nowo-task-field">{{ form_row(taskForm.priority) }}</div>
             {# A board without columns has no column field (TaskFormType adds it only with choices). #}
             {% if taskForm.columnId is defined %}
-                <div class="nowo-task-field">{{ form_row(taskForm.columnId, {attr: {'data-nowo-task-board-add-task-modal-target': 'columnField'}}) }}</div>
+                <div class="nowo-task-field">{{ form_row(taskForm.columnId, {attr: {}}) }}</div>
             {% endif %}
         </div>
         <div class="nowo-task-field">{{ form_row(taskForm.description) }}</div>
@@ -32,7 +35,7 @@
             {% if taskForm.startAt is defined %}
                 <div class="nowo-task-field">{{ form_row(taskForm.startAt) }}</div>
             {% endif %}
-            <div class="nowo-task-field">{{ form_row(taskForm.dueAt, addTaskQuery|default(null) ? {attr: {'data-nowo-task-board-add-task-modal-target': 'dueField'}} : {}) }}</div>
+            <div class="nowo-task-field">{{ form_row(taskForm.dueAt) }}</div>
         </div>
         <div class="nowo-task-field">{{ form_row(taskForm.tags) }}</div>
         {% if taskForm.color is defined %}
@@ -57,16 +60,7 @@
             {{ include('@NowoTaskBoardBundle/manage/_icon.html.twig', {name: 'plus'}) }}{{ 'task_board.action.add_task'|trans({}, 'NowoTaskBoardBundle') }}
         </button>
 {% endset %}
-{# Since 2.10.0 (spec 214): the calendar's copy carries data-testid="nowo-task-cal-add-dialog". #}
-{{ include(nowo_ui_partial('dialog', 'NowoTaskBoardBundle'), {
-    id: 'nowo-task-board-add-task-modal',
-    title: 'task_board.board.add_task'|trans({}, 'NowoTaskBoardBundle'),
-    bundle: 'NowoTaskBoardBundle',
-    root_class: 'nowo-task-dialog nowo-task-dialog--native nowo-task-dialog--wide',
-    size: 'wide',
-    attr: {'data-nowo-task-board-add-task-modal-target': 'modal'}|merge((addTaskQuery.calendar ?? null) ? {'data-testid': 'nowo-task-cal-add-dialog'} : {}),
-    title_attr: {'data-nowo-task-board-add-task-modal-target': 'title'},
-    body: _body,
-    footer: _footer,
-    footer_attr: {class: 'nowo-task-dialog__footer nowo-task-dialog__actions'},
-}, false) }}
+<div data-controller="nowo-task-board-add-task-modal" data-nowo-task-board-add-task-modal-fragment-value="true">
+    {{ _body }}
+</div>
+<div class="nowo-task-dialog__footer nowo-task-dialog__actions" data-nowo-ui-dialog-actions>{{ _footer }}</div>

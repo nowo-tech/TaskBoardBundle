@@ -60,6 +60,9 @@ final class ApiTestHost implements TaskApiMembersInterface, TaskApiAuthenticator
 
     public static int $consumed = 0;
 
+    /** @var list<string> since 3.7.0: the token id of each consume() */
+    public static array $consumedTokenIds = [];
+
     public static bool $planAllows = true;
 
     /** @var list<string> tenants the plan refuses */
@@ -108,6 +111,7 @@ final class ApiTestHost implements TaskApiMembersInterface, TaskApiAuthenticator
         self::$ipLimitAccepts     = true;
         self::$failedIps          = [];
         self::$consumed           = 0;
+        self::$consumedTokenIds   = [];
         self::$planAllows         = true;
         self::$planRefusesTenants = [];
         self::$tenants            = [];
@@ -152,6 +156,7 @@ final class ApiTestHost implements TaskApiMembersInterface, TaskApiAuthenticator
     public function consume(TaskApiPrincipal $principal): TaskApiRateLimitState
     {
         ++self::$consumed;
+        self::$consumedTokenIds[] = $principal->tokenId;
 
         return new TaskApiRateLimitState(self::$tokenLimitAccepts, 100, self::$tokenLimitAccepts ? 99 : 0, 1_790_000_000);
     }

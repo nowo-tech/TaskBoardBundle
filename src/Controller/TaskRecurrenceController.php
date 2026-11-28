@@ -10,6 +10,8 @@ use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Exception\TaskCopyRefusedException;
 use Nowo\TaskBoardBundle\Form\CsrfActionType;
 use Nowo\TaskBoardBundle\Form\TaskRecurrenceFormType;
+use Nowo\TaskBoardBundle\Provenance\Attribute\AsWriteChannel;
+use Nowo\TaskBoardBundle\Provenance\WriteChannel;
 use Nowo\TaskBoardBundle\Recurrence\Entity\TaskRecurrence;
 use Nowo\TaskBoardBundle\Recurrence\TaskRecurrenceManager;
 use Nowo\TaskBoardBundle\Recurrence\TaskRecurrenceRule;
@@ -46,6 +48,7 @@ use function is_string;
  * resume, stop, skip a date, undo a skip). Who may: `canEditTask()`; a task the user cannot see answers 404, one they may
  * only read 403. Every write has its own CSRF token. Nothing here creates an occurrence: the host's schedule does.
  */
+#[AsWriteChannel(WriteChannel::Web)]
 final class TaskRecurrenceController extends AbstractController
 {
     public const ACTIONS = ['pause', 'resume', 'stop', 'skip', 'unskip'];

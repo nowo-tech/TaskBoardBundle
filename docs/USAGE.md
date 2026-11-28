@@ -1895,13 +1895,89 @@ describe the latest one.
 - The **actor label** is plain text: control and format characters are removed, the edges trimmed, and a label over 120
   characters is **cut** to 120 when stored (never refused, so a long token name never blocks a write). It is printed
   escaped in the pages and returned as a plain JSON string by the Task API (`token_name`). Never put a secret in it.
-- `null`: nothing to say (a console command, a worker): the columns stay `NULL`.
+- `null`: nothing to say: since 3.7.0 the channel the entry point declared is stored instead (below); outside any
+  entry point the columns stay `NULL`.
 - Called inside the write, possibly several times per request: keep it cheap, without queries and without state across
   requests (FrankenPHP worker mode, kernel not reset).
 
 The history and the comments show `via API · <label>` next to the actor (translations
 `task_board.history.channel.*`). The Task API answers carry `created_by`, `updated_by`, `channel` and `token_name` on
 tasks and comments ([API](API.md#provenance-fields-since-218)).
+
+**Declared channel and correlation id (since 3.7.0, Beacon spec 235 FR-004).** When the host's provider answers
+null (or there is none), the bundle stores the channel its own entry point declared, without a label:
+
+| Entry point | Channel |
+|---|---|
+| The board pages (every bundle web controller that writes) | `web` |
+| The Task API (`/api/tasks/v2` write, management and question controllers) | `api` |
+| The client API of a first-party app (`/task-board/v1`, Beacon Desktop) | `app` |
+| `nowo:task-board:import`, `nowo:task-board:sync` | `cli` |
+
+The values are `Provenance\WriteChannel` (`web`, `app`, `api`, `mcp`, `cli`); all fit the 8-character `channel` columns,
+so no column changes. A controller declares its channel with `#[Provenance\Attribute\AsWriteChannel(WriteChannel::Web)]`
+on its class or one action (`WriteChannelControllerListener`, the last `kernel.controller_arguments` listener, runs the
+action inside the scope). Any other entry point — an in-process MCP server calling the Task API operations, a message
+handler, a host command — wraps its own call:
+
+```php
+$scope->run(WriteChannel::Mcp, fn () => $operations->update($principal, $taskId, $input)); // Provenance\WriteChannelScope
+```
+
+Writes made outside the wrapped call carry no declared channel (audit ZDX-TB-I3): async Messenger handlers (a sync
+handler inherits its caller's), `StreamedResponse` callbacks and `kernel.view` / `kernel.response` /
+`kernel.exception` / `kernel.terminate` listeners; wrap them with `run()` if they write tasks. Column follow-ups and
+board moves of an import or sync now report `cli` (before: the `web` fallback) to a host `ColumnTransitionPolicyInterface`;
+the built-in policies treat only `api` and `mcp` as machine channels, so their answers are unchanged. A question answered
+inside a `cli` scope stores `via = cli` (`TaskQuestionAnswer::VIAS`, Task API `via` enum).
+
+The scope is call-scoped, never global: the channel is popped when the call returns or throws, calls nest (the
+innermost wins), and `kernel.reset` plus the request / message / command boundaries clear it (FrankenPHP worker mode).
+The host's provider still wins whole (channel and label) whenever it answers.
+
+Every history row also stores `correlation_id` (`TaskChangeHistory::getCorrelationId()`, 1 to 64 characters of
+`[A-Za-z0-9._:-]`): the id of the request, message or command that made it, from
+`Nowo\CorrelationContract\CorrelationIdProviderInterface::current()` (nowo-tech/correlation-contract ^0.1). The
+bundle autowires that interface when the host registers it (an alias or a service with that id, e.g. AuditKit's
+provider); without one the column stays `NULL` (`NullCorrelationIdProvider` behaviour). It is indexed
+(`task_board_change_history_correlation_idx`) so a timeline can list the rows of one id. It is not personal data and
+survives an erasure. The bundle's pages do not print it (Beacon spec 235 FR-030 shows ids only to readers allowed to see
+them, a decision the host's timeline makes); the history is not part of the Task API or client API answers.
+
+**Timeline source (since 3.7.0, AuditKit 2.2).** With nowo-tech/audit-kit-bundle ^2.2 installed (a soft dependency:
+suggested, not required), `Bridge\AuditKit\TaskTimelineSource` is registered and tagged
+`nowo_audit_kit.timeline_source`, so AuditKit's `TimelineMerger` merges a task's changes and comments with the action
+log and the other sources:
+
+```php
+$page = $timelineMerger->page(new TimelineSubject('task', $taskId), new TimelineCriteria(correlationId: $id), TimelineCursor::fromToken($cursor ?? ''), 50);
+```
+
+- Source name `task_board`; subject type `task` only. `user`, `scope`, `correlation` and any other type give nothing:
+  the source never reads across tasks or tenants. For "one unit of work" on a task use the correlation filter.
+- Visibility: the **signed-in user** must pass the task page's checks — task board access
+  (`TaskBoardAccessCheckerInterface`), the request's tenant (`TaskBoardTenantContext::owns()`) and `canViewTask()`.
+  Otherwise, without a signed-in user, or for an unknown task, the answer is the same empty list. Call it in the
+  reader's request (not from a worker without a security token).
+- Entries: `history:<uuid>`, kind `task.<change type>` (`task.title`, `task.column`, …), `changes`
+  `{<type>: {from, to}}` (a description, or a value over 500 characters, as `{changed: true, from_len, to_len}`),
+  `actorId`, `channel`, `tokenLabel`, `correlationId`, payload `{task_id, actor_name, context, cause}`; and
+  `comment:<uuid>`, kind `comment.added`, payload `{task_id, comment_id, actor_name, deleted, edited}` (never the body).
+  Treat payloads as personal data (`actor_name`).
+- Filters: `kinds` (`[]` matches nothing), `since` / `until` (inclusive), `correlationId` (byte for byte; comments have
+  no correlation id, so a correlation filter returns history rows only).
+- Visibility follows the **web task page** (audit ZDX-TB-I4): history rows show what its activity stream shows, including
+  the host's label of host-object links (`link_*` rows) — the client API's `link_visibility` port is not applied. Do not
+  serve this timeline through a client surface without filtering those rows. Comments are listed only while the comments
+  repository is wired.
+- Rows are read as arrays (nothing enters the entity manager's identity map; ZDX-TB-I5). With a correlation filter the
+  column is compared case-insensitively in SQL and exactly in PHP; look-alike rows never take a slot (the next keyset
+  batch is read), and a call returns up to 1000 entries, so AuditKit's merger (500 + 1) always learns there is a next page
+  (ZDX-TB-L1).
+- Order and cursor: newest first, ties by id descending. Rows are stored at whole seconds in the server's timezone: the
+  source compares a cursor there and treats a cursor with a fraction of a second (another source's) as just after its
+  whole second, per `TimelineCursor::boundFor()`; every `occurredAt` is a whole second. At most 1000 entries per call.
+  Stateless (worker mode).
 
 **Last write, together.** The three last-write columns of a task or comment (`updated_by_id`, `channel`,
 `actor_label`) are always written in one UPDATE, so two overlapping writes never leave one person's id next to another's

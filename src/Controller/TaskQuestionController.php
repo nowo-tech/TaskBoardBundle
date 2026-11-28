@@ -13,6 +13,8 @@ use Nowo\TaskBoardBundle\Form\CsrfActionType;
 use Nowo\TaskBoardBundle\Form\TaskQuestionAnswerFormType;
 use Nowo\TaskBoardBundle\Form\TaskQuestionFormType;
 use Nowo\TaskBoardBundle\Form\TaskQuestionWithdrawFormType;
+use Nowo\TaskBoardBundle\Provenance\Attribute\AsWriteChannel;
+use Nowo\TaskBoardBundle\Provenance\WriteChannel;
 use Nowo\TaskBoardBundle\Question\Entity\TaskQuestion;
 use Nowo\TaskBoardBundle\Question\TaskQuestionConflictException;
 use Nowo\TaskBoardBundle\Question\TaskQuestionManager;
@@ -64,6 +66,7 @@ use const ARRAY_FILTER_USE_BOTH;
  * again (403 when refused). The answer comes back to `_target_path` (a local path), to the drawer (a drawer's fetch) or to
  * the task page. Nothing here changes the task's status.
  */
+#[AsWriteChannel(WriteChannel::Web)]
 final class TaskQuestionController extends AbstractController
 {
     /**

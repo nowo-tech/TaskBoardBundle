@@ -14,6 +14,8 @@ use Nowo\TaskBoardBundle\Folder\TaskBoardRestructurePolicyInterface;
 use Nowo\TaskBoardBundle\Form\CsrfActionType;
 use Nowo\TaskBoardBundle\Form\TaskCustomFieldDefinitionFormType;
 use Nowo\TaskBoardBundle\Port\Snapshots;
+use Nowo\TaskBoardBundle\Provenance\Attribute\AsWriteChannel;
+use Nowo\TaskBoardBundle\Provenance\WriteChannel;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
@@ -55,6 +57,7 @@ use function is_string;
  * is refused with a message, nothing written). A field an import created keeps its provenance marker (shown as a
  * badge); editing it here is allowed (a re-import finds it by the marker, never by its name).
  */
+#[AsWriteChannel(WriteChannel::Web)]
 final class TaskCustomFieldController extends AbstractController
 {
     private const FIELD_ID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';

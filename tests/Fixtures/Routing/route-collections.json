@@ -98,6 +98,7 @@
                 "host": "",
                 "schemes": [],
                 "methods": [
+                    "GET",
                     "POST"
                 ],
                 "defaults": {
@@ -322,6 +323,60 @@
                 ],
                 "defaults": {
                     "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::updateColumn"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_task_new",
+                "path": "/tools/task-board/board/{boardId}/task/new",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::newTaskDialog"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_column_new",
+                "path": "/tools/task-board/board/{boardId}/column/new",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::newColumnDialog"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_column_edit",
+                "path": "/tools/task-board/board/{boardId}/column/{columnId}/edit",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::editColumnDialog"
                 },
                 "requirements": [],
                 "options": {
@@ -1245,6 +1300,7 @@
                 "host": "",
                 "schemes": [],
                 "methods": [
+                    "GET",
                     "POST"
                 ],
                 "defaults": {
@@ -1469,6 +1525,60 @@
                 ],
                 "defaults": {
                     "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::updateColumn"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_task_new",
+                "path": "/acme/tools/task-board/board/{boardId}/task/new",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::newTaskDialog"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_column_new",
+                "path": "/acme/tools/task-board/board/{boardId}/column/new",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::newColumnDialog"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_column_edit",
+                "path": "/acme/tools/task-board/board/{boardId}/column/{columnId}/edit",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::editColumnDialog"
                 },
                 "requirements": [],
                 "options": {
@@ -2010,6 +2120,7 @@
                 "host": "",
                 "schemes": [],
                 "methods": [
+                    "GET",
                     "POST"
                 ],
                 "defaults": {
@@ -2258,6 +2369,66 @@
                 ],
                 "defaults": {
                     "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::updateColumn"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_task_new",
+                "path": "/projects/{tenantSlug}/tasks/board/{boardId}/task/new",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::newTaskDialog"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_column_new",
+                "path": "/projects/{tenantSlug}/tasks/board/{boardId}/column/new",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::newColumnDialog"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_column_edit",
+                "path": "/projects/{tenantSlug}/tasks/board/{boardId}/column/{columnId}/edit",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::editColumnDialog"
                 },
                 "requirements": {
                     "tenantSlug": "p\\-[A-Za-z0-9_-]+"
@@ -2844,6 +3015,7 @@
                 "host": "",
                 "schemes": [],
                 "methods": [
+                    "GET",
                     "POST"
                 ],
                 "defaults": {
@@ -3092,6 +3264,66 @@
                 ],
                 "defaults": {
                     "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::updateColumn"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_task_new",
+                "path": "/teams/{tenantSlug}/board/{boardId}/task/new",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::newTaskDialog"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_column_new",
+                "path": "/teams/{tenantSlug}/board/{boardId}/column/new",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::newColumnDialog"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_column_edit",
+                "path": "/teams/{tenantSlug}/board/{boardId}/column/{columnId}/edit",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::editColumnDialog"
                 },
                 "requirements": {
                     "tenantSlug": "[a-z]+"
@@ -5475,6 +5707,7 @@
                 "host": "",
                 "schemes": [],
                 "methods": [
+                    "GET",
                     "POST"
                 ],
                 "defaults": {
@@ -5699,6 +5932,60 @@
                 ],
                 "defaults": {
                     "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::updateColumn"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_task_new",
+                "path": "/tools/task-board/board/{boardId}/task/new",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::newTaskDialog"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_column_new",
+                "path": "/tools/task-board/board/{boardId}/column/new",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::newColumnDialog"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_column_edit",
+                "path": "/tools/task-board/board/{boardId}/column/{columnId}/edit",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::editColumnDialog"
                 },
                 "requirements": [],
                 "options": {
@@ -8003,6 +8290,7 @@
                 "host": "",
                 "schemes": [],
                 "methods": [
+                    "GET",
                     "POST"
                 ],
                 "defaults": {
@@ -8227,6 +8515,60 @@
                 ],
                 "defaults": {
                     "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::updateColumn"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_task_new",
+                "path": "/acme/tools/task-board/board/{boardId}/task/new",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::newTaskDialog"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_column_new",
+                "path": "/acme/tools/task-board/board/{boardId}/column/new",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::newColumnDialog"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_column_edit",
+                "path": "/acme/tools/task-board/board/{boardId}/column/{columnId}/edit",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::editColumnDialog"
                 },
                 "requirements": [],
                 "options": {
@@ -8886,6 +9228,7 @@
                 "host": "",
                 "schemes": [],
                 "methods": [
+                    "GET",
                     "POST"
                 ],
                 "defaults": {
@@ -9134,6 +9477,66 @@
                 ],
                 "defaults": {
                     "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::updateColumn"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_task_new",
+                "path": "/projects/{tenantSlug}/tasks/tools/task-board/board/{boardId}/task/new",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::newTaskDialog"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_column_new",
+                "path": "/projects/{tenantSlug}/tasks/tools/task-board/board/{boardId}/column/new",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::newColumnDialog"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_column_edit",
+                "path": "/projects/{tenantSlug}/tasks/tools/task-board/board/{boardId}/column/{columnId}/edit",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::editColumnDialog"
                 },
                 "requirements": {
                     "tenantSlug": "p\\-[A-Za-z0-9_-]+"
@@ -9825,6 +10228,7 @@
                 "host": "",
                 "schemes": [],
                 "methods": [
+                    "GET",
                     "POST"
                 ],
                 "defaults": {
@@ -10073,6 +10477,66 @@
                 ],
                 "defaults": {
                     "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::updateColumn"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_task_new",
+                "path": "/teams/{tenantSlug}/tools/task-board/board/{boardId}/task/new",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::newTaskDialog"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_column_new",
+                "path": "/teams/{tenantSlug}/tools/task-board/board/{boardId}/column/new",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::newColumnDialog"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_column_edit",
+                "path": "/teams/{tenantSlug}/tools/task-board/board/{boardId}/column/{columnId}/edit",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::editColumnDialog"
                 },
                 "requirements": {
                     "tenantSlug": "[a-z]+"
@@ -10776,6 +11240,7 @@
                 "host": "",
                 "schemes": [],
                 "methods": [
+                    "GET",
                     "POST"
                 ],
                 "defaults": {
@@ -11000,6 +11465,60 @@
                 ],
                 "defaults": {
                     "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::updateColumn"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_task_new",
+                "path": "/tools/task-board/board/{boardId}/task/new",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::newTaskDialog"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_column_new",
+                "path": "/tools/task-board/board/{boardId}/column/new",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::newColumnDialog"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_column_edit",
+                "path": "/tools/task-board/board/{boardId}/column/{columnId}/edit",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::editColumnDialog"
                 },
                 "requirements": [],
                 "options": {
@@ -11536,6 +12055,7 @@
                 "host": "",
                 "schemes": [],
                 "methods": [
+                    "GET",
                     "POST"
                 ],
                 "defaults": {
@@ -11760,6 +12280,60 @@
                 ],
                 "defaults": {
                     "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::updateColumn"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_task_new",
+                "path": "/tools/task-board/board/{boardId}/task/new",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::newTaskDialog"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_column_new",
+                "path": "/tools/task-board/board/{boardId}/column/new",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::newColumnDialog"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_column_edit",
+                "path": "/tools/task-board/board/{boardId}/column/{columnId}/edit",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::editColumnDialog"
                 },
                 "requirements": [],
                 "options": {
@@ -12334,6 +12908,7 @@
                 "host": "",
                 "schemes": [],
                 "methods": [
+                    "GET",
                     "POST"
                 ],
                 "defaults": {
@@ -12558,6 +13133,60 @@
                 ],
                 "defaults": {
                     "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::updateColumn"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_task_new",
+                "path": "/tools/task-board/board/{boardId}/task/new",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::newTaskDialog"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_column_new",
+                "path": "/tools/task-board/board/{boardId}/column/new",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::newColumnDialog"
+                },
+                "requirements": [],
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "nowo_task_board_column_edit",
+                "path": "/tools/task-board/board/{boardId}/column/{columnId}/edit",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::editColumnDialog"
                 },
                 "requirements": [],
                 "options": {
@@ -13192,6 +13821,7 @@
                 "host": "",
                 "schemes": [],
                 "methods": [
+                    "GET",
                     "POST"
                 ],
                 "defaults": {
@@ -13440,6 +14070,66 @@
                 ],
                 "defaults": {
                     "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::updateColumn"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_task_new",
+                "path": "/projects/{tenantSlug}/tasks/board/{boardId}/task/new",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::newTaskDialog"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_column_new",
+                "path": "/projects/{tenantSlug}/tasks/board/{boardId}/column/new",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::newColumnDialog"
+                },
+                "requirements": {
+                    "tenantSlug": "p\\-[A-Za-z0-9_-]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_project_nowo_task_board_column_edit",
+                "path": "/projects/{tenantSlug}/tasks/board/{boardId}/column/{columnId}/edit",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::editColumnDialog"
                 },
                 "requirements": {
                     "tenantSlug": "p\\-[A-Za-z0-9_-]+"
@@ -14129,6 +14819,7 @@
                 "host": "",
                 "schemes": [],
                 "methods": [
+                    "GET",
                     "POST"
                 ],
                 "defaults": {
@@ -14377,6 +15068,66 @@
                 ],
                 "defaults": {
                     "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::updateColumn"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_task_new",
+                "path": "/teams/{tenantSlug}/board/{boardId}/task/new",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::newTaskDialog"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_column_new",
+                "path": "/teams/{tenantSlug}/board/{boardId}/column/new",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::newColumnDialog"
+                },
+                "requirements": {
+                    "tenantSlug": "[a-z]+"
+                },
+                "options": {
+                    "compiler_class": "Symfony\\Component\\Routing\\RouteCompiler",
+                    "utf8": true
+                },
+                "condition": ""
+            },
+            {
+                "name": "app_team_nowo_task_board_column_edit",
+                "path": "/teams/{tenantSlug}/board/{boardId}/column/{columnId}/edit",
+                "host": "",
+                "schemes": [],
+                "methods": [
+                    "GET"
+                ],
+                "defaults": {
+                    "_controller": "Nowo\\TaskBoardBundle\\Controller\\TaskBoardManageController::editColumnDialog"
                 },
                 "requirements": {
                     "tenantSlug": "[a-z]+"
