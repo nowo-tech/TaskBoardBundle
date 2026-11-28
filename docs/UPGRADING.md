@@ -286,6 +286,10 @@ No BC break: every new constructor argument is optional and appended, every new 
   only, idempotent, committed before it returns) and set the option; Desktop then calls it on "Disconnect" / "Sign out".
   The route sits under the client API's existing stateless firewall: nothing to change in `security.yaml`. Audit it from
   `TaskBoardEvents::CLIENT_API_LOGGED_OUT`. See [CLIENT-API](CLIENT-API.md#routes).
+- **AuditKit timeline source (optional).** With nowo-tech/audit-kit-bundle ^2.2 installed, the task changes and comments
+  join AuditKit's timeline (`TimelineSubject('task', $taskId)`, source `task_board`), filtered by the signed-in user's
+  access to the task. Nothing to configure; without AuditKit nothing is registered
+  ([USAGE](USAGE.md#member-badges-and-write-provenance-since-218)).
 
 ## To 3.6.0
 

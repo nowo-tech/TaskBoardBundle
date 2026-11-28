@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\DependencyInjection;
 
 use LogicException;
+use Nowo\AuditKitBundle\Timeline\TimelineSourceInterface;
 use Nowo\OutboundUrlGuardBundle\Guard\OutboundUrlGuard;
 use Nowo\SearchKitBundle\Provider\Entity\EntitySearchDefinition;
 use Nowo\TaskBoardBundle\Api\Controller\TaskApiQuestionController;
@@ -34,6 +35,7 @@ use Nowo\TaskBoardBundle\Api\Repository\TaskApiQueryRepository;
 use Nowo\TaskBoardBundle\Api\Security\TaskApiActors;
 use Nowo\TaskBoardBundle\Api\Security\TaskApiCommitWatermark;
 use Nowo\TaskBoardBundle\Api\Security\TaskApiConflictResponseFormatter;
+use Nowo\TaskBoardBundle\Bridge\AuditKit\TaskTimelineSource;
 use Nowo\TaskBoardBundle\Bridge\SearchKit\BoardSearchDefinition;
 use Nowo\TaskBoardBundle\Bridge\SearchKit\TaskSearchDefinition;
 use Nowo\TaskBoardBundle\Bridge\TimeTrack\ImportedTimeAggregatorListener;
@@ -275,6 +277,12 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
     /** Since 3.4.0: UserKit's export section contract (optional dependency: a literal, so the bundle loads without it). */
     public const USER_KIT_EXPORT_PROVIDER_INTERFACE = PersonalDataExportProviderInterface::class;
 
+    /** Since 3.7.0: AuditKit's timeline source contract (nowo-tech/audit-kit-bundle >= 2.2, optional). */
+    public const AUDIT_KIT_TIMELINE_SOURCE = TimelineSourceInterface::class;
+
+    /** Since 3.7.0: the tag AuditKit's timeline merger collects. */
+    public const AUDIT_KIT_TIMELINE_SOURCE_TAG = 'nowo_audit_kit.timeline_source';
+
     private const TIPTAP_EXTENSION = 'nowo_tiptap_editor';
 
     /** Since 2.25.0: SearchKit's `EntitySearchDefinition::TAG` (a literal: SearchKit is optional). */
@@ -308,6 +316,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         // Since 2.28.0: TimeTrack's deprecated 1.x scope port (removed in TimeTrack 2.0), a string so a TimeTrack without it
         // still loads: while it exists it is the service TimeTrack registers, else its framework-free twin is asked.
         private readonly string $timeTrackLegacyScopeProvider = self::TIME_TRACK_LEGACY_SCOPE_PROVIDER,
+        // Since 3.7.0 (Beacon spec 235): interface whose presence (AuditKit >= 2.2) registers the task timeline source.
+        private readonly string $timelineSourceInterface = self::AUDIT_KIT_TIMELINE_SOURCE,
     ) {
     }
 
@@ -429,6 +439,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         // Since 2.16.0 (spec 234, FR-014): whether a task may enter a column; default: always.
         $container->setAlias(ColumnTransitionPolicyInterface::class, $this->serviceOr($config['column_transition_policy'], AllowAllColumnTransitionPolicy::class));
         $this->registerMemberBadgesAndProvenance($container, $config);
+        $this->registerTimelineSource($container, $emName);
         $this->registerWeekStartResolver($container, $config['gantt']);
         $this->registerMentionResolver($container, $config['comments']['mention_resolver']);
         // Since 1.24: the host's default board view per user, else the board view.
@@ -1232,6 +1243,26 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             ->setArgument('$host', new Reference($this->serviceOr($config['write_provenance_provider'] ?? null, NoWriteProvenance::class)))
             ->setArgument('$scope', new Reference(WriteChannelScope::class)));
         $container->setAlias(WriteProvenanceProviderInterface::class, ScopedWriteProvenance::class);
+    }
+
+    /**
+     * Since 3.7.0 (Beacon spec 235 T003): the task changes and comments as an AuditKit timeline source, only when
+     * AuditKit's `TimelineSourceInterface` exists (a soft dependency: nowo-tech/audit-kit-bundle ^2.2 is suggested, not
+     * required). Tagged explicitly, so it is found also with autoconfiguration off.
+     */
+    private function registerTimelineSource(ContainerBuilder $container, string $emName): void
+    {
+        $container->addResource(new ClassExistenceResource($this->timelineSourceInterface));
+        if (!interface_exists($this->timelineSourceInterface)) {
+            return;
+        }
+        $container->setDefinition(TaskTimelineSource::class, (new Definition(TaskTimelineSource::class))
+            ->setArgument('$entityManager', new Reference(sprintf('doctrine.orm.%s_entity_manager', $emName)))
+            ->setArgument('$tokenStorage', new Reference('security.token_storage'))
+            ->setArgument('$access', new Reference(TaskBoardAccessCheckerInterface::class))
+            ->setArgument('$resourceAccess', new Reference(TaskBoardResourceAccessChecker::class))
+            ->setArgument('$tenantContext', new Reference(TaskBoardTenantContext::class, ContainerInterface::NULL_ON_INVALID_REFERENCE))
+            ->addTag(self::AUDIT_KIT_TIMELINE_SOURCE_TAG));
     }
 
     private function serviceOr(mixed $id, string $default): string

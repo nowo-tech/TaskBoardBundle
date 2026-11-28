@@ -59,6 +59,7 @@
         "twig/string-extra": "^3.12"
     },
     "require-dev": {
+        "nowo-tech/audit-kit-bundle": "^2.2",
         "friendsofphp/php-cs-fixer": "^3.0",
         "igor-php/igor-php": "^0.10.0 || ^0.11.0",
         "league/commonmark": "^2.7",
@@ -111,6 +112,7 @@
         }
     },
     "suggest": {
+        "nowo-tech/audit-kit-bundle": "Since 3.7: task changes and comments as an AuditKit timeline source (^2.2, TimelineSourceInterface).",
         "nowo-tech/search-kit-bundle": "Since 2.25: the header search groups tasks and boards (SearchKit ^1.11, PHP >= 8.3).",
         "nowo-tech/time-track-bundle": "Optional time tracking (^1.23 || ^2.0): task and team directories, and automatic total_time_seconds aggregation.",
         "nowo-tech/tiptap-editor-bundle": "Optional rich-text description editor (TiptapEditorType).",

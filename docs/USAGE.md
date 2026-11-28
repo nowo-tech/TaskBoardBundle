@@ -1937,11 +1937,32 @@ provider); without one the column stays `NULL` (`NullCorrelationIdProvider` beha
 survives an erasure. The bundle's pages do not print it (Beacon spec 235 FR-030 shows ids only to readers allowed to see
 them, a decision the host's timeline makes); the history is not part of the Task API or client API answers.
 
-**Timeline source (not yet).** Spec 235 T003 also asks for a timeline source of task changes and comments. It depends on
-AuditKit 2.2's `TimelineSourceInterface`, not tagged yet; the seam is ready — rows carry `getCorrelationId()`,
-`getChannel()`, `getActorLabel()`, `getCreatedAt()` and the user snapshot, and the new index serves "rows of one id" —
-and the source will be registered only when `Nowo\AuditKitBundle\Timeline\TimelineSourceInterface` exists (a soft
-dependency: composer `suggest`, no hard requirement) once that contract is published.
+**Timeline source (since 3.7.0, AuditKit 2.2).** With nowo-tech/audit-kit-bundle ^2.2 installed (a soft dependency:
+suggested, not required), `Bridge\AuditKit\TaskTimelineSource` is registered and tagged
+`nowo_audit_kit.timeline_source`, so AuditKit's `TimelineMerger` merges a task's changes and comments with the action
+log and the other sources:
+
+```php
+$page = $timelineMerger->page(new TimelineSubject('task', $taskId), new TimelineCriteria(correlationId: $id), TimelineCursor::fromToken($cursor ?? ''), 50);
+```
+
+- Source name `task_board`; subject type `task` only. `user`, `scope`, `correlation` and any other type give nothing:
+  the source never reads across tasks or tenants. For "one unit of work" on a task use the correlation filter.
+- Visibility: the **signed-in user** must pass the task page's checks — task board access
+  (`TaskBoardAccessCheckerInterface`), the request's tenant (`TaskBoardTenantContext::owns()`) and `canViewTask()`.
+  Otherwise, without a signed-in user, or for an unknown task, the answer is the same empty list. Call it in the
+  reader's request (not from a worker without a security token).
+- Entries: `history:<uuid>`, kind `task.<change type>` (`task.title`, `task.column`, …), `changes`
+  `{<type>: {from, to}}` (a description, or a value over 500 characters, as `{changed: true, from_len, to_len}`),
+  `actorId`, `channel`, `tokenLabel`, `correlationId`, payload `{task_id, actor_name, context, cause}`; and
+  `comment:<uuid>`, kind `comment.added`, payload `{task_id, comment_id, actor_name, deleted, edited}` (never the body).
+  Treat payloads as personal data (`actor_name`).
+- Filters: `kinds` (`[]` matches nothing), `since` / `until` (inclusive), `correlationId` (byte for byte; comments have
+  no correlation id, so a correlation filter returns history rows only).
+- Order and cursor: newest first, ties by id descending. Rows are stored at whole seconds in the server's timezone: the
+  source compares a cursor there and treats a cursor with a fraction of a second (another source's) as just after its
+  whole second, per `TimelineCursor::boundFor()`; every `occurredAt` is a whole second. At most 500 entries per call.
+  Stateless (worker mode).
 
 **Last write, together.** The three last-write columns of a task or comment (`updated_by_id`, `channel`,
 `actor_label`) are always written in one UPDATE, so two overlapping writes never leave one person's id next to another's

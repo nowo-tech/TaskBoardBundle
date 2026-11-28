@@ -159,12 +159,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`ClientApi\Contract\TaskClientTokenRevokerInterface`) revokes that token only, then `TaskClientLoggedOutEvent`
   (`TaskBoardEvents::CLIENT_API_LOGGED_OUT`, ids only). No scope, account, context or budget check; a failing revoker is
   an error answer (retry). `me.features.serverLogout`. OpenAPI document updated (`ClientApiOpenApiTest`: 20 routes).
+- **AuditKit timeline source (Beacon spec 235 T003).** `Bridge\AuditKit\TaskTimelineSource` (source `task_board`,
+  subject type `task`) gives a task's history rows (`task.<change type>`, with `changes`, channel, token label and
+  correlation id) and comments (`comment.added`, no body) to AuditKit 2.2's timeline merger. Soft dependency: registered
+  and tagged `nowo_audit_kit.timeline_source` only when `Nowo\AuditKitBundle\Timeline\TimelineSourceInterface` exists
+  (composer `suggest` nowo-tech/audit-kit-bundle ^2.2). The signed-in user must pass the task page's checks (task board
+  access, the request's tenant, `canViewTask()`); other subject types (`user`, `scope`, `correlation`) give nothing, so
+  it never reads across tasks or tenants. Keyset per `TimelineCursor::boundFor()` at whole seconds in the server's
+  timezone; `TimelineCriteria` kinds, dates and correlation id (byte for byte; comments have none).
 
-### Not in this release
-
-- The task-changes and comments timeline source of spec 235 T003 waits for AuditKit 2.2's `TimelineSourceInterface`
-  (not tagged). It will be a soft dependency (composer `suggest` nowo-tech/audit-kit-bundle; the source service
-  registered only when that interface exists); the rows and the index are ready for it.
 
 ## [3.6.0] - 2026-11-27
 

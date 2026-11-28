@@ -45,6 +45,8 @@ services:
             - '../../ClientApi/'
             - '../../PersonalData/'
             - '../../Bridge/UserKit/'
+            # Since 3.7.0: registered by TaskBoardExtension only when AuditKit's TimelineSourceInterface exists.
+            - '../../Bridge/AuditKit/'
             - '../../Search/Header/'
             # Since 2.22.0: values of the task menu (the builder is a service).
             - '../../Menu/TaskMenu.php'
