@@ -4,14 +4,20 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\Tests\Unit;
 
+use Nowo\CorrelationContract\CorrelationId;
+use Nowo\CorrelationContract\CorrelationIdProviderInterface;
+use Nowo\CorrelationContract\NullCorrelationIdProvider;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Entity\TaskChangeHistory;
 use Nowo\TaskBoardBundle\Enum\TaskChangeType;
 use Nowo\TaskBoardBundle\Enum\TaskPriority;
 use Nowo\TaskBoardBundle\Service\TaskChangeRecorder;
 use PHPUnit\Framework\TestCase;
 use stdClass;
+
+use function array_map;
 
 final class TaskChangeRecorderTest extends TestCase
 {
@@ -24,6 +30,38 @@ final class TaskChangeRecorderTest extends TestCase
         (new TaskChangeRecorder())->record($task, $user, TaskChangeType::Title, 'A', 'B', 'ctx');
 
         self::assertSame('ctx', $task->getChangeHistory()->first()->getContext());
+    }
+
+    public function testEveryRowKeepsTheHostsCorrelationIdSince370(): void
+    {
+        $board       = new TaskBoard('Demo', 'demo', new stdClass());
+        $task        = new Task($board, 'Work', new stdClass());
+        $correlation = new class implements CorrelationIdProviderInterface {
+            public ?CorrelationId $id = null;
+
+            public function current(): ?CorrelationId
+            {
+                return $this->id;
+            }
+
+            public function currentOrGenerate(): CorrelationId
+            {
+                return $this->id ?? CorrelationId::generate();
+            }
+        };
+        $recorder = new TaskChangeRecorder(correlation: $correlation);
+
+        $recorder->record($task, new stdClass(), TaskChangeType::Title, 'A', 'B');
+        $correlation->id = CorrelationId::fromString('4bf92f3577b34da6a3ce929d0e0e4736');
+        $recorder->record($task, new stdClass(), TaskChangeType::Title, 'B', 'C');
+        $recorder->recordAs($task, null, 'Guest', TaskChangeType::Title, 'C', 'D');
+        (new TaskChangeRecorder(correlation: new NullCorrelationIdProvider()))->record($task, new stdClass(), TaskChangeType::Title, 'D', 'E');
+
+        self::assertSame([null, '4bf92f3577b34da6a3ce929d0e0e4736', '4bf92f3577b34da6a3ce929d0e0e4736', null], array_map(static fn (TaskChangeHistory $row): ?string => $row->getCorrelationId(), $task->getChangeHistory()->toArray()));
+        $row = $task->getChangeHistory()->get(1);
+        self::assertInstanceOf(TaskChangeHistory::class, $row);
+        $row->detachUser(true);
+        self::assertSame('4bf92f3577b34da6a3ce929d0e0e4736', $row->getCorrelationId(), 'not personal data: kept by an erasure');
     }
 
     public function testRecordCreatedAddsHistoryEntry(): void

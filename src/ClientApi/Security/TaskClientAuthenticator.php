@@ -48,8 +48,9 @@ use const FILTER_VALIDATE_IP;
  * {@see self::MAX_TOKEN_LENGTH} bytes), sets the token's user as the security user and keeps the principal in the request
  * attributes ({@see self::ATTRIBUTE}). Anything else (no token, unknown, expired, revoked, another family, a user that is
  * not a `UserInterface`) answers the API's own `401 invalid_token` with `WWW-Authenticate: Bearer`, never a redirect,
- * and dispatches `TaskClientApiDeniedEvent`. Cookies and sessions are never read. Stateless: nothing of a request is
- * kept on the service.
+ * and dispatches `TaskClientApiDeniedEvent`; since 3.7.0, on `POST logout` a token the resolver refuses answers `204`
+ * (nothing to revoke, no event), and a request without a Bearer token still `401`. Cookies and sessions are never read.
+ * Stateless: nothing of a request is kept on the service.
  */
 final class TaskClientAuthenticator extends AbstractAuthenticator implements AuthenticationEntryPointInterface
 {
@@ -64,6 +65,9 @@ final class TaskClientAuthenticator extends AbstractAuthenticator implements Aut
 
     /** Longest context header passed on (bytes); a longer one is `invalid_context` later. */
     public const MAX_CONTEXT_LENGTH = 128;
+
+    /** Since 3.7.0: the message of a logout whose token the resolver refused (answered 204, nothing revoked). */
+    private const NOTHING_TO_REVOKE = 'nothing_to_revoke';
 
     public function __construct(
         private readonly TaskClientPrincipalResolverInterface $resolver,
@@ -98,7 +102,8 @@ final class TaskClientAuthenticator extends AbstractAuthenticator implements Aut
             $request->attributes->set(self::MODULE_FORBIDDEN, true);
         }
         if (!$principal instanceof TaskClientPrincipal || !$principal->user instanceof UserInterface) {
-            throw new CustomUserMessageAuthenticationException('invalid_token');
+            // 3.7.0: a logout with an unknown, expired or revoked token answers the same 204 as a real one (never an oracle).
+            throw new CustomUserMessageAuthenticationException($request->attributes->get(TaskClientApiListener::ROUTE_SCOPE) === TaskClientApiListener::NO_SCOPE ? self::NOTHING_TO_REVOKE : 'invalid_token');
         }
         $user = $principal->user;
         $request->attributes->set(self::ATTRIBUTE, $principal);
@@ -112,10 +117,14 @@ final class TaskClientAuthenticator extends AbstractAuthenticator implements Aut
         return null;
     }
 
-    public function onAuthenticationFailure(Request $request, AuthenticationException $exception): JsonResponse
+    public function onAuthenticationFailure(Request $request, AuthenticationException $exception): Response
     {
         $request->attributes->remove(self::ATTRIBUTE);
         $request->attributes->remove(self::MODULE_FORBIDDEN);
+        if ($exception->getMessageKey() === self::NOTHING_TO_REVOKE) {
+            // 3.7.0: nothing to sign out; no refusal event either (there is no principal to name).
+            return self::signedOut();
+        }
         $this->events?->dispatch(new TaskClientApiDeniedEvent('invalid_token', null, null, self::ipPrefix($request->getClientIp())), TaskBoardEvents::CLIENT_API_DENIED);
 
         return self::invalidToken();
@@ -132,6 +141,12 @@ final class TaskClientAuthenticator extends AbstractAuthenticator implements Aut
         $refusal = new TaskClientApiException('invalid_token', Response::HTTP_UNAUTHORIZED, [], ['WWW-Authenticate' => 'Bearer error="invalid_token"']);
 
         return new JsonResponse($refusal->body(), $refusal->status, $refusal->headers + ['Cache-Control' => 'no-store, private']);
+    }
+
+    /** Since 3.7.0: the answer of `POST logout`, `204` with no body. */
+    public static function signedOut(): Response
+    {
+        return new Response(null, Response::HTTP_NO_CONTENT, ['Cache-Control' => 'no-store, private', 'X-Content-Type-Options' => 'nosniff']);
     }
 
     /** The plain Bearer token: null when absent, blank or longer than {@see self::MAX_TOKEN_LENGTH}. */

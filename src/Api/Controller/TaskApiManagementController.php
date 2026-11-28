@@ -15,6 +15,8 @@ use Nowo\TaskBoardBundle\Api\Serializer\TaskApiReadSerializer;
 use Nowo\TaskBoardBundle\Api\TaskApiInput;
 use Nowo\TaskBoardBundle\Api\TaskApiPrincipal;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
+use Nowo\TaskBoardBundle\Provenance\Attribute\AsWriteChannel;
+use Nowo\TaskBoardBundle\Provenance\WriteChannel;
 use Nowo\TaskBoardBundle\Routing\TaskBoardRouteLoader;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -25,6 +27,7 @@ use Symfony\Component\Routing\Attribute\Route;
  * Since 2.2.0 (spec 213): boards and columns (Full management). Each answers the board as `GET /v2/list/{id}` does, with
  * `warnings` for the fields nothing read.
  */
+#[AsWriteChannel(WriteChannel::Api)]
 #[Route(requirements: TaskBoardRouteLoader::API_REQUIREMENTS, defaults: TaskBoardRouteLoader::API_DEFAULTS)]
 final readonly class TaskApiManagementController
 {

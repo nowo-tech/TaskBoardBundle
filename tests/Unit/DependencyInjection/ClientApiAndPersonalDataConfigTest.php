@@ -9,6 +9,7 @@ use LogicException;
 use Nowo\TaskBoardBundle\Bridge\UserKit\TaskBoardUserKitExportProvider;
 use Nowo\TaskBoardBundle\ClientApi\Controller\TaskClientApiController;
 use Nowo\TaskBoardBundle\ClientApi\Security\TaskClientApiListener;
+use Nowo\TaskBoardBundle\ClientApi\TaskClientReader;
 use Nowo\TaskBoardBundle\DependencyInjection\Configuration;
 use Nowo\TaskBoardBundle\DependencyInjection\TaskBoardExtension;
 use Nowo\TaskBoardBundle\PersonalData\TaskBoardPersonalDataExporter;
@@ -29,7 +30,7 @@ final class ClientApiAndPersonalDataConfigTest extends TestCase
     public function testTheDefaults(): void
     {
         $config = (new Processor())->processConfiguration(new Configuration(), [['user_class' => User::class]]);
-        self::assertSame(['principal_resolver' => null, 'context_policy' => null, 'reference_resolver' => null, 'link_visibility' => null, 'file_resolver' => null, 'source_link' => null, 'file_scheme' => null, 'prefix' => '/api/task-board', 'context_header' => 'X-Beacon-Context'], $config['client_api']);
+        self::assertSame(['principal_resolver' => null, 'context_policy' => null, 'reference_resolver' => null, 'link_visibility' => null, 'file_resolver' => null, 'source_link' => null, 'token_revoker' => null, 'file_scheme' => null, 'prefix' => '/api/task-board', 'context_header' => 'X-Beacon-Context'], $config['client_api']);
         self::assertSame(['user_kit' => true], $config['personal_data']);
         self::assertFalse($config['sync']['people_forget']);
     }
@@ -75,6 +76,21 @@ final class ClientApiAndPersonalDataConfigTest extends TestCase
         self::assertTrue($container->getDefinition(TaskClientApiListener::class)->hasTag('kernel.event_subscriber'));
         self::assertTrue($container->getDefinition(TaskClientApiController::class)->isPublic());
         self::assertSame('/api/tb/v1', $container->getDefinition(TaskBoardRouteLoader::class)->getArgument('$clientApiPrefix'));
+    }
+
+    public function testTheTokenRevokerNeedsThePrincipalResolverAndTurnsServerLogoutOn(): void
+    {
+        $container = $this->load(['client_api' => ['principal_resolver' => 'app.resolver', 'context_policy' => 'app.contexts']] + $this->api());
+        self::assertNull($container->getDefinition(TaskClientApiController::class)->getArgument('$revoker'));
+        self::assertFalse($container->getDefinition(TaskClientReader::class)->getArgument('$serverLogout'));
+
+        $container = $this->load(['client_api' => ['principal_resolver' => 'app.resolver', 'context_policy' => 'app.contexts', 'token_revoker' => 'app.revoker']] + $this->api());
+        self::assertSame('app.revoker', (string) $container->getDefinition(TaskClientApiController::class)->getArgument('$revoker'));
+        self::assertTrue($container->getDefinition(TaskClientReader::class)->getArgument('$serverLogout'));
+
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage('token_revoker needs client_api.principal_resolver');
+        $this->load(['client_api' => ['token_revoker' => 'app.revoker']]);
     }
 
     public function testThePersonalDataExporterAndUserKitsSection(): void

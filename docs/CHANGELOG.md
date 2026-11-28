@@ -141,6 +141,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Correlation id on task history (Beacon spec 235 T003 / FR-004).** `TaskChangeHistory` gets a nullable
+  `correlation_id` (`VARCHAR(64)`, indexed `task_board_change_history_correlation_idx`; `getCorrelationId()`), filled
+  from the host's `Nowo\CorrelationContract\CorrelationIdProviderInterface::current()` (nowo-tech/correlation-contract
+  ^0.1, new dependency), autowired when the host registers one; `NULL` otherwise. Not personal data: kept by an erasure.
+  Schema change in UPGRADING.
+- **Declared write channel.** When the host's `write_provenance_provider` says nothing, history rows, tasks and comments
+  store the channel the bundle's entry point declares: board pages `web`, Task API writes `api`, client API `app`,
+  import / sync commands `cli` (new `WriteChannel::Cli`). Call-scoped `Provenance\WriteChannelScope` (popped in
+  `finally`, `kernel.reset` and the unit-of-work boundaries clear it), `#[Provenance\Attribute\AsWriteChannel]` on
+  controllers (applied by `WriteChannelControllerListener`), `ScopedWriteProvenance` (the host's provider first). Every
+  value fits the existing 8-character columns. Translations `task_board.history.channel.cli` (7 locales).
+- **Client API `POST logout` (Beacon Desktop BDA13-L2).** `nowo_task_board_client_v1_logout`: `204` always when a Bearer
+  token is sent (never an oracle), the host's new optional `client_api.token_revoker`
+  (`ClientApi\Contract\TaskClientTokenRevokerInterface`) revokes that token only, then `TaskClientLoggedOutEvent`
+  (`TaskBoardEvents::CLIENT_API_LOGGED_OUT`, ids only). No scope, account, context or budget check; a failing revoker is
+  an error answer (retry). `me.features.serverLogout`. OpenAPI document updated (`ClientApiOpenApiTest`: 20 routes).
+
+### Not in this release
+
+- The task-changes and comments timeline source of spec 235 T003 waits for AuditKit 2.2's `TimelineSourceInterface`
+  (not tagged). It will be a soft dependency (composer `suggest` nowo-tech/audit-kit-bundle; the source service
+  registered only when that interface exists); the rows and the index are ready for it.
+
 ## [3.6.0] - 2026-11-27
 
 ### Changed

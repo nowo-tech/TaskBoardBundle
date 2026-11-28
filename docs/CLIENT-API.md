@@ -43,6 +43,7 @@ nowo_task_board:
         file_resolver: App\Tasks\DesktopTaskFiles            # optional, tokens/1 images
         source_link: App\Tasks\DesktopTaskSources            # optional, POST tasks with source
         file_scheme: beacon-file                             # the scheme of host files in Markdown images
+        token_revoker: App\Tasks\DesktopTaskTokens          # optional (3.7.0), POST logout revokes the token
         prefix: /api/task-board                              # routes under /api/task-board/v1
         context_header: X-Beacon-Context
 ```
@@ -74,6 +75,7 @@ Without that firewall the API fails closed (`500 server_error`, logged).
 | `Link\TaskObjectLinkVisibilityInterface::visibleTo($viewer, $type, $id)` | no | Whether a host-object link of a task is shown to this reader. Without it every host-object link is `{visible: false}` in the client API (the web UI is unchanged). |
 | `ClientApi\Contract\TaskClientFileResolverInterface::canView($reader, $fileId)` | no | Whether an image `![alt](<file_scheme>:<id>)` is shown (`{visible: true, fileId, alt}`); otherwise `{visible: false}` with no id and no alt. |
 | `ClientApi\Contract\TaskClientSourceLinkInterface::link($principal, $source)` | no | The host object a new task links to for its `source` (Beacon: a chat message the person may read now), or null (`422 source_not_visible`). Without it `source` is `400 invalid_field`. |
+| `ClientApi\Contract\TaskClientTokenRevokerInterface::revoke($bearer, $principal, $request)` | no (3.7.0) | Revokes the one token `POST logout` presents (Beacon: TimeTrack's `ClientFamilyTokenAuthenticator::revoke('tasks', …)`): only that token, never another family's, idempotent (an already revoked, expired or unknown token is a no-op), committed before it returns, a transient failure propagated (never swallowed). Without it logout answers 204 but the token stays valid until it expires (`me.features.serverLogout` false). |
 
 The principal becomes a `TaskApiPrincipal` per request: level **Read** with `task-board:read`, **Tasks** with
 `task-board:write` too (never Full, never My tasks), `where` from the context, channel **`app`**
@@ -107,11 +109,12 @@ device label. The person's budgets come from `api.hooks.rate_limiter` (`consume(
 
 ## Routes
 
-Read routes need `task-board:read`, writes `task-board:write` (else `403 insufficient_scope`).
+Read routes need `task-board:read`, writes `task-board:write` (else `403 insufficient_scope`); `POST logout` needs no
+scope.
 
 | Method and path | Notes |
 |---|---|
-| `GET me` | `{apiVersion: 1, user, scopes, context, contexts, features, limits, enums}`; `features.realtime`, `templates`, `files`, `activity` are false in 3.4.0 |
+| `GET me` | `{apiVersion: 1, user, scopes, context, contexts, features, limits, enums}`; `features.realtime`, `templates`, `files`, `activity` are false in 3.4.0; `features.serverLogout` (3.7.0) says whether `POST logout` revokes the token on the server |
 | `GET my-tasks?bucket=&today=&cursor=&limit=` | The caller's open tasks (open or custom column, not completed, not archived) as **assignee** in the context's boards; `bucket` = `overdue`, `today`, `upcoming` (the next 14 days), `no_date`, `review` (as **reviewer**), `all` (default). `today` = the client's local date, within a day of the server's UTC date (else `400 invalid_date`). Sorted by due date, priority, id. The first page also returns `counts {overdue, today, upcoming, review}`. At most 2000 open assignments are read per request. |
 | `GET boards?cursor=&limit=&q=` | The context's boards the person may view, by name; `group` = the board's folder, else the host's space of its tenant (`{type: folder\|space, id, label}`). No counts in the list (audit ZCS-L2). |
 | `GET boards/{id}` | The board with `counts {open, capped}` (open tasks the reader may open; at most 2000 are read, `capped` says when there were more), the people the caller may assign there (100 at most) and the tags in use (50 at most). |
@@ -129,6 +132,7 @@ Read routes need `task-board:read`, writes `task-board:write` (else `403 insuffi
 | `PUT tasks/{id}/members/{userId}` / `DELETE …` | `{role: assignee\|reviewer\|stakeholder\|watcher}` (`userId` may be `me`); the board's assignee rule applies; `If-Match` required. `DELETE` removes every role of that person. |
 | `POST tasks/{id}/checklist-items` | `{checklist, title}` (a subtask tagged `checklist:<name>`); `Idempotency-Key` required; `201 {task (the parent), itemId}`. |
 | `PATCH tasks/{id}/checklist-items/{itemId}` | `{title?, done?}` with the **item's** `If-Match`; `done` moves it to the done column or back to the first. `200 {task, itemId, itemRevision}`. |
+| `POST logout` | Since 3.7.0 (Beacon Desktop BDA13-L2, as ChatKit 2.4.1 and the TimeTrack client API): signs the client out. The host's revoker revokes the presented token, and only it, then `TaskBoardEvents::CLIENT_API_LOGGED_OUT` (`TaskClientLoggedOutEvent`: token id, user id, `revoked`, network; ids only) is dispatched. **Always `204` with no body** when a Bearer token is sent — also for a token already revoked, expired or unknown (no oracle, no event, nothing revoked), so the client may retry freely; no Bearer token is `401 invalid_token`. No scope, account, context or budget check (a token may always be given up, also after the person lost Tasks); the context header is ignored. Afterwards every call with that token is `401 invalid_token`. A failing revoker is `500 server_error` (`409 unavailable` on a lock conflict): retry, the token is still valid. Route `nowo_task_board_client_v1_logout`. |
 
 Every answer that shows one task carries its revision as `ETag`.
 

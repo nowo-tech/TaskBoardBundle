@@ -1895,13 +1895,53 @@ describe the latest one.
 - The **actor label** is plain text: control and format characters are removed, the edges trimmed, and a label over 120
   characters is **cut** to 120 when stored (never refused, so a long token name never blocks a write). It is printed
   escaped in the pages and returned as a plain JSON string by the Task API (`token_name`). Never put a secret in it.
-- `null`: nothing to say (a console command, a worker): the columns stay `NULL`.
+- `null`: nothing to say: since 3.7.0 the channel the entry point declared is stored instead (below); outside any
+  entry point the columns stay `NULL`.
 - Called inside the write, possibly several times per request: keep it cheap, without queries and without state across
   requests (FrankenPHP worker mode, kernel not reset).
 
 The history and the comments show `via API · <label>` next to the actor (translations
 `task_board.history.channel.*`). The Task API answers carry `created_by`, `updated_by`, `channel` and `token_name` on
 tasks and comments ([API](API.md#provenance-fields-since-218)).
+
+**Declared channel and correlation id (since 3.7.0, Beacon spec 235 FR-004).** When the host's provider answers
+null (or there is none), the bundle stores the channel its own entry point declared, without a label:
+
+| Entry point | Channel |
+|---|---|
+| The board pages (every bundle web controller that writes) | `web` |
+| The Task API (`/api/tasks/v2` write, management and question controllers) | `api` |
+| The client API of a first-party app (`/task-board/v1`, Beacon Desktop) | `app` |
+| `nowo:task-board:import`, `nowo:task-board:sync` | `cli` |
+
+The values are `Provenance\WriteChannel` (`web`, `app`, `api`, `mcp`, `cli`); all fit the 8-character `channel` columns,
+so no column changes. A controller declares its channel with `#[Provenance\Attribute\AsWriteChannel(WriteChannel::Web)]`
+on its class or one action (`WriteChannelControllerListener`, the last `kernel.controller_arguments` listener, runs the
+action inside the scope). Any other entry point — an in-process MCP server calling the Task API operations, a message
+handler, a host command — wraps its own call:
+
+```php
+$scope->run(WriteChannel::Mcp, fn () => $operations->update($principal, $taskId, $input)); // Provenance\WriteChannelScope
+```
+
+The scope is call-scoped, never global: the channel is popped when the call returns or throws, calls nest (the
+innermost wins), and `kernel.reset` plus the request / message / command boundaries clear it (FrankenPHP worker mode).
+The host's provider still wins whole (channel and label) whenever it answers.
+
+Every history row also stores `correlation_id` (`TaskChangeHistory::getCorrelationId()`, 1 to 64 characters of
+`[A-Za-z0-9._:-]`): the id of the request, message or command that made it, from
+`Nowo\CorrelationContract\CorrelationIdProviderInterface::current()` (nowo-tech/correlation-contract ^0.1). The
+bundle autowires that interface when the host registers it (an alias or a service with that id, e.g. AuditKit's
+provider); without one the column stays `NULL` (`NullCorrelationIdProvider` behaviour). It is indexed
+(`task_board_change_history_correlation_idx`) so a timeline can list the rows of one id. It is not personal data and
+survives an erasure. The bundle's pages do not print it (Beacon spec 235 FR-030 shows ids only to readers allowed to see
+them, a decision the host's timeline makes); the history is not part of the Task API or client API answers.
+
+**Timeline source (not yet).** Spec 235 T003 also asks for a timeline source of task changes and comments. It depends on
+AuditKit 2.2's `TimelineSourceInterface`, not tagged yet; the seam is ready — rows carry `getCorrelationId()`,
+`getChannel()`, `getActorLabel()`, `getCreatedAt()` and the user snapshot, and the new index serves "rows of one id" —
+and the source will be registered only when `Nowo\AuditKitBundle\Timeline\TimelineSourceInterface` exists (a soft
+dependency: composer `suggest`, no hard requirement) once that contract is published.
 
 **Last write, together.** The three last-write columns of a task or comment (`updated_by_id`, `channel`,
 `actor_label`) are always written in one UPDATE, so two overlapping writes never leave one person's id next to another's

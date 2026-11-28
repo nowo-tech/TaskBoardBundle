@@ -6,12 +6,14 @@
     <entity name="Nowo\TaskBoardBundle\Entity\TaskChangeHistory" table="task_board_task_change_history">
         <indexes>
             <index name="task_board_change_history_task_idx" columns="task_id"/>
+            <index name="task_board_change_history_correlation_idx" columns="correlation_id"/>
         </indexes>
         <id name="id" type="string" length="36"/>
         <field name="createdAt" type="datetime_immutable" column="created_at"/>
         <field name="userName" type="string" column="user_name" length="180" nullable="true"/>
         <field name="channel" type="string" length="8" nullable="true"/>
         <field name="actorLabel" type="string" column="actor_label" length="120" nullable="true"/>
+        <field name="correlationId" type="string" column="correlation_id" length="64" nullable="true"/>
         <field name="changeType" type="string" column="change_type" length="32" enum-type="Nowo\TaskBoardBundle\Enum\TaskChangeType"/>
         <field name="oldValue" type="text" column="old_value" nullable="true"/>
         <field name="newValue" type="text" column="new_value" nullable="true"/>

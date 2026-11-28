@@ -116,6 +116,8 @@ use Nowo\TaskBoardBundle\Port\Internal\TaskBoardDefaultViewResolverInterface;
 use Nowo\TaskBoardBundle\Port\Internal\TaskBoardTargetsInterface;
 use Nowo\TaskBoardBundle\Port\Internal\TaskMentionCandidatesResolverInterface;
 use Nowo\TaskBoardBundle\Provenance\NoWriteProvenance;
+use Nowo\TaskBoardBundle\Provenance\ScopedWriteProvenance;
+use Nowo\TaskBoardBundle\Provenance\WriteChannelScope;
 use Nowo\TaskBoardBundle\Provenance\WriteProvenanceProviderInterface;
 use Nowo\TaskBoardBundle\Question\DefaultTaskQuestionRecipientResolver;
 use Nowo\TaskBoardBundle\Question\TaskQuestionManager;
@@ -599,8 +601,13 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
      */
     private function registerClientApi(ContainerBuilder $container, array $config, string $emName): void
     {
-        $client = $config['client_api'];
+        $client  = $config['client_api'];
+        $revoker = is_string($client['token_revoker']) && $client['token_revoker'] !== '' ? $client['token_revoker'] : null;
         if (!is_string($client['principal_resolver']) || $client['principal_resolver'] === '') {
+            if ($revoker !== null) {
+                throw new LogicException('nowo_task_board.client_api.token_revoker needs client_api.principal_resolver (the client API is off without it).');
+            }
+
             return;
         }
         if (!$config['api']['enabled']) {
@@ -655,7 +662,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             ->setArgument('$questionManager', $config['task_questions']['enabled'] ? new Reference(TaskQuestionManager::class) : null)
             ->setArgument('$timeTracking', $container->hasDefinition(TaskBoardTaskDirectory::class))
             ->setArgument('$taskNumbers', (bool) $config['task_numbers']['enabled'])
-            ->setArgument('$subtaskDepth', $config['max_subtask_depth'] ?? null));
+            ->setArgument('$subtaskDepth', $config['max_subtask_depth'] ?? null)
+            ->setArgument('$serverLogout', $revoker !== null));
         $container->setDefinition(TaskClientWriter::class, (new Definition(TaskClientWriter::class))
             ->setAutowired(true)
             ->setArgument('$rowLock', new Reference(OrderedRowLockInterface::class, ContainerInterface::NULL_ON_INVALID_REFERENCE))
@@ -668,6 +676,9 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             ->setAutowired(true)
             ->setPublic(true)
             ->setArgument('$maxBodyBytes', $config['api']['max_body_bytes'])
+            // Since 3.7.0 (Beacon Desktop BDA13-L2): POST logout.
+            ->setArgument('$revoker', $revoker === null ? null : new Reference($revoker))
+            ->setArgument('$events', new Reference('event_dispatcher', ContainerInterface::NULL_ON_INVALID_REFERENCE))
             ->addTag('controller.service_arguments'));
         $container->getDefinition(TaskBoardRouteLoader::class)->setArgument('$clientApiPrefix', $v1);
     }
@@ -1206,7 +1217,8 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
 
     /**
      * Since 2.18.0 (Beacon spec 234): `member_badge_provider` (default: none, nothing is asked) and
-     * `write_provenance_provider` (default {@see NoWriteProvenance}: the columns stay NULL).
+     * `write_provenance_provider` (default {@see NoWriteProvenance}: the columns stay NULL). Since 3.7.0 the bundle's
+     * services receive {@see ScopedWriteProvenance}: the host's answer, else the channel of {@see WriteChannelScope}.
      *
      * @param array<string, mixed> $config
      */
@@ -1215,7 +1227,11 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
         $badges = $config['member_badge_provider'] ?? null;
         $container->setAlias(MemberBadgeProviderInterface::class, $this->serviceOr($badges, NoMemberBadges::class));
         $container->getDefinition(MemberBadges::class)->setArgument('$provider', is_string($badges) && $badges !== '' ? new Reference($badges) : null);
-        $container->setAlias(WriteProvenanceProviderInterface::class, $this->serviceOr($config['write_provenance_provider'] ?? null, NoWriteProvenance::class));
+        // Since 3.7.0 (Beacon spec 235): the host's provider answers first; else the channel the entry point declared.
+        $container->setDefinition(ScopedWriteProvenance::class, (new Definition(ScopedWriteProvenance::class))
+            ->setArgument('$host', new Reference($this->serviceOr($config['write_provenance_provider'] ?? null, NoWriteProvenance::class)))
+            ->setArgument('$scope', new Reference(WriteChannelScope::class)));
+        $container->setAlias(WriteProvenanceProviderInterface::class, ScopedWriteProvenance::class);
     }
 
     private function serviceOr(mixed $id, string $default): string

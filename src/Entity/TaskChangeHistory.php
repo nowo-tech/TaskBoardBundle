@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\Entity;
 use App\Entity\User;
 use DateTimeImmutable;
 use Doctrine\ORM\Mapping as ORM;
+use Nowo\CorrelationContract\CorrelationId;
 use Nowo\TaskBoardBundle\Enum\TaskChangeType;
 use Nowo\TaskBoardBundle\Provenance\WriteChannel;
 use Nowo\TaskBoardBundle\Provenance\WriteProvenance;
@@ -17,6 +18,8 @@ use Nowo\TaskBoardBundle\ValueObject\Uuid;
 #[ORM\Entity]
 #[ORM\Table(name: 'task_board_task_change_history')]
 #[ORM\Index(name: 'task_board_change_history_task_idx', columns: ['task_id'])]
+// Since 3.7.0 (Beacon spec 235, FR-004): the rows of one request, message or command.
+#[ORM\Index(name: 'task_board_change_history_correlation_idx', columns: ['correlation_id'])]
 class TaskChangeHistory
 {
     #[ORM\Id]
@@ -37,6 +40,14 @@ class TaskChangeHistory
     /** Since 2.18.0 (Beacon spec 234): the host's plain-text label of the actor (e.g. an API token's name); null: none. */
     #[ORM\Column(name: 'actor_label', type: 'string', length: 120, nullable: true)]
     private ?string $actorLabel;
+
+    /**
+     * Since 3.7.0 (Beacon spec 235, FR-004): the correlation id of the request, message or command that made the change,
+     * as the host's `Nowo\CorrelationContract\CorrelationIdProviderInterface` told it (1 to 64 characters of
+     * `[A-Za-z0-9._:-]`); null: the host has no correlation support, or the change was made outside any unit of work.
+     */
+    #[ORM\Column(name: 'correlation_id', type: 'string', length: 64, nullable: true)]
+    private ?string $correlationId;
 
     public function __construct(
         #[ORM\ManyToOne(targetEntity: Task::class, inversedBy: 'changeHistory')]
@@ -62,12 +73,15 @@ class TaskChangeHistory
         ?WriteProvenance $provenance = null,
         // Since 2.23.0 (Beacon spec 242): the actor's name when there is no user object (an external answer).
         ?string $actorName = null,
+        // Since 3.7.0 (Beacon spec 235, FR-004): the correlation id of the unit of work (null: the column stays NULL).
+        ?CorrelationId $correlationId = null,
     ) {
-        $this->id         = Uuid::generate()->toString();
-        $this->createdAt  = new DateTimeImmutable();
-        $this->userName   = $user === null ? Text::cutNullable($actorName, Task::USER_NAME_MAX) : Text::cut(UserLabel::of($user), Task::USER_NAME_MAX);
-        $this->channel    = $provenance?->channel->value;
-        $this->actorLabel = WriteProvenance::normalizeLabel($provenance?->actorLabel);
+        $this->id            = Uuid::generate()->toString();
+        $this->createdAt     = new DateTimeImmutable();
+        $this->userName      = $user === null ? Text::cutNullable($actorName, Task::USER_NAME_MAX) : Text::cut(UserLabel::of($user), Task::USER_NAME_MAX);
+        $this->channel       = $provenance?->channel->value;
+        $this->actorLabel    = WriteProvenance::normalizeLabel($provenance?->actorLabel);
+        $this->correlationId = $correlationId?->value;
     }
 
     public function getId(): string
@@ -158,6 +172,15 @@ class TaskChangeHistory
     public function getActorLabel(): ?string
     {
         return $this->actorLabel;
+    }
+
+    /**
+     * Since 3.7.0 (Beacon spec 235, FR-004): the correlation id of the request, message or command that made the change;
+     * null when the host told none. Not personal data: it stays when the author's account is erased.
+     */
+    public function getCorrelationId(): ?string
+    {
+        return $this->correlationId;
     }
 
     public function getCreatedAt(): DateTimeImmutable

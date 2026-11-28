@@ -10,6 +10,8 @@ services:
             - '../../DependencyInjection/'
             - '../../TaskBoardBundle.php'
             - '../../Resources/'
+            # Since 3.7.0: a PHP attribute, not a service.
+            - '../../Provenance/Attribute/'
             # Value objects / data carriers are not services (REQ: keep the container free of non-services).
             - '../../Entity/'
             - '../../Dto/'
@@ -486,6 +488,11 @@ services:
             $logger: '@?logger'
         tags: [{ name: kernel.reset, method: reset }]
 
+    # Since 3.7.0 (Beacon spec 235): the channel an entry point declared for the writes of its call (popped when the call
+    # ends; cleared between the requests of a worker).
+    Nowo\TaskBoardBundle\Provenance\WriteChannelScope:
+        tags: [{ name: kernel.reset, method: reset }]
+
     # Since 2.18.0 (Beacon spec 234): the member badges of a request (TaskBoardExtension sets the provider, or none).
     Nowo\TaskBoardBundle\Member\MemberBadges:
         arguments:
@@ -503,6 +510,7 @@ services:
                 - '@!Nowo\TaskBoardBundle\Avatar\TaskMemberAvatars'
                 - '@!Nowo\TaskBoardBundle\Member\MemberBadges'
                 - '@!Nowo\TaskBoardBundle\Service\TaskChangeContext'
+                - '@!Nowo\TaskBoardBundle\Provenance\WriteChannelScope'
                 - '@!Nowo\TaskBoardBundle\Service\TaskEventDeferral'
         tags:
             - { name: kernel.event_subscriber }

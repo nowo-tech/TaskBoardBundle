@@ -6,6 +6,8 @@ namespace Nowo\TaskBoardBundle\Command;
 
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Port\Internal\SyncActorResolverInterface;
+use Nowo\TaskBoardBundle\Provenance\WriteChannel;
+use Nowo\TaskBoardBundle\Provenance\WriteChannelScope;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncOptions;
 use Nowo\TaskBoardBundle\Sync\Dto\SyncReport;
@@ -53,6 +55,8 @@ final class TaskBoardSyncCommand extends Command
         private readonly SyncStore $store,
         private readonly SyncActorResolverInterface $actors,
         private readonly ?TranslatorInterface $translator = null,
+        // Since 3.7.0 (Beacon spec 235): the writes of a run are recorded with the `cli` channel.
+        private readonly WriteChannelScope $channels = new WriteChannelScope(),
     ) {
         parent::__construct();
     }
@@ -70,6 +74,12 @@ final class TaskBoardSyncCommand extends Command
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
+    {
+        // @igor-ignore - The closure runs once, now, inside run(); the scope keeps no reference to it.
+        return $this->channels->run(WriteChannel::Cli, fn (): int => $this->sync($input, $output));
+    }
+
+    private function sync(InputInterface $input, OutputInterface $output): int
     {
         $io    = new SymfonyStyle($input, $output);
         $board = $this->boards->findById((string) $input->getArgument('boardId'));

@@ -18,6 +18,8 @@ use Nowo\TaskBoardBundle\Menu\TaskMenuBuilder;
 use Nowo\TaskBoardBundle\Menu\TaskMenuOperation;
 use Nowo\TaskBoardBundle\Menu\TaskTimerStart;
 use Nowo\TaskBoardBundle\Menu\TaskTimerStarterInterface;
+use Nowo\TaskBoardBundle\Provenance\Attribute\AsWriteChannel;
+use Nowo\TaskBoardBundle\Provenance\WriteChannel;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
@@ -64,6 +66,7 @@ use const PHP_URL_SCHEME;
  * posted anyway — and then whatever the service checks (transition policy, the host's limits, the assignee policy,
  * the time tracker). Afterwards it goes back to the local `_target_path`, else the task's board. Stateless.
  */
+#[AsWriteChannel(WriteChannel::Web)]
 final class TaskMenuController extends AbstractController
 {
     /**

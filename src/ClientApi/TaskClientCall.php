@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\ClientApi;
 use LogicException;
 use Nowo\TaskBoardBundle\Api\TaskApiPrincipal;
 use Nowo\TaskBoardBundle\ClientApi\Model\TaskClientPrincipal;
+use Nowo\TaskBoardBundle\ClientApi\Security\TaskClientAuthenticator;
 use Symfony\Component\HttpFoundation\Request;
 
 /**
@@ -31,5 +32,16 @@ final readonly class TaskClientCall
         $call = $request->attributes->get(self::ATTRIBUTE);
 
         return $call instanceof self ? $call : throw new LogicException('Not an authenticated task board client API request.');
+    }
+
+    /**
+     * Since 3.7.0: the principal the authenticator resolved (`POST logout` holds no call: it runs no scope or context
+     * check).
+     */
+    public static function principalOf(Request $request): TaskClientPrincipal
+    {
+        $principal = $request->attributes->get(TaskClientAuthenticator::ATTRIBUTE);
+
+        return $principal instanceof TaskClientPrincipal ? $principal : throw new LogicException('Not an authenticated task board client API request.');
     }
 }

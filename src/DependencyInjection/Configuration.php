@@ -256,6 +256,7 @@ final class Configuration implements ConfigurationInterface
                         ->scalarNode('link_visibility')->defaultNull()->info('Service id of a Link\TaskObjectLinkVisibilityInterface. null: every host-object link reads visible: false in the client API.')->end()
                         ->scalarNode('file_resolver')->defaultNull()->info('Service id of a ClientApi\Contract\TaskClientFileResolverInterface (tokens/1 images). null: every image reads visible: false.')->end()
                         ->scalarNode('source_link')->defaultNull()->info('Service id of a ClientApi\Contract\TaskClientSourceLinkInterface (POST tasks with source). null: source is 400 invalid_field.')->end()
+                        ->scalarNode('token_revoker')->defaultNull()->info('Since 3.7.0: service id of a ClientApi\Contract\TaskClientTokenRevokerInterface: POST <prefix>/v1/logout revokes the presented token (only it). null: logout still answers 204, but only the client forgets the token (me.features.serverLogout false). Needs principal_resolver.')->end()
                         ->scalarNode('file_scheme')->defaultNull()->info('The URL scheme of the host\'s files in Markdown images (Beacon: beacon-file). null: no image is a host file.')
                             ->validate()
                                 ->ifTrue(static fn (mixed $scheme): bool => $scheme !== null && (!is_string($scheme) || preg_match('/^[a-z][a-z0-9+.-]{0,31}$/D', $scheme) !== 1))

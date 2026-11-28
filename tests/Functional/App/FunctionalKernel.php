@@ -6,6 +6,7 @@ namespace Nowo\TaskBoardBundle\Tests\Functional\App;
 
 use Doctrine\Bundle\DoctrineBundle\DependencyInjection\Configuration as DoctrineConfiguration;
 use Doctrine\Bundle\DoctrineBundle\DoctrineBundle;
+use Nowo\CorrelationContract\CorrelationIdProviderInterface;
 use Nowo\FormKitBundle\NowoFormKitBundle;
 use Nowo\SearchKitBundle\Test\QueryCounter;
 use Nowo\SearchKitBundle\Test\QueryCountingMiddleware;
@@ -252,6 +253,9 @@ final class FunctionalKernel extends Kernel
         // write_provenance_provider).
         $container->services()->set('app.member_badges', ScriptedMemberBadges::class)->public();
         $container->services()->set('app.write_provenance', PathWriteProvenance::class)->autowire()->public();
+        // Since 3.7.0 (Beacon spec 235): the host's correlation id provider, autowired by the bundle (null id by default).
+        $container->services()->set('app.correlation_ids', ScriptedCorrelationIds::class)->public();
+        $container->services()->alias(CorrelationIdProviderInterface::class, 'app.correlation_ids');
         // Since 2.16.0 (spec 234): a column transition policy (used when a test sets column_transition_policy).
         $container->services()->set('app.transition_policy', ScriptedTransitionPolicy::class)->public();
         // Since 3.3.0 (audits ZCF-L1 / L3): a restructure policy (used when a test sets restructure.policy).

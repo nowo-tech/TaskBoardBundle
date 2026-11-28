@@ -52,7 +52,8 @@ final class ApiProvenanceTest extends ApiTestCase
         self::assertResponseIsSuccessful();
         $this->get('/api/tasks/v2/task/' . $task->getId());
         self::assertSame('uuid-' . $this->owner->getId(), $this->json()['updated_by']);
-        self::assertNull($this->json()['channel']);
+        // Since 3.7.0 (Beacon spec 235): the Task API declares its channel; the one the client sent is still ignored.
+        self::assertSame('api', $this->json()['channel']);
         self::assertNull($this->json()['token_name']);
     }
 

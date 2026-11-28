@@ -8,6 +8,8 @@ use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Import\Dto\TaskImportOptions;
 use Nowo\TaskBoardBundle\Import\TaskImportOrchestrator;
 use Nowo\TaskBoardBundle\Import\TaskImportSource;
+use Nowo\TaskBoardBundle\Provenance\WriteChannel;
+use Nowo\TaskBoardBundle\Provenance\WriteChannelScope;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -35,6 +37,8 @@ final class TaskBoardImportCommand extends Command
         private readonly TaskBoardRepositoryInterface $boardRepository,
         private readonly TaskImportOrchestrator $importOrchestrator,
         private readonly TokenStorageInterface $tokenStorage,
+        // Since 3.7.0 (Beacon spec 235): the writes of a run are recorded with the `cli` channel.
+        private readonly WriteChannelScope $channels = new WriteChannelScope(),
     ) {
         parent::__construct();
     }
@@ -50,6 +54,12 @@ final class TaskBoardImportCommand extends Command
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
+    {
+        // @igor-ignore - The closure runs once, now, inside run(); the scope keeps no reference to it.
+        return $this->channels->run(WriteChannel::Cli, fn (): int => $this->import($input, $output));
+    }
+
+    private function import(InputInterface $input, OutputInterface $output): int
     {
         $io = new SymfonyStyle($input, $output);
 
