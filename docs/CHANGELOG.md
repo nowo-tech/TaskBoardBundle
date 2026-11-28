@@ -142,6 +142,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+
+- Spec Kit code inventory (`specs/001-baseline/code-inventory.md`) covers all 1179 production files: 13 files of 3.3.0 to 3.7.0 added, the removed `add-column-modal-controller.ts` row dropped, `FR-AUDIT-001` added, SC-001 and the coverage summary recounted.
+
 ## [3.7.0] - 2026-11-28
 
 ### Added

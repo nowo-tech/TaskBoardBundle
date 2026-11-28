@@ -292,10 +292,11 @@ the board.
 - **FR-PD-001** (3.4.0, Beacon WORKLIST): `TaskBoardPersonalDataExporterInterface`, one export section per account-erasure step (`ERASURE_SECTIONS` pinned against `TaskSyncPeopleReassigner::ERASURE_STEPS` and `TaskRecurrenceManager::forgetAuthor()`), ids and metadata only, never a secret or token; UserKit's `task_board` section when UserKit is installed (`personal_data.user_kit`).
 - **FR-SYNC-016** (3.4.0, Beacon spec 208 E): "Forget this person" on the People page (`sync.people_forget`): `SyncPersonForgetCheckEvent` (deny by default), CSRF POST behind a UiKit confirm dialog, `TaskSyncPeopleDirectoryService::anonymise()` in a short locked transaction (directory, then person), idempotent, audited by id.
 - **FR-SYNC-017** (3.4.0): `TenantCredentialReturnAwareSourceInterface::tenantCredentialFormUrlWithReturn()`, optional: the import plan's Connect step passes its path (same origin, `OAuthReturnPath::isSafe()`) to the host's token page; `TenantCredentialSourceInterface` unchanged.
+- **FR-AUDIT-001** (3.7.0, Beacon spec 235 T003): `Bridge\AuditKit\TaskTimelineSource`, an AuditKit 2.2 timeline source for the changes and comments of one task (subject type `task` only; any other subject gives no entry, so it never reads across tasks or tenants); registered only when AuditKit's `TimelineSourceInterface` exists.
 
 ## Success Criteria
 
-- **SC-001**: **1071/1071** production files (1096 tracked, 25 co-located Vitest excluded) mapped in [`code-inventory.md`](code-inventory.md), audited 2026-11-24 on 3.0.0 (`git ls-files src | wc -l`; `git ls-files src | grep -vc '\.test\.ts$'`).
+- **SC-001**: **1179/1179** production files (1204 tracked, 25 co-located Vitest excluded) mapped in [`code-inventory.md`](code-inventory.md), audited 2026-11-28 on 3.7.0 (`git ls-files src | wc -l`; `git ls-files src | grep -vc '\.test\.ts$'`).
 - **SC-002**: Config keys match `Configuration.php` and Flex recipe defaults.
 - **SC-003**: PHPUnit + Vitest + PHPStan pass in CI.
 - **SC-004**: Demo with TimeTrack: board + timer + aggregated time on task.
