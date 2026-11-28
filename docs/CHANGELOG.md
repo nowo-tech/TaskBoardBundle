@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[3.7.0] - 2026-11-28](#370---2026-11-28)
 - [[3.6.0] - 2026-11-27](#360---2026-11-27)
 - [[3.5.0] - 2026-11-27](#350---2026-11-27)
 - [[3.4.1] - 2026-11-27](#341---2026-11-27)
@@ -141,6 +142,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.7.0] - 2026-11-28
+
 ### Added
 
 - **Correlation id on task history (Beacon spec 235 T003 / FR-004).** `TaskChangeHistory` gets a nullable
@@ -174,7 +177,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   budget (`logout:<tokenId>`, `429` + `Retry-After`). `cli` added to the Task API OpenAPI `channel` and `via` enums and to
   `TaskQuestionAnswer::VIAS`. `#[SensitiveParameter]` on `$bearer` of `TaskClientPrincipalResolverInterface::resolve()`
   and `TaskClientTokenRevokerInterface::revoke()` (no BC break for implementers).
-
 
 ## [3.6.0] - 2026-11-27
 
@@ -4146,7 +4148,7 @@ First stable release of **TaskBoard Bundle**.
 - Doctrine ORM ^2.15 || ^3.0
 - `nowo-tech/time-track-bundle` ^1.0 (required in 1.0.x; optional from 1.1.0)
 
-[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v3.6.0...HEAD
+[Unreleased]: https://github.com/nowo-tech/TaskBoardBundle/compare/v3.7.0...HEAD
 [1.9.0]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.4...v1.9.0
 [1.8.4]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.3...v1.8.4
 [1.8.3]: https://github.com/nowo-tech/TaskBoardBundle/compare/v1.8.2...v1.8.3
