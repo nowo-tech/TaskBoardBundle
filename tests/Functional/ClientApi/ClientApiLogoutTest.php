@@ -5,12 +5,15 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Tests\Functional\ClientApi;
 
 use Nowo\TaskBoardBundle\ClientApi\Model\TaskClientPrincipal;
+use Nowo\TaskBoardBundle\ClientApi\Security\TaskClientAuthenticator;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Event\TaskClientApiDeniedEvent;
 use Nowo\TaskBoardBundle\Event\TaskClientLoggedOutEvent;
 use Nowo\TaskBoardBundle\Tests\Functional\Api\App\ApiTestHost;
 use Nowo\TaskBoardBundle\Tests\Functional\Api\App\ClientApiTestHost;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+
+use function array_map;
 
 /**
  * Since 3.7.0 (Beacon Desktop BDA13-L2): `POST logout` revokes the presented token through the host's revoker, and only
@@ -84,9 +87,13 @@ final class ClientApiLogoutTest extends ClientApiTestCase
             self::assertSame('no-store, private', $this->client->getResponse()->headers->get('Cache-Control'));
         }
         self::assertCount(1, ClientApiTestHost::$revoked, 'a refused token is never revoked');
-        self::assertCount(1, $this->loggedOut, 'nothing to name, no event');
-        self::assertSame([], $this->denied);
-        self::assertSame($consumed, ApiTestHost::$consumed, 'logout spends no budget');
+        self::assertCount(1, $this->loggedOut, 'nothing to name, no logout event');
+        // Audit ZDX-TB-L2: every refused token is reported and counted against the IP, so probing is visible.
+        self::assertSame([TaskClientAuthenticator::REASON_LOGOUT_UNKNOWN_TOKEN, TaskClientAuthenticator::REASON_LOGOUT_UNKNOWN_TOKEN], array_map(static fn (TaskClientApiDeniedEvent $event): string => $event->reason, $this->denied));
+        self::assertNull($this->denied[0]->tokenId);
+        self::assertSame(['127.0.0.1', '127.0.0.1'], ApiTestHost::$failedIps);
+        self::assertSame($consumed, ApiTestHost::$consumed, 'a refused token spends no token budget');
+        self::assertSame(['logout:tok-' . self::CLIENT_TOKEN], ApiTestHost::$consumedTokenIds, 'the logout budget is the token\'s own key');
     }
 
     public function testWithoutABearerTokenItIs401(): void
@@ -127,6 +134,33 @@ final class ClientApiLogoutTest extends ClientApiTestCase
         ClientApiTestHost::$revokeFails = false;
         $this->call('GET', '/me');
         self::assertResponseIsSuccessful();
+    }
+
+    public function testAnIpOverItsFailedTokenBudgetGets429BeforeTheResolver(): void
+    {
+        ApiTestHost::$ipLimitAccepts = false;
+        $this->call('POST', '/logout');
+        $this->assertError(429, 'rate_limited');
+        self::assertGreaterThanOrEqual(1, (int) $this->client->getResponse()->headers->get('Retry-After'));
+        self::assertSame('no-store, private', $this->client->getResponse()->headers->get('Cache-Control'));
+        self::assertSame([], ClientApiTestHost::$resolved, 'the resolver is not asked');
+        self::assertSame([], ClientApiTestHost::$revoked);
+        self::assertSame(['rate_limited'], array_map(static fn (TaskClientApiDeniedEvent $event): string => $event->reason, $this->denied));
+    }
+
+    public function testATokenOverItsLogoutBudgetGets429AndIsNotRevokedYet(): void
+    {
+        ApiTestHost::$tokenLimitAccepts = false;
+        $this->call('POST', '/logout');
+        $this->assertError(429, 'rate_limited');
+        self::assertGreaterThanOrEqual(1, (int) $this->client->getResponse()->headers->get('Retry-After'));
+        self::assertSame([], ClientApiTestHost::$revoked);
+        self::assertSame([], $this->loggedOut);
+
+        ApiTestHost::$tokenLimitAccepts = true;
+        $this->call('POST', '/logout');
+        self::assertResponseStatusCodeSame(204);
+        self::assertCount(1, ClientApiTestHost::$revoked);
     }
 
     public function testOtherMethodsOnTheRouteAreNotFound(): void

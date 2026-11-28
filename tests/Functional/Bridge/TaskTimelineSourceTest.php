@@ -18,6 +18,8 @@ use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\Enum\TaskChangeType;
 use Nowo\TaskBoardBundle\Provenance\WriteChannel;
 use Nowo\TaskBoardBundle\Provenance\WriteProvenance;
+use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
+use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\AppUser;
 use Nowo\TaskBoardBundle\Tests\Functional\FunctionalTestCase;
 use ReflectionProperty;
@@ -30,6 +32,7 @@ use function array_reverse;
 use function array_values;
 use function count;
 use function date_default_timezone_get;
+use function intdiv;
 use function sort;
 use function str_repeat;
 
@@ -167,9 +170,55 @@ final class TaskTimelineSourceTest extends FunctionalTestCase
         self::assertSame([], $source->page($this->subject(), new TimelineCriteria(), null, 50), 'nobody signed in');
     }
 
+    public function testAMergerPageOf500PlusOneAndLookAlikeCorrelationIdsNeverEndThePageEarly(): void
+    {
+        $task = $this->em->find(Task::class, $this->task->getId());
+        self::assertInstanceOf(Task::class, $task);
+        $owner = $this->em->find(AppUser::class, $this->owner->getId());
+        self::assertInstanceOf(AppUser::class, $owner);
+        for ($i = 0; $i < 600; ++$i) {
+            $row = new TaskChangeHistory($task, $owner, TaskChangeType::Tags, (string) $i, (string) ($i + 1));
+            (new ReflectionProperty(TaskChangeHistory::class, 'createdAt'))->setValue($row, $this->base->modify('-' . (1 + intdiv($i, 7)) . ' seconds'));
+            $this->em->persist($row);
+        }
+        $this->em->flush();
+        $this->em->clear();
+        $source = $this->source();
+        // AuditKit's merger asks for its page size plus one to know there is a next page.
+        self::assertCount(501, $source->page($this->subject(), new TimelineCriteria(), null, 501));
+        self::assertCount(606, $source->page($this->subject(), new TimelineCriteria(), null, 5000), 'at most 1000');
+        $map = $this->em->getUnitOfWork()->getIdentityMap();
+        self::assertArrayNotHasKey(TaskChangeHistory::class, $map, 'rows are read as arrays: no history row enters the identity map');
+        self::assertArrayNotHasKey(TaskComment::class, $map);
+
+        // Look-alike ids (another case) are newer than the exact ones: they never take a slot of the page.
+        $lookAlike = '4BF92F3577B34DA6A3CE929D0E0E4736';
+        foreach ([20, 21, 22] as $second) {
+            $this->history(TaskChangeType::Color, '#000000', '#ffffff', $second, $lookAlike);
+        }
+        $page = $source->page($this->subject(), new TimelineCriteria(correlationId: self::TRACE), null, 2);
+        self::assertSame(['task.title', 'task.description'], $this->sortedKinds($page, false));
+        self::assertSame([self::TRACE, self::TRACE], array_map(static fn (TimelineEvent $event): ?string => $event->correlationId, $page));
+        self::assertCount(3, $source->page($this->subject(), new TimelineCriteria(correlationId: $lookAlike), null, 50));
+    }
+
+    public function testWithoutTheCommentsRepositoryNoCommentIsListed(): void
+    {
+        $container = self::getContainer();
+        $source    = new TaskTimelineSource(
+            $this->em,
+            $container->get('security.token_storage'),
+            $container->get(TaskBoardAccessCheckerInterface::class),
+            $container->get(TaskBoardResourceAccessChecker::class),
+        );
+        self::assertSame(['task.title', 'task.title', 'task.priority', 'task.description'], $this->sortedKinds($source->page($this->subject(), new TimelineCriteria(), null, 50)));
+    }
+
     private function history(TaskChangeType $type, string $old, string $new, int $second, ?string $correlation = null, ?WriteProvenance $provenance = null): void
     {
-        $row = new TaskChangeHistory($this->task, $this->owner, $type, $old, $new, provenance: $provenance, correlationId: $correlation === null ? null : CorrelationId::fromString($correlation));
+        $task  = $this->em->find(Task::class, $this->task->getId()) ?? $this->task;
+        $owner = $this->em->find(AppUser::class, $this->owner->getId()) ?? $this->owner;
+        $row   = new TaskChangeHistory($task, $owner, $type, $old, $new, provenance: $provenance, correlationId: $correlation === null ? null : CorrelationId::fromString($correlation));
         (new ReflectionProperty(TaskChangeHistory::class, 'createdAt'))->setValue($row, $this->base->modify('+' . $second . ' seconds'));
         $this->em->persist($row);
         $this->em->flush();

@@ -285,7 +285,12 @@ No BC break: every new constructor argument is optional and appended, every new 
   says which. Beacon: implement the revoker over TimeTrack's `ClientFamilyTokenAuthenticator` (`tasks` family, this token
   only, idempotent, committed before it returns) and set the option; Desktop then calls it on "Disconnect" / "Sign out".
   The route sits under the client API's existing stateless firewall: nothing to change in `security.yaml`. Audit it from
-  `TaskBoardEvents::CLIENT_API_LOGGED_OUT`. See [CLIENT-API](CLIENT-API.md#routes).
+  `TaskBoardEvents::CLIENT_API_LOGGED_OUT`. Logout spends `api.hooks.rate_limiter`: `failedTokenState()` /
+  `registerFailedToken()` for the IP, and `consume()` with token id `logout:<tokenId>` (a key apart from the token's
+  reads). A firewall `user_checker` that refuses a disabled account makes logout `401`: revoke client tokens on disable.
+  See [CLIENT-API](CLIENT-API.md#routes).
+- **`cli` in the Task API.** The OpenAPI `channel` (tasks, comments) and question `via` enums gain `cli`; a client
+  generated with strict enums needs regenerating.
 - **AuditKit timeline source (optional).** With nowo-tech/audit-kit-bundle ^2.2 installed, the task changes and comments
   join AuditKit's timeline (`TimelineSubject('task', $taskId)`, source `task_board`), filtered by the signed-in user's
   access to the task. Nothing to configure; without AuditKit nothing is registered

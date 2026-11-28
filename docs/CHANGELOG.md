@@ -166,7 +166,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (composer `suggest` nowo-tech/audit-kit-bundle ^2.2). The signed-in user must pass the task page's checks (task board
   access, the request's tenant, `canViewTask()`); other subject types (`user`, `scope`, `correlation`) give nothing, so
   it never reads across tasks or tenants. Keyset per `TimelineCursor::boundFor()` at whole seconds in the server's
-  timezone; `TimelineCriteria` kinds, dates and correlation id (byte for byte; comments have none).
+  timezone; `TimelineCriteria` kinds, dates and correlation id (byte for byte; comments have none). Audit ZDX: up to
+  1000 entries per call so the merger's 500 + 1 sees its next page, look-alike correlation ids never take a slot
+  (keyset refill), rows read as arrays (nothing in the identity map), comments only with the comments repository.
+- **Audit ZDX follow-ups.** Logout budgets as ChatKit's: per-IP failed-token budget before the resolver (`429`), a refused
+  token counted and reported (`TaskClientApiDeniedEvent` reason `logout_unknown_token`, still `204`), a per-token logout
+  budget (`logout:<tokenId>`, `429` + `Retry-After`). `cli` added to the Task API OpenAPI `channel` and `via` enums and to
+  `TaskQuestionAnswer::VIAS`. `#[SensitiveParameter]` on `$bearer` of `TaskClientPrincipalResolverInterface::resolve()`
+  and `TaskClientTokenRevokerInterface::revoke()` (no BC break for implementers).
 
 
 ## [3.6.0] - 2026-11-27

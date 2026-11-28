@@ -26,6 +26,7 @@ use Nowo\TaskBoardBundle\ClientApi\Model\TaskClientSourceLink;
 use Nowo\TaskBoardBundle\Link\TaskObjectLinkVisibilityInterface;
 use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\AppUser;
 use RuntimeException;
+use SensitiveParameter;
 
 use function array_keys;
 use function in_array;
@@ -95,7 +96,7 @@ final class ClientApiTestHost implements TaskApiIdempotencyStoreInterface, TaskC
         self::$revokeFails   = false;
     }
 
-    public function resolve(string $bearer, TaskClientRequest $request): ?TaskClientPrincipal
+    public function resolve(#[SensitiveParameter] string $bearer, TaskClientRequest $request): ?TaskClientPrincipal
     {
         self::$resolved[] = $bearer;
         $token            = self::$tokens[$bearer] ?? null;
@@ -116,7 +117,7 @@ final class ClientApiTestHost implements TaskApiIdempotencyStoreInterface, TaskC
     }
 
     /** Since 3.7.0: revokes this bearer only (idempotent: an unknown one is a no-op). */
-    public function revoke(string $bearer, TaskClientPrincipal $principal, TaskClientRequest $request): void
+    public function revoke(#[SensitiveParameter] string $bearer, TaskClientPrincipal $principal, TaskClientRequest $request): void
     {
         if (self::$revokeFails) {
             throw new RuntimeException('Token store unavailable.');

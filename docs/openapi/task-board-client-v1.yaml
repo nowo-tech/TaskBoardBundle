@@ -380,12 +380,16 @@ paths:
         always be given up); the context header is ignored. After it, every call with the token answers 401
         invalid_token. Without a revoker the answer is still 204 but the token stays valid until it expires
         (me.features.serverLogout is false). A failing revoker answers an error (500 server_error, 409 unavailable):
-        retry.
+        retry. Budgets (audit ZDX-TB-L2): an IP whose failed-token budget is spent gets 429 before the token is
+        resolved; a refused token is counted against the IP and reported (TaskClientApiDeniedEvent reason
+        logout_unknown_token) while still answering 204; a valid token spends a logout budget of its own
+        (logout:<tokenId>, apart from its other requests): 429 + Retry-After, retry later, the token is not revoked yet.
       parameters: []
       responses:
         '204': {description: 'Signed out (or nothing to sign out). No body.'}
         '401': {$ref: '#/components/responses/Error'}
         '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
         '500': {$ref: '#/components/responses/Error'}
 components:
   securitySchemes:

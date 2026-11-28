@@ -638,7 +638,9 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             ->setArgument('$resolver', new Reference(TaskClientPrincipalResolverInterface::class))
             ->setArgument('$v1Prefix', $v1)
             ->setArgument('$contextHeader', $client['context_header'])
-            ->setArgument('$events', new Reference('event_dispatcher', ContainerInterface::NULL_ON_INVALID_REFERENCE)));
+            ->setArgument('$events', new Reference('event_dispatcher', ContainerInterface::NULL_ON_INVALID_REFERENCE))
+            // Since 3.7.0 (audit ZDX-TB-L2): the failed-token budget per IP of POST logout.
+            ->setArgument('$rateLimiter', new Reference(TaskApiRateLimiterInterface::class, ContainerInterface::NULL_ON_INVALID_REFERENCE)));
         $container->setAlias(TaskClientAuthenticator::class, 'nowo_task_board.client_api.authenticator');
         $container->setDefinition(TaskClientApiListener::class, (new Definition(TaskClientApiListener::class))
             ->setAutowired(true)
@@ -1262,6 +1264,7 @@ final class TaskBoardExtension extends Extension implements PrependExtensionInte
             ->setArgument('$access', new Reference(TaskBoardAccessCheckerInterface::class))
             ->setArgument('$resourceAccess', new Reference(TaskBoardResourceAccessChecker::class))
             ->setArgument('$tenantContext', new Reference(TaskBoardTenantContext::class, ContainerInterface::NULL_ON_INVALID_REFERENCE))
+            ->setArgument('$commentRepository', new Reference(TaskCommentRepositoryInterface::class, ContainerInterface::NULL_ON_INVALID_REFERENCE))
             ->addTag(self::AUDIT_KIT_TIMELINE_SOURCE_TAG));
     }
 

@@ -24,6 +24,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use RuntimeException;
+use SensitiveParameter;
 use stdClass;
 use Symfony\Component\HttpFoundation\Cookie;
 use Symfony\Component\HttpFoundation\Request;
@@ -220,7 +221,7 @@ final class TaskClientApiListenerTest extends TestCase
     public function testASignalWithAPrincipalThatIsNotASecurityUserIsA401(): void
     {
         $resolver = new class implements TaskClientPrincipalResolverInterface {
-            public function resolve(string $bearer, TaskClientRequest $request): ?TaskClientPrincipal
+            public function resolve(#[SensitiveParameter] string $bearer, TaskClientRequest $request): ?TaskClientPrincipal
             {
                 throw new TaskBoardModuleForbiddenException(new TaskClientPrincipal(new stdClass(), [TaskClientPrincipal::SCOPE_READ], 'tok-1'));
             }
@@ -260,7 +261,7 @@ final class TaskClientApiListenerTest extends TestCase
     private function resolver(): TaskClientPrincipalResolverInterface
     {
         return new class implements TaskClientPrincipalResolverInterface {
-            public function resolve(string $bearer, TaskClientRequest $request): ?TaskClientPrincipal
+            public function resolve(#[SensitiveParameter] string $bearer, TaskClientRequest $request): ?TaskClientPrincipal
             {
                 return null;
             }

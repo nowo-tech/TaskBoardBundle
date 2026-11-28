@@ -17,19 +17,21 @@ use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskChangeHistory;
 use Nowo\TaskBoardBundle\Entity\TaskComment;
 use Nowo\TaskBoardBundle\Enum\TaskChangeType;
+use Nowo\TaskBoardBundle\Provenance\WriteChannel;
+use Nowo\TaskBoardBundle\Repository\TaskCommentRepositoryInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
-use Nowo\TaskBoardBundle\Sync\People\SyncUser;
 use Nowo\TaskBoardBundle\Tenancy\TaskBoardTenantContext;
+use Stringable;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
 
-use function array_filter;
 use function array_map;
 use function array_slice;
-use function array_values;
+use function count;
 use function date_default_timezone_get;
 use function in_array;
+use function is_scalar;
 use function max;
 use function mb_strlen;
 use function min;
@@ -59,6 +61,10 @@ use function usort;
  * Both carry `actorId`, `channel` and `tokenLabel`; history rows `correlationId`. Comments have no correlation id: with a
  * correlation filter they give none. The payload holds the actor's name snapshot: treat it as personal data.
  *
+ * Rows are read as arrays (nothing enters the host's identity map, audit ZDX-TB-I5); comments only while the comments
+ * repository is wired (ZDX-TB-I4). At most {@see self::MAX_LIMIT} entries, so AuditKit's merger (500 + 1) sees its next
+ * page (ZDX-TB-L1).
+ *
  * Precision: both tables store whole seconds in the server's timezone. Cursors are compared there, and a cursor with a
  * fraction of a second (another source's) is treated as just after its whole second (as AuditKit's action log). Each
  * `occurredAt` is that whole second. Stateless (FrankenPHP worker mode).
@@ -77,8 +83,11 @@ final readonly class TaskTimelineSource implements TimelineSourceInterface
     /** Longest value given as `{from, to}` (characters); longer: `{changed, from_len, to_len}`. */
     public const VALUE_MAX = 500;
 
-    /** Most entries one call returns. */
-    public const MAX_LIMIT = 500;
+    /**
+     * Most entries one call returns (audit ZDX-TB-L1): above AuditKit's merger page (500) plus the one it asks for to know
+     * there is a next page.
+     */
+    public const MAX_LIMIT = 1000;
 
     private const HISTORY = 'history:';
 
@@ -90,6 +99,8 @@ final readonly class TaskTimelineSource implements TimelineSourceInterface
         private TaskBoardAccessCheckerInterface $access,
         private TaskBoardResourceAccessChecker $resourceAccess,
         private ?TaskBoardTenantContext $tenantContext = null,
+        // Audit ZDX-TB-I4: without the comments repository (comments off) the timeline lists no comment either.
+        private ?TaskCommentRepositoryInterface $commentRepository = null,
         private string $name = self::NAME,
     ) {
     }
@@ -104,10 +115,10 @@ final readonly class TaskTimelineSource implements TimelineSourceInterface
         [$types, $comments] = $this->kinds($criteria->kinds);
         $events             = [];
         if ($types !== []) {
-            $events = array_map($this->historyEvent(...), $this->history($task, $criteria, $after, $limit, $types));
+            $events = array_map(fn (array $row): TimelineEvent => $this->historyEvent($row, $task->getId()), $this->history($task, $criteria, $after, $limit, $types));
         }
-        if ($comments && $criteria->correlationId === null) {
-            $events = [...$events, ...array_map($this->commentEvent(...), $this->comments($task, $criteria, $after, $limit))];
+        if ($comments && $criteria->correlationId === null && $this->commentRepository instanceof TaskCommentRepositoryInterface) {
+            $events = [...$events, ...array_map(fn (array $row): TimelineEvent => $this->commentEvent($row, $task->getId()), $this->comments($task, $criteria, $after, $limit))];
         }
         usort($events, static fn (TimelineEvent $a, TimelineEvent $b): int => [$b->occurredAt, $b->id] <=> [$a->occurredAt, $a->id]);
 
@@ -152,45 +163,80 @@ final readonly class TaskTimelineSource implements TimelineSourceInterface
     }
 
     /**
+     * The history rows as arrays (audit ZDX-TB-I5: nothing enters the host's identity map). With a correlation filter
+     * the column is compared case-insensitively in SQL and exactly in PHP; rows the exact check drops never take a slot
+     * (audit ZDX-TB-L1): the next keyset batch is read until `$limit` rows are kept or the task has no more.
+     *
      * @param list<TaskChangeType> $types
      *
-     * @return list<TaskChangeHistory>
+     * @return list<array<string, mixed>>
      */
     private function history(Task $task, TimelineCriteria $criteria, ?TimelineCursor $after, int $limit, array $types): array
     {
-        $query = $this->entityManager->createQueryBuilder()
-            ->select('h')
-            ->from(TaskChangeHistory::class, 'h')
-            ->andWhere('h.task = :task')
-            ->setParameter('task', $task->getId())
-            ->andWhere('h.changeType IN (:types)')
-            ->setParameter('types', array_map(static fn (TaskChangeType $type): string => $type->value, $types));
-        if ($criteria->correlationId !== null) {
-            $query->andWhere('h.correlationId = :correlation')->setParameter('correlation', $criteria->correlationId);
-        }
-        $this->bound($query, 'h', self::HISTORY, $criteria, $after);
-        /** @var list<TaskChangeHistory> $rows */
-        $rows = $query->orderBy('h.createdAt', 'DESC')->addOrderBy('h.id', 'DESC')->setMaxResults($limit)->getQuery()->getResult();
+        $kept = [];
+        $last = null;
+        do {
+            $query = $this->select('h', TaskChangeHistory::class, ['h.changeType AS changeType', 'h.oldValue AS oldValue', 'h.newValue AS newValue', 'h.context AS context', 'h.cause AS cause', 'h.userName AS actorName', 'h.correlationId AS correlationId'], 'user', $task)
+                ->andWhere('h.changeType IN (:types)')
+                ->setParameter('types', array_map(static fn (TaskChangeType $type): string => $type->value, $types));
+            if ($criteria->correlationId !== null) {
+                // @igor-ignore - A query builder created by this call (select()), not a shared service.
+                $query->andWhere('LOWER(h.correlationId) = LOWER(:correlation)')->setParameter('correlation', $criteria->correlationId);
+            }
+            $this->bound($query, 'h', self::HISTORY, $criteria, $after);
+            if ($last !== null) {
+                // @igor-ignore - A query builder created by this call (select()), not a shared service.
+                $query->andWhere('(h.createdAt < :lastAt OR (h.createdAt = :lastAt AND h.id < :lastId))')
+                    ->setParameter('lastAt', $last['createdAt'], 'datetime_immutable')
+                    ->setParameter('lastId', $last['id']);
+            }
+            /** @var list<array<string, mixed>> $batch */
+            // @igor-ignore - A query builder created by this call (select()), not a shared service.
+            $batch = $query->setMaxResults($limit)->getQuery()->getArrayResult();
+            foreach ($batch as $row) {
+                if ($criteria->correlationId === null || $row['correlationId'] === $criteria->correlationId) {
+                    $kept[] = $row;
+                }
+                $last = $row;
+            }
+        } while (count($batch) === $limit && count($kept) < $limit);
 
-        // Defence in depth: a case-insensitive collation never widens a correlation filter.
-        return $criteria->correlationId === null ? $rows : array_values(array_filter($rows, static fn (TaskChangeHistory $row): bool => $row->getCorrelationId() === $criteria->correlationId));
+        return array_slice($kept, 0, $limit);
     }
 
     /**
-     * @return list<TaskComment>
+     * The comments as arrays (audit ZDX-TB-I5).
+     *
+     * @return list<array<string, mixed>>
      */
     private function comments(Task $task, TimelineCriteria $criteria, ?TimelineCursor $after, int $limit): array
     {
-        $query = $this->entityManager->createQueryBuilder()
-            ->select('c')
-            ->from(TaskComment::class, 'c')
-            ->andWhere('c.task = :task')
-            ->setParameter('task', $task->getId());
+        $query = $this->select('c', TaskComment::class, ['c.authorName AS actorName', 'c.deletedAt AS deletedAt', 'c.editedAt AS editedAt'], 'author', $task);
         $this->bound($query, 'c', self::COMMENT, $criteria, $after);
-        /** @var list<TaskComment> $rows */
-        $rows = $query->orderBy('c.createdAt', 'DESC')->addOrderBy('c.id', 'DESC')->setMaxResults($limit)->getQuery()->getResult();
+        /** @var list<array<string, mixed>> $rows */
+        $rows = $query->setMaxResults($limit)->getQuery()->getArrayResult();
 
         return $rows;
+    }
+
+    /**
+     * The scalar columns of one table for the task, newest first. The actor is the user column's value: the association's
+     * id, or the user reference itself with `database.user_reference: id`.
+     *
+     * @param class-string $class
+     * @param list<string> $columns
+     */
+    private function select(string $alias, string $class, array $columns, string $userField, Task $task): QueryBuilder
+    {
+        $user = $this->entityManager->getClassMetadata($class)->hasAssociation($userField) ? 'IDENTITY(' . $alias . '.' . $userField . ')' : $alias . '.' . $userField;
+
+        return $this->entityManager->createQueryBuilder()
+            ->select([$alias . '.id AS id', $alias . '.createdAt AS createdAt', $alias . '.channel AS channel', $alias . '.actorLabel AS actorLabel', $user . ' AS actorId', ...$columns])
+            ->from($class, $alias)
+            ->andWhere($alias . '.task = :task')
+            ->setParameter('task', $task->getId())
+            ->orderBy($alias . '.createdAt', 'DESC')
+            ->addOrderBy($alias . '.id', 'DESC');
     }
 
     /**
@@ -236,42 +282,59 @@ final readonly class TaskTimelineSource implements TimelineSourceInterface
         $query->andWhere($alias . '.createdAt ' . ($order > 0 ? '<=' : '<') . ' :at');
     }
 
-    private function historyEvent(TaskChangeHistory $row): TimelineEvent
+    /**
+     * @param array<string, mixed> $row
+     */
+    private function historyEvent(array $row, string $taskId): TimelineEvent
     {
-        $type  = $row->getChangeType()->value;
-        $user  = $row->getUser();
-        $old   = $row->getOldValue();
-        $new   = $row->getNewValue();
-        $plain = $row->getChangeType() !== TaskChangeType::Description && mb_strlen((string) $old) <= self::VALUE_MAX && mb_strlen((string) $new) <= self::VALUE_MAX;
+        $type  = $this->text($row['changeType'] instanceof TaskChangeType ? $row['changeType']->value : $row['changeType']) ?? '';
+        $old   = $this->text($row['oldValue']);
+        $new   = $this->text($row['newValue']);
+        $plain = $type !== TaskChangeType::Description->value && mb_strlen((string) $old) <= self::VALUE_MAX && mb_strlen((string) $new) <= self::VALUE_MAX;
 
         return new TimelineEvent(
             source: $this->name,
-            id: self::HISTORY . $row->getId(),
-            occurredAt: $this->second($row->getCreatedAt()),
+            id: self::HISTORY . $this->text($row['id']),
+            occurredAt: $this->second($this->date($row['createdAt'])),
             kind: self::KIND_PREFIX . $type,
-            actorId: $user === null ? null : SyncUser::id($user),
-            channel: $row->getChannel()?->value,
-            tokenLabel: $row->getActorLabel(),
-            correlationId: $row->getCorrelationId(),
+            actorId: $this->text($row['actorId']),
+            channel: WriteChannel::tryFrom((string) $this->text($row['channel']))?->value,
+            tokenLabel: $this->text($row['actorLabel']),
+            correlationId: $this->text($row['correlationId']),
             changes: [$type => $plain ? ['from' => $old, 'to' => $new] : ['changed' => true, 'from_len' => mb_strlen((string) $old), 'to_len' => mb_strlen((string) $new)]],
-            payload: ['task_id' => $row->getTask()->getId(), 'actor_name' => $row->getUserName(), 'context' => $row->getContext(), 'cause' => $row->getCause()],
+            payload: ['task_id' => $taskId, 'actor_name' => $this->text($row['actorName']), 'context' => $this->text($row['context']), 'cause' => $this->text($row['cause'])],
         );
     }
 
-    private function commentEvent(TaskComment $comment): TimelineEvent
+    /**
+     * @param array<string, mixed> $row
+     */
+    private function commentEvent(array $row, string $taskId): TimelineEvent
     {
-        $author = $comment->getAuthor();
+        $id = (string) $this->text($row['id']);
 
         return new TimelineEvent(
             source: $this->name,
-            id: self::COMMENT . $comment->getId(),
-            occurredAt: $this->second($comment->getCreatedAt()),
+            id: self::COMMENT . $id,
+            occurredAt: $this->second($this->date($row['createdAt'])),
             kind: self::KIND_COMMENT,
-            actorId: $author === null ? null : SyncUser::id($author),
-            channel: $comment->getChannel()?->value,
-            tokenLabel: $comment->getActorLabel(),
-            payload: ['task_id' => $comment->getTask()->getId(), 'comment_id' => $comment->getId(), 'actor_name' => $comment->getAuthorName(), 'deleted' => $comment->isDeleted(), 'edited' => $comment->getEditedAt() instanceof DateTimeImmutable],
+            actorId: $this->text($row['actorId']),
+            channel: WriteChannel::tryFrom((string) $this->text($row['channel']))?->value,
+            tokenLabel: $this->text($row['actorLabel']),
+            payload: ['task_id' => $taskId, 'comment_id' => $id, 'actor_name' => $this->text($row['actorName']), 'deleted' => $row['deletedAt'] instanceof DateTimeImmutable, 'edited' => $row['editedAt'] instanceof DateTimeImmutable],
         );
+    }
+
+    /** A scalar or Stringable column value (a user reference with `database.user_reference: id`) as a string. */
+    private function text(mixed $value): ?string
+    {
+        return is_scalar($value) || $value instanceof Stringable ? (string) $value : null;
+    }
+
+    /** The `createdAt` column (hydrated as a `DateTimeImmutable`; the epoch for anything else). */
+    private function date(mixed $value): DateTimeImmutable
+    {
+        return $value instanceof DateTimeImmutable ? $value : new DateTimeImmutable('@0');
     }
 
     /** A bound of the criteria in the server's timezone (where the rows are stored). */

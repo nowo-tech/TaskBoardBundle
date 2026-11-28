@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\ClientApi\Contract;
 use Nowo\TaskBoardBundle\ClientApi\Exception\TaskBoardModuleForbiddenException;
 use Nowo\TaskBoardBundle\ClientApi\Model\TaskClientPrincipal;
 use Nowo\TaskBoardBundle\ClientApi\Model\TaskClientRequest;
+use SensitiveParameter;
 
 /**
  * Since 3.4.0 (client API v1, Q-BD-22): who a Bearer token of the client API belongs to. TaskBoard issues and stores no
@@ -28,5 +29,5 @@ use Nowo\TaskBoardBundle\ClientApi\Model\TaskClientRequest;
  */
 interface TaskClientPrincipalResolverInterface
 {
-    public function resolve(string $bearer, TaskClientRequest $request): ?TaskClientPrincipal;
+    public function resolve(#[SensitiveParameter] string $bearer, TaskClientRequest $request): ?TaskClientPrincipal;
 }

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\ClientApi\Security;
 
+use Nowo\TaskBoardBundle\Api\Hook\TaskApiRateLimiterInterface;
+use Nowo\TaskBoardBundle\Api\Value\TaskApiRateLimitState;
 use Nowo\TaskBoardBundle\ClientApi\Contract\TaskClientPrincipalResolverInterface;
 use Nowo\TaskBoardBundle\ClientApi\Exception\TaskBoardModuleForbiddenException;
 use Nowo\TaskBoardBundle\ClientApi\Model\TaskClientPrincipal;
@@ -11,6 +13,8 @@ use Nowo\TaskBoardBundle\ClientApi\Model\TaskClientRequest;
 use Nowo\TaskBoardBundle\ClientApi\TaskClientApiException;
 use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
 use Nowo\TaskBoardBundle\Event\TaskClientApiDeniedEvent;
+use Psr\Clock\ClockInterface;
+use Symfony\Component\Clock\NativeClock;
 use Symfony\Component\HttpFoundation\IpUtils;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -27,6 +31,7 @@ use Symfony\Component\Security\Http\EntryPoint\AuthenticationEntryPointInterface
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 use function filter_var;
+use function max;
 use function str_contains;
 use function str_starts_with;
 use function strlen;
@@ -49,7 +54,8 @@ use const FILTER_VALIDATE_IP;
  * attributes ({@see self::ATTRIBUTE}). Anything else (no token, unknown, expired, revoked, another family, a user that is
  * not a `UserInterface`) answers the API's own `401 invalid_token` with `WWW-Authenticate: Bearer`, never a redirect,
  * and dispatches `TaskClientApiDeniedEvent`; since 3.7.0, on `POST logout` a token the resolver refuses answers `204`
- * (nothing to revoke, no event), and a request without a Bearer token still `401`. Cookies and sessions are never read.
+ * (nothing to revoke; counted as a failed token of the IP and reported as `logout_unknown_token`), an IP whose
+ * failed-token budget is spent gets `429 rate_limited`, and a request without a Bearer token still `401`. Cookies and sessions are never read.
  * Stateless: nothing of a request is kept on the service.
  */
 final class TaskClientAuthenticator extends AbstractAuthenticator implements AuthenticationEntryPointInterface
@@ -69,11 +75,20 @@ final class TaskClientAuthenticator extends AbstractAuthenticator implements Aut
     /** Since 3.7.0: the message of a logout whose token the resolver refused (answered 204, nothing revoked). */
     private const NOTHING_TO_REVOKE = 'nothing_to_revoke';
 
+    /** Since 3.7.0 (audit ZDX-TB-L2): the message of a logout from an IP whose failed-token budget is spent (429). */
+    private const LOGOUT_RATE_LIMITED = 'logout_rate_limited';
+
+    /** Since 3.7.0 (audit ZDX-TB-L2): the denied-event reason of a logout with a token the resolver refused. */
+    public const REASON_LOGOUT_UNKNOWN_TOKEN = 'logout_unknown_token';
+
     public function __construct(
         private readonly TaskClientPrincipalResolverInterface $resolver,
         private readonly string $v1Prefix,
         private readonly string $contextHeader = 'X-Beacon-Context',
         private readonly ?EventDispatcherInterface $events = null,
+        // Since 3.7.0 (audit ZDX-TB-L2): the failed-token budget per IP of `POST logout` (`api.hooks.rate_limiter`).
+        private readonly ?TaskApiRateLimiterInterface $rateLimiter = null,
+        private readonly ClockInterface $clock = new NativeClock(),
     ) {
     }
 
@@ -87,6 +102,16 @@ final class TaskClientAuthenticator extends AbstractAuthenticator implements Aut
         $bearer = self::bearer($request);
         if ($bearer === null) {
             throw new CustomUserMessageAuthenticationException('invalid_token');
+        }
+        $logout = $request->attributes->get(TaskClientApiListener::ROUTE_SCOPE) === TaskClientApiListener::NO_SCOPE;
+        // 3.7.0 (audit ZDX-TB-L2): an IP that spent its failed-token budget may not drive the resolver through logout.
+        if ($logout && $this->rateLimiter instanceof TaskApiRateLimiterInterface) {
+            $state = $this->rateLimiter->failedTokenState((string) $request->getClientIp());
+            if (!$state->accepted) {
+                $request->attributes->set(self::LOGOUT_RATE_LIMITED, $state);
+
+                throw new CustomUserMessageAuthenticationException(self::LOGOUT_RATE_LIMITED);
+            }
         }
         $header = $request->headers->get($this->contextHeader);
         try {
@@ -103,7 +128,7 @@ final class TaskClientAuthenticator extends AbstractAuthenticator implements Aut
         }
         if (!$principal instanceof TaskClientPrincipal || !$principal->user instanceof UserInterface) {
             // 3.7.0: a logout with an unknown, expired or revoked token answers the same 204 as a real one (never an oracle).
-            throw new CustomUserMessageAuthenticationException($request->attributes->get(TaskClientApiListener::ROUTE_SCOPE) === TaskClientApiListener::NO_SCOPE ? self::NOTHING_TO_REVOKE : 'invalid_token');
+            throw new CustomUserMessageAuthenticationException($logout ? self::NOTHING_TO_REVOKE : 'invalid_token');
         }
         $user = $principal->user;
         $request->attributes->set(self::ATTRIBUTE, $principal);
@@ -121,11 +146,24 @@ final class TaskClientAuthenticator extends AbstractAuthenticator implements Aut
     {
         $request->attributes->remove(self::ATTRIBUTE);
         $request->attributes->remove(self::MODULE_FORBIDDEN);
+        $ipPrefix = self::ipPrefix($request->getClientIp());
+        $state    = $request->attributes->get(self::LOGOUT_RATE_LIMITED);
+        if ($state instanceof TaskApiRateLimitState) {
+            $request->attributes->remove(self::LOGOUT_RATE_LIMITED);
+            $this->events?->dispatch(new TaskClientApiDeniedEvent('rate_limited', null, null, $ipPrefix), TaskBoardEvents::CLIENT_API_DENIED);
+            $refusal = new TaskClientApiException('rate_limited', Response::HTTP_TOO_MANY_REQUESTS, [], ['Retry-After' => (string) max(1, $state->resetAt - $this->clock->now()->getTimestamp())]);
+
+            return new JsonResponse($refusal->body(), $refusal->status, $refusal->headers + ['Cache-Control' => 'no-store, private']);
+        }
         if ($exception->getMessageKey() === self::NOTHING_TO_REVOKE) {
-            // 3.7.0: nothing to sign out; no refusal event either (there is no principal to name).
+            // 3.7.0: nothing to sign out, the same 204; the attempt is counted against the IP and reported (audit ZDX-TB-L2).
+            // @igor-ignore - Failed-token counter is meant to persist across requests (host rate limiter storage).
+            $this->rateLimiter?->registerFailedToken((string) $request->getClientIp());
+            $this->events?->dispatch(new TaskClientApiDeniedEvent(self::REASON_LOGOUT_UNKNOWN_TOKEN, null, null, $ipPrefix), TaskBoardEvents::CLIENT_API_DENIED);
+
             return self::signedOut();
         }
-        $this->events?->dispatch(new TaskClientApiDeniedEvent('invalid_token', null, null, self::ipPrefix($request->getClientIp())), TaskBoardEvents::CLIENT_API_DENIED);
+        $this->events?->dispatch(new TaskClientApiDeniedEvent('invalid_token', null, null, $ipPrefix), TaskBoardEvents::CLIENT_API_DENIED);
 
         return self::invalidToken();
     }

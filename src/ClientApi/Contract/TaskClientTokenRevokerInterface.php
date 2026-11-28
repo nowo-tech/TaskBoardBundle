@@ -7,6 +7,7 @@ namespace Nowo\TaskBoardBundle\ClientApi\Contract;
 use Nowo\TaskBoardBundle\ClientApi\Model\TaskClientPrincipal;
 use Nowo\TaskBoardBundle\ClientApi\Model\TaskClientRequest;
 use Nowo\TaskBoardBundle\Event\TaskClientLoggedOutEvent;
+use SensitiveParameter;
 
 /**
  * Since 3.7.0 (client API v1, Beacon Desktop BDA13-L2, `POST <prefix>/v1/logout`): revokes the one Bearer token a client
@@ -32,7 +33,8 @@ use Nowo\TaskBoardBundle\Event\TaskClientLoggedOutEvent;
  * A token the resolver refuses is never revoked by logout (the answer is the same 204). So the resolver should refuse
  * only for reasons of the token itself (unknown, expired, revoked, another client family), or the host revokes a
  * person's client tokens when it disables the account; a token whose person lost the Tasks permission
- * (`TaskBoardModuleForbiddenException`) is revoked like any other.
+ * (`TaskBoardModuleForbiddenException`) is revoked like any other. A firewall `user_checker` that refuses a disabled
+ * account makes logout answer 401 before this is called: revoke the person's client tokens when you disable it.
  */
 interface TaskClientTokenRevokerInterface
 {
@@ -43,5 +45,5 @@ interface TaskClientTokenRevokerInterface
      * @param TaskClientPrincipal $principal what resolve() answered for it in this request
      * @param TaskClientRequest $request the request (no header, cookie or body; the context header is not passed)
      */
-    public function revoke(string $bearer, TaskClientPrincipal $principal, TaskClientRequest $request): void;
+    public function revoke(#[SensitiveParameter] string $bearer, TaskClientPrincipal $principal, TaskClientRequest $request): void;
 }

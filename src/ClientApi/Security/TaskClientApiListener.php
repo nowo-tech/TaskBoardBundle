@@ -67,7 +67,7 @@ use function strlen;
  * 5. (3.5, audit ZDF-L1) the person's budget (`api.hooks.rate_limiter`, shared with their personal tokens) is consumed
  *    right after step 1, before steps 2 to 4 — `429 rate_limited`.
  *
- * `POST logout` (3.7.0, {@see self::NO_SCOPE}) runs step 1 only.
+ * `POST logout` (3.7.0, {@see self::NO_SCOPE}) runs step 1 and a budget of its own ({@see self::LOGOUT_KEY_PREFIX}).
  *
  * Then the call holds a `TaskApiPrincipal` (level `Read` for `task-board:read`, `Tasks` with `task-board:write`, never
  * `Full` or `My tasks`; `where` from the context; channel `app`), so the existing guard and operations decide everything
@@ -84,6 +84,12 @@ final readonly class TaskClientApiListener implements EventSubscriberInterface
      * up, and its read traffic can never starve its sign-out); only step 1 runs.
      */
     public const NO_SCOPE = '';
+
+    /**
+     * Since 3.7.0 (audit ZDX-TB-L2): `POST logout` spends `api.hooks.rate_limiter` under the token id with this prefix
+     * (`logout:<tokenId>`), a budget apart from the token's other requests.
+     */
+    public const LOGOUT_KEY_PREFIX = 'logout:';
 
     private const RATE_LIMIT = '_nowo_task_board_client_rate_limit';
 
@@ -126,7 +132,9 @@ final readonly class TaskClientApiListener implements EventSubscriberInterface
         }
         try {
             if ($scope === self::NO_SCOPE) {
-                $this->client($request);
+                // 3.7.0 (audit ZDX-TB-L2): a logout budget of the token's own, so its reads never starve its sign-out.
+                $client = $this->client($request);
+                $this->spend($request, $client, TaskClientAuthenticator::ipPrefix($request->getClientIp()), self::LOGOUT_KEY_PREFIX);
 
                 return;
             }
@@ -231,10 +239,10 @@ final readonly class TaskClientApiListener implements EventSubscriberInterface
      *
      * @throws TaskClientApiException 429 when spent
      */
-    private function spend(Request $request, TaskClientPrincipal $client, ?string $ipPrefix): void
+    private function spend(Request $request, TaskClientPrincipal $client, ?string $ipPrefix, string $keyPrefix = ''): void
     {
         $level = $client->hasScope(TaskClientPrincipal::SCOPE_WRITE) ? TaskApiLevel::Tasks : TaskApiLevel::Read;
-        $state = $this->rateLimiter->consume(new TaskApiPrincipal($client->user, $level, TaskApiWhere::limitedTo([], []), $client->tokenId, $client->tokenName !== '' ? $client->tokenName : 'app', ColumnTransitionVia::APP));
+        $state = $this->rateLimiter->consume(new TaskApiPrincipal($client->user, $level, TaskApiWhere::limitedTo([], []), $keyPrefix . $client->tokenId, $client->tokenName !== '' ? $client->tokenName : 'app', ColumnTransitionVia::APP));
         $request->attributes->set(self::RATE_LIMIT, $state);
         if (!$state->accepted) {
             $this->deny('rate_limited', Response::HTTP_TOO_MANY_REQUESTS, $client, $ipPrefix, ['Retry-After' => (string) max(1, $state->resetAt - $this->clock->now()->getTimestamp())]);

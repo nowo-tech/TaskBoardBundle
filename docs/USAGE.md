@@ -1924,6 +1924,13 @@ handler, a host command — wraps its own call:
 $scope->run(WriteChannel::Mcp, fn () => $operations->update($principal, $taskId, $input)); // Provenance\WriteChannelScope
 ```
 
+Writes made outside the wrapped call carry no declared channel (audit ZDX-TB-I3): async Messenger handlers (a sync
+handler inherits its caller's), `StreamedResponse` callbacks and `kernel.view` / `kernel.response` /
+`kernel.exception` / `kernel.terminate` listeners; wrap them with `run()` if they write tasks. Column follow-ups and
+board moves of an import or sync now report `cli` (before: the `web` fallback) to a host `ColumnTransitionPolicyInterface`;
+the built-in policies treat only `api` and `mcp` as machine channels, so their answers are unchanged. A question answered
+inside a `cli` scope stores `via = cli` (`TaskQuestionAnswer::VIAS`, Task API `via` enum).
+
 The scope is call-scoped, never global: the channel is popped when the call returns or throws, calls nest (the
 innermost wins), and `kernel.reset` plus the request / message / command boundaries clear it (FrankenPHP worker mode).
 The host's provider still wins whole (channel and label) whenever it answers.
@@ -1959,9 +1966,17 @@ $page = $timelineMerger->page(new TimelineSubject('task', $taskId), new Timeline
   Treat payloads as personal data (`actor_name`).
 - Filters: `kinds` (`[]` matches nothing), `since` / `until` (inclusive), `correlationId` (byte for byte; comments have
   no correlation id, so a correlation filter returns history rows only).
+- Visibility follows the **web task page** (audit ZDX-TB-I4): history rows show what its activity stream shows, including
+  the host's label of host-object links (`link_*` rows) — the client API's `link_visibility` port is not applied. Do not
+  serve this timeline through a client surface without filtering those rows. Comments are listed only while the comments
+  repository is wired.
+- Rows are read as arrays (nothing enters the entity manager's identity map; ZDX-TB-I5). With a correlation filter the
+  column is compared case-insensitively in SQL and exactly in PHP; look-alike rows never take a slot (the next keyset
+  batch is read), and a call returns up to 1000 entries, so AuditKit's merger (500 + 1) always learns there is a next page
+  (ZDX-TB-L1).
 - Order and cursor: newest first, ties by id descending. Rows are stored at whole seconds in the server's timezone: the
   source compares a cursor there and treats a cursor with a fraction of a second (another source's) as just after its
-  whole second, per `TimelineCursor::boundFor()`; every `occurredAt` is a whole second. At most 500 entries per call.
+  whole second, per `TimelineCursor::boundFor()`; every `occurredAt` is a whole second. At most 1000 entries per call.
   Stateless (worker mode).
 
 **Last write, together.** The three last-write columns of a task or comment (`updated_by_id`, `channel`,
