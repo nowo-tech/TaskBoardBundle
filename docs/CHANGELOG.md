@@ -141,6 +141,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Correlation id on task history (Beacon spec 235 T003 / FR-004).** `TaskChangeHistory` gets a nullable
+  `correlation_id` (`VARCHAR(64)`, indexed `task_board_change_history_correlation_idx`; `getCorrelationId()`), filled
+  from the host's `Nowo\CorrelationContract\CorrelationIdProviderInterface::current()` (nowo-tech/correlation-contract
+  ^0.1, new dependency), autowired when the host registers one; `NULL` otherwise. Not personal data: kept by an erasure.
+  Schema change in UPGRADING.
+- **Declared write channel.** When the host's `write_provenance_provider` says nothing, history rows, tasks and comments
+  store the channel the bundle's entry point declares: board pages `web`, Task API writes `api`, client API `app`,
+  import / sync commands `cli` (new `WriteChannel::Cli`). Call-scoped `Provenance\WriteChannelScope` (popped in
+  `finally`, `kernel.reset` and the unit-of-work boundaries clear it), `#[Provenance\Attribute\AsWriteChannel]` on
+  controllers (applied by `WriteChannelControllerListener`), `ScopedWriteProvenance` (the host's provider first). Every
+  value fits the existing 8-character columns. Translations `task_board.history.channel.cli` (7 locales).
+- **Client API `POST logout` (Beacon Desktop BDA13-L2).** `nowo_task_board_client_v1_logout`: `204` always when a Bearer
+  token is sent (never an oracle), the host's new optional `client_api.token_revoker`
+  (`ClientApi\Contract\TaskClientTokenRevokerInterface`) revokes that token only, then `TaskClientLoggedOutEvent`
+  (`TaskBoardEvents::CLIENT_API_LOGGED_OUT`, ids only). No scope, account, context or budget check; a failing revoker is
+  an error answer (retry). `me.features.serverLogout`. OpenAPI document updated (`ClientApiOpenApiTest`: 20 routes).
+- **AuditKit timeline source (Beacon spec 235 T003).** `Bridge\AuditKit\TaskTimelineSource` (source `task_board`,
+  subject type `task`) gives a task's history rows (`task.<change type>`, with `changes`, channel, token label and
+  correlation id) and comments (`comment.added`, no body) to AuditKit 2.2's timeline merger. Soft dependency: registered
+  and tagged `nowo_audit_kit.timeline_source` only when `Nowo\AuditKitBundle\Timeline\TimelineSourceInterface` exists
+  (composer `suggest` nowo-tech/audit-kit-bundle ^2.2). The signed-in user must pass the task page's checks (task board
+  access, the request's tenant, `canViewTask()`); other subject types (`user`, `scope`, `correlation`) give nothing, so
+  it never reads across tasks or tenants. Keyset per `TimelineCursor::boundFor()` at whole seconds in the server's
+  timezone; `TimelineCriteria` kinds, dates and correlation id (byte for byte; comments have none). Audit ZDX: up to
+  1000 entries per call so the merger's 500 + 1 sees its next page, look-alike correlation ids never take a slot
+  (keyset refill), rows read as arrays (nothing in the identity map), comments only with the comments repository.
+- **Audit ZDX follow-ups.** Logout budgets as ChatKit's: per-IP failed-token budget before the resolver (`429`), a refused
+  token counted and reported (`TaskClientApiDeniedEvent` reason `logout_unknown_token`, still `204`), a per-token logout
+  budget (`logout:<tokenId>`, `429` + `Retry-After`). `cli` added to the Task API OpenAPI `channel` and `via` enums and to
+  `TaskQuestionAnswer::VIAS`. `#[SensitiveParameter]` on `$bearer` of `TaskClientPrincipalResolverInterface::resolve()`
+  and `TaskClientTokenRevokerInterface::revoke()` (no BC break for implementers).
+
+
 ## [3.6.0] - 2026-11-27
 
 ### Changed

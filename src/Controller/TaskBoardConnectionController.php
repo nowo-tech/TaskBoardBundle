@@ -16,6 +16,8 @@ use Nowo\TaskBoardBundle\Form\ContainerLevelFormType;
 use Nowo\TaskBoardBundle\Form\CsrfActionType;
 use Nowo\TaskBoardBundle\Port\Internal\OAuthConnectionStarterInterface;
 use Nowo\TaskBoardBundle\Port\Internal\ProviderCredentialResolverInterface;
+use Nowo\TaskBoardBundle\Provenance\Attribute\AsWriteChannel;
+use Nowo\TaskBoardBundle\Provenance\WriteChannel;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
@@ -111,6 +113,7 @@ use function usort;
  * refresh, progress, history, unlink. Only users who may manage the board's connection reach it; everyone else gets
  * 404. Every action is a POST with its own CSRF token; the progress endpoint is a read-only GET.
  */
+#[AsWriteChannel(WriteChannel::Web)]
 final class TaskBoardConnectionController extends AbstractController
 {
     private const CONTAINER_ID = '/^[A-Za-z0-9_:-]{1,128}$/D';

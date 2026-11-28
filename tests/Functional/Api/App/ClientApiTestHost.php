@@ -15,6 +15,7 @@ use Nowo\TaskBoardBundle\ClientApi\Contract\TaskClientFileResolverInterface;
 use Nowo\TaskBoardBundle\ClientApi\Contract\TaskClientPrincipalResolverInterface;
 use Nowo\TaskBoardBundle\ClientApi\Contract\TaskClientReferenceResolverInterface;
 use Nowo\TaskBoardBundle\ClientApi\Contract\TaskClientSourceLinkInterface;
+use Nowo\TaskBoardBundle\ClientApi\Contract\TaskClientTokenRevokerInterface;
 use Nowo\TaskBoardBundle\ClientApi\Exception\TaskBoardModuleForbiddenException;
 use Nowo\TaskBoardBundle\ClientApi\Model\TaskClientContext;
 use Nowo\TaskBoardBundle\ClientApi\Model\TaskClientPrincipal;
@@ -25,6 +26,7 @@ use Nowo\TaskBoardBundle\ClientApi\Model\TaskClientSourceLink;
 use Nowo\TaskBoardBundle\Link\TaskObjectLinkVisibilityInterface;
 use Nowo\TaskBoardBundle\Tests\Functional\App\Entity\AppUser;
 use RuntimeException;
+use SensitiveParameter;
 
 use function array_keys;
 use function in_array;
@@ -33,7 +35,7 @@ use function in_array;
  * Since 3.4.0: the host side of the client API in the tests — one scriptable object behind every client port, with
  * static state a test sets before the kernel handles the request (as {@see ApiTestHost}).
  */
-final class ClientApiTestHost implements TaskApiIdempotencyStoreInterface, TaskClientPrincipalResolverInterface, TaskClientContextPolicyInterface, TaskClientReferenceResolverInterface, TaskObjectLinkVisibilityInterface, TaskClientFileResolverInterface, TaskClientSourceLinkInterface
+final class ClientApiTestHost implements TaskApiIdempotencyStoreInterface, TaskClientPrincipalResolverInterface, TaskClientContextPolicyInterface, TaskClientReferenceResolverInterface, TaskObjectLinkVisibilityInterface, TaskClientFileResolverInterface, TaskClientSourceLinkInterface, TaskClientTokenRevokerInterface
 {
     /** @var array<string, array{email: string, scopes: list<string>, id: string, context?: string|null, forbidden?: bool}> by bearer */
     public static array $tokens = [];
@@ -64,6 +66,12 @@ final class ClientApiTestHost implements TaskApiIdempotencyStoreInterface, TaskC
 
     public static bool $completeFails = false;
 
+    /** @var list<array{0: string, 1: string, 2: string|null}> since 3.7.0: bearer, principal token id and context header of each revoke */
+    public static array $revoked = [];
+
+    /** Since 3.7.0: the next revoke throws (a transient failure). */
+    public static bool $revokeFails = false;
+
     /** @var list<array{0: int, 1: string}> status and body of each completed answer */
     public static array $completed = [];
 
@@ -84,9 +92,11 @@ final class ClientApiTestHost implements TaskApiIdempotencyStoreInterface, TaskC
         self::$files         = [];
         self::$sources       = [];
         self::$resolved      = [];
+        self::$revoked       = [];
+        self::$revokeFails   = false;
     }
 
-    public function resolve(string $bearer, TaskClientRequest $request): ?TaskClientPrincipal
+    public function resolve(#[SensitiveParameter] string $bearer, TaskClientRequest $request): ?TaskClientPrincipal
     {
         self::$resolved[] = $bearer;
         $token            = self::$tokens[$bearer] ?? null;
@@ -104,6 +114,16 @@ final class ClientApiTestHost implements TaskApiIdempotencyStoreInterface, TaskC
         }
 
         return $principal;
+    }
+
+    /** Since 3.7.0: revokes this bearer only (idempotent: an unknown one is a no-op). */
+    public function revoke(#[SensitiveParameter] string $bearer, TaskClientPrincipal $principal, TaskClientRequest $request): void
+    {
+        if (self::$revokeFails) {
+            throw new RuntimeException('Token store unavailable.');
+        }
+        self::$revoked[] = [$bearer, $principal->tokenId, $request->contextHeader];
+        unset(self::$tokens[$bearer]);
     }
 
     public function contextsFor(TaskClientPrincipal $principal): array

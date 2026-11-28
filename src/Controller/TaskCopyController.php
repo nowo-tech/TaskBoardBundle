@@ -18,6 +18,8 @@ use Nowo\TaskBoardBundle\Move\TaskMovePlan;
 use Nowo\TaskBoardBundle\Move\TaskMovePlanner;
 use Nowo\TaskBoardBundle\Move\TaskMover;
 use Nowo\TaskBoardBundle\Port\Internal\TaskBoardTargetsInterface;
+use Nowo\TaskBoardBundle\Provenance\Attribute\AsWriteChannel;
+use Nowo\TaskBoardBundle\Provenance\WriteChannel;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
@@ -54,6 +56,7 @@ use function is_string;
  * Access: the source task needs `canEditTask()` and its board `canEditBoard()`; the target must be one of
  * {@see TaskBoardTargetsInterface::targets()}, otherwise 404.
  */
+#[AsWriteChannel(WriteChannel::Web)]
 final class TaskCopyController extends AbstractController
 {
     public const MOVE_TOKEN = 'task_board_task_move_board';

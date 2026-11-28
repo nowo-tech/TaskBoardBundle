@@ -67,6 +67,8 @@ use function strlen;
  * 5. (3.5, audit ZDF-L1) the person's budget (`api.hooks.rate_limiter`, shared with their personal tokens) is consumed
  *    right after step 1, before steps 2 to 4 — `429 rate_limited`.
  *
+ * `POST logout` (3.7.0, {@see self::NO_SCOPE}) runs step 1 and a budget of its own ({@see self::LOGOUT_KEY_PREFIX}).
+ *
  * Then the call holds a `TaskApiPrincipal` (level `Read` for `task-board:read`, `Tasks` with `task-board:write`, never
  * `Full` or `My tasks`; `where` from the context; channel `app`), so the existing guard and operations decide everything
  * else. Every refusal from step 2 on dispatches `TaskClientApiDeniedEvent` (ids and codes). Answers are
@@ -76,6 +78,18 @@ final readonly class TaskClientApiListener implements EventSubscriberInterface
 {
     /** Route default marking the client API's routes, with the scope the route needs. */
     public const ROUTE_SCOPE = '_nowo_task_board_client_scope';
+
+    /**
+     * Since 3.7.0: the "scope" of `POST logout` — no scope, account, context or budget check (a token may always be given
+     * up, and its read traffic can never starve its sign-out); only step 1 runs.
+     */
+    public const NO_SCOPE = '';
+
+    /**
+     * Since 3.7.0 (audit ZDX-TB-L2): `POST logout` spends `api.hooks.rate_limiter` under the token id with this prefix
+     * (`logout:<tokenId>`), a budget apart from the token's other requests.
+     */
+    public const LOGOUT_KEY_PREFIX = 'logout:';
 
     private const RATE_LIMIT = '_nowo_task_board_client_rate_limit';
 
@@ -117,6 +131,13 @@ final readonly class TaskClientApiListener implements EventSubscriberInterface
             return;
         }
         try {
+            if ($scope === self::NO_SCOPE) {
+                // 3.7.0 (audit ZDX-TB-L2): a logout budget of the token's own, so its reads never starve its sign-out.
+                $client = $this->client($request);
+                $this->spend($request, $client, TaskClientAuthenticator::ipPrefix($request->getClientIp()), self::LOGOUT_KEY_PREFIX);
+
+                return;
+            }
             $request->attributes->set(TaskClientCall::ATTRIBUTE, $this->enter($request, $scope));
         } catch (TaskClientApiException $refusal) {
             $event->setResponse($this->answer($refusal));
@@ -157,13 +178,7 @@ final readonly class TaskClientApiListener implements EventSubscriberInterface
      */
     private function enter(Request $request, string $scope): TaskClientCall
     {
-        $client = $request->attributes->get(TaskClientAuthenticator::ATTRIBUTE);
-        $user   = $this->tokenStorage->getToken()?->getUser();
-        if (!$client instanceof TaskClientPrincipal || !$user instanceof UserInterface || ($user !== $client->user && (SyncUser::id($user) === null || SyncUser::id($user) !== SyncUser::id($client->user)))) {
-            $this->logger->error('TaskBoard client API: no principal behind the security user. The client API must sit behind a stateless firewall with nowo_task_board.client_api.authenticator.', ['bundle' => 'nowo_task_board']);
-
-            throw new TaskClientApiException('server_error', Response::HTTP_INTERNAL_SERVER_ERROR);
-        }
+        $client   = $this->client($request);
         $ipPrefix = TaskClientAuthenticator::ipPrefix($request->getClientIp());
         // Audit ZDF-L1: the token's budget comes first, so a client looping on a refusal (401 or 403) is bounded per token.
         $this->spend($request, $client, $ipPrefix);
@@ -201,15 +216,33 @@ final readonly class TaskClientApiListener implements EventSubscriberInterface
     }
 
     /**
+     * Step 1: the principal the authenticator resolved, behind the same security user.
+     *
+     * @throws TaskClientApiException 500 when the host forgot the firewall
+     */
+    private function client(Request $request): TaskClientPrincipal
+    {
+        $client = $request->attributes->get(TaskClientAuthenticator::ATTRIBUTE);
+        $user   = $this->tokenStorage->getToken()?->getUser();
+        if (!$client instanceof TaskClientPrincipal || !$user instanceof UserInterface || ($user !== $client->user && (SyncUser::id($user) === null || SyncUser::id($user) !== SyncUser::id($client->user)))) {
+            $this->logger->error('TaskBoard client API: no principal behind the security user. The client API must sit behind a stateless firewall with nowo_task_board.client_api.authenticator.', ['bundle' => 'nowo_task_board']);
+
+            throw new TaskClientApiException('server_error', Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+
+        return $client;
+    }
+
+    /**
      * Consumes one request of the token's budget (audit ZDF-L1: before every refusal that follows the token's validation);
      * the budget is the token's and the person's, so it does not depend on the context.
      *
      * @throws TaskClientApiException 429 when spent
      */
-    private function spend(Request $request, TaskClientPrincipal $client, ?string $ipPrefix): void
+    private function spend(Request $request, TaskClientPrincipal $client, ?string $ipPrefix, string $keyPrefix = ''): void
     {
         $level = $client->hasScope(TaskClientPrincipal::SCOPE_WRITE) ? TaskApiLevel::Tasks : TaskApiLevel::Read;
-        $state = $this->rateLimiter->consume(new TaskApiPrincipal($client->user, $level, TaskApiWhere::limitedTo([], []), $client->tokenId, $client->tokenName !== '' ? $client->tokenName : 'app', ColumnTransitionVia::APP));
+        $state = $this->rateLimiter->consume(new TaskApiPrincipal($client->user, $level, TaskApiWhere::limitedTo([], []), $keyPrefix . $client->tokenId, $client->tokenName !== '' ? $client->tokenName : 'app', ColumnTransitionVia::APP));
         $request->attributes->set(self::RATE_LIMIT, $state);
         if (!$state->accepted) {
             $this->deny('rate_limited', Response::HTTP_TOO_MANY_REQUESTS, $client, $ipPrefix, ['Retry-After' => (string) max(1, $state->resetAt - $this->clock->now()->getTimestamp())]);

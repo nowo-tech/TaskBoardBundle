@@ -17,7 +17,7 @@ use function in_array;
 /**
  * Since 2.23.0 (Beacon spec 242): one answer to a question — the options picked (ids of the question's options), the
  * *Other* free text, the recipient it answers for (`answeredBySubject`), who answered (a signed-in user, or null for an
- * external answer through the host's link, with the name the host gave) and where (`via`: web, app, api, mcp, external).
+ * external answer through the host's link, with the name the host gave) and where (`via`: web, app, api, mcp, cli since 3.7.0, external).
  *
  * Never edited or deleted: a later answer supersedes it ({@see self::getSupersededAt()}), and both are kept.
  */
@@ -32,8 +32,11 @@ class TaskQuestionAnswer
 
     public const VIA_EXTERNAL = 'external';
 
-    /** The values of {@see self::getVia()}. */
-    public const VIAS = ['web', 'app', 'api', 'mcp', self::VIA_EXTERNAL];
+    /**
+     * The values of {@see self::getVia()}. Since 3.7.0 (audit ZDX-TB-L3) also `cli`: an answer given inside a command's
+     * declared channel (`WriteChannelScope`), so every `WriteChannel` value is a valid `via`.
+     */
+    public const VIAS = ['web', 'app', 'api', 'mcp', 'cli', self::VIA_EXTERNAL];
 
     #[ORM\Id]
     #[ORM\Column(type: 'string', length: 36)]

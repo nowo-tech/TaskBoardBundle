@@ -12,6 +12,8 @@ use Nowo\TaskBoardBundle\Api\Security\TaskApiRequestListener;
 use Nowo\TaskBoardBundle\Api\TaskApiInput;
 use Nowo\TaskBoardBundle\Api\TaskApiPrincipal;
 use Nowo\TaskBoardBundle\Api\TaskApiRefusal;
+use Nowo\TaskBoardBundle\Provenance\Attribute\AsWriteChannel;
+use Nowo\TaskBoardBundle\Provenance\WriteChannel;
 use Nowo\TaskBoardBundle\Question\Entity\TaskQuestion;
 use Nowo\TaskBoardBundle\Question\TaskQuestionAnswerSnapshot;
 use Nowo\TaskBoardBundle\Question\TaskQuestionOptionSnapshot;
@@ -34,6 +36,7 @@ use function preg_match;
  * `task_questions.enabled`. **Not in ClickUp's API.** Thin: one operation each, then the question's JSON
  * ({@see self::question()}). Markdown context comes back as stored, never as HTML.
  */
+#[AsWriteChannel(WriteChannel::Api)]
 #[Route(requirements: self::REQUIREMENTS, defaults: TaskBoardRouteLoader::API_DEFAULTS)]
 final readonly class TaskApiQuestionController
 {

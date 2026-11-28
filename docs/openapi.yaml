@@ -1169,7 +1169,7 @@ components:
         creator: {$ref: '#/components/schemas/Person'}
         created_by: {type: [string, 'null'], description: 'Since 2.18.0: the API id of the creator'}
         updated_by: {type: [string, 'null'], description: 'Since 2.18.0: the API id of who made the last recorded write'}
-        channel: {type: [string, 'null'], enum: [web, app, api, mcp, null], description: 'Since 2.18.0: where the last write came from, as the host said'}
+        channel: {type: [string, 'null'], enum: [web, app, api, mcp, cli, null], description: 'Since 2.18.0: where the last write came from, as the host said; since 3.7.0 else the channel the bundle''s entry point declared (cli: an import or sync command)'}
         token_name: {type: [string, 'null'], maxLength: 120, description: 'Since 2.18.0: the host''s plain-text label of the last write''s actor (never the token)'}
         assignees: {type: array, items: {$ref: '#/components/schemas/Person'}}
         watchers: {type: array, items: {$ref: '#/components/schemas/Person'}}
@@ -1197,7 +1197,7 @@ components:
       properties: {checklist: {$ref: '#/components/schemas/Checklist'}, warnings: {$ref: '#/components/schemas/Warnings'}}
     Comments:
       type: object
-      properties: {comments: {type: array, items: {type: object, properties: {id: {type: string}, comment_text: {type: string}, user: {$ref: '#/components/schemas/Person'}, date: {type: string}, created_by: {type: [string, 'null']}, updated_by: {type: [string, 'null']}, channel: {type: [string, 'null'], enum: [web, app, api, mcp, null]}, token_name: {type: [string, 'null'], maxLength: 120}}}}}
+      properties: {comments: {type: array, items: {type: object, properties: {id: {type: string}, comment_text: {type: string}, user: {$ref: '#/components/schemas/Person'}, date: {type: string}, created_by: {type: [string, 'null']}, updated_by: {type: [string, 'null']}, channel: {type: [string, 'null'], enum: [web, app, api, mcp, cli, null]}, token_name: {type: [string, 'null'], maxLength: 120}}}}}
     CommentCreated:
       type: object
       properties: {id: {type: string}, hist_id: {type: string}, date: {type: integer}}
@@ -1227,7 +1227,7 @@ components:
       properties: {id: {type: string}, task_id: {type: string}, list_id: {type: string}, text: {type: string}, context: {type: [string, 'null'], description: 'Markdown as stored, never HTML'}, choice: {type: string, enum: [single, multiple]}, allow_other: {type: boolean}, state: {type: string, enum: [open, answered, withdrawn]}, options: {type: array, items: {type: object, properties: {id: {type: string}, label: {type: string}, description: {type: [string, 'null']}, recommended: {type: boolean}}}}, recipients: {type: array, items: {type: object, properties: {id: {type: string}, label: {type: string}, external: {type: boolean}}}}, due_date: {type: [string, 'null'], format: date}, asked_by: {type: [object, 'null']}, asked_at: {type: integer}, answer: {oneOf: [{$ref: '#/components/schemas/QuestionAnswerItem'}, {type: 'null'}]}, answers: {type: array, items: {$ref: '#/components/schemas/QuestionAnswerItem'}}, withdrawn: {type: [object, 'null']}, published: {type: [object, 'null']}, version: {type: integer}}
     QuestionAnswerItem:
       type: object
-      properties: {id: {type: string}, options: {type: array, items: {type: string}}, option_labels: {type: array, items: {type: string}}, other_text: {type: [string, 'null']}, subject_id: {type: string}, answered_by: {type: [object, 'null']}, via: {type: string, enum: [web, app, api, mcp, external]}, answered_at: {type: integer}, superseded_at: {type: [integer, 'null']}}
+      properties: {id: {type: string}, options: {type: array, items: {type: string}}, option_labels: {type: array, items: {type: string}}, other_text: {type: [string, 'null']}, subject_id: {type: string}, answered_by: {type: [object, 'null']}, via: {type: string, enum: [web, app, api, mcp, cli, external]}, answered_at: {type: integer}, superseded_at: {type: [integer, 'null']}}
     Questions:
       type: object
       properties: {questions: {type: array, items: {$ref: '#/components/schemas/Question'}}}

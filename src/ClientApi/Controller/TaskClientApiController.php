@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace Nowo\TaskBoardBundle\ClientApi\Controller;
 
+use Nowo\TaskBoardBundle\ClientApi\Contract\TaskClientTokenRevokerInterface;
 use Nowo\TaskBoardBundle\ClientApi\Model\TaskClientPrincipal;
+use Nowo\TaskBoardBundle\ClientApi\Model\TaskClientRequest;
+use Nowo\TaskBoardBundle\ClientApi\Security\TaskClientApiListener;
+use Nowo\TaskBoardBundle\ClientApi\Security\TaskClientAuthenticator;
 use Nowo\TaskBoardBundle\ClientApi\TaskClientApiException;
 use Nowo\TaskBoardBundle\ClientApi\TaskClientCall;
 use Nowo\TaskBoardBundle\ClientApi\TaskClientIdempotency;
@@ -13,9 +17,15 @@ use Nowo\TaskBoardBundle\ClientApi\TaskClientReader;
 use Nowo\TaskBoardBundle\ClientApi\TaskClientWriter;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Enum\TaskMemberRole;
+use Nowo\TaskBoardBundle\Event\TaskBoardEvents;
+use Nowo\TaskBoardBundle\Event\TaskClientLoggedOutEvent;
+use Nowo\TaskBoardBundle\Provenance\Attribute\AsWriteChannel;
+use Nowo\TaskBoardBundle\Provenance\WriteChannel;
+use Nowo\TaskBoardBundle\Sync\People\SyncUser;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 use function is_int;
 use function is_string;
@@ -27,6 +37,7 @@ use function preg_match;
  * went through `TaskClientApiListener` (principal, scope, context, budget); an answer that shows a task carries its
  * revision as `ETag`. Stateless.
  */
+#[AsWriteChannel(WriteChannel::App)]
 final readonly class TaskClientApiController
 {
     /** The routes: name => [method, path after `/v1`, action, scope]. */
@@ -50,6 +61,8 @@ final readonly class TaskClientApiController
         'task_member_delete'    => ['DELETE', '/tasks/{taskId}/members/{userId}', 'memberDelete', TaskClientPrincipal::SCOPE_WRITE],
         'checklist_item_create' => ['POST', '/tasks/{taskId}/checklist-items', 'checklistItemCreate', TaskClientPrincipal::SCOPE_WRITE],
         'checklist_item_update' => ['PATCH', '/tasks/{taskId}/checklist-items/{itemId}', 'checklistItemUpdate', TaskClientPrincipal::SCOPE_WRITE],
+        // Since 3.7.0 (Beacon Desktop BDA13-L2): no scope (a token may always be given up).
+        'logout' => ['POST', '/logout', 'logout', TaskClientApiListener::NO_SCOPE],
     ];
 
     public function __construct(
@@ -57,6 +70,9 @@ final readonly class TaskClientApiController
         private TaskClientWriter $writer,
         private TaskClientIdempotency $idempotency,
         private int $maxBodyBytes = 1048576,
+        // Since 3.7.0: the host's revoker of `POST logout` (null: the client only forgets its token).
+        private ?TaskClientTokenRevokerInterface $revoker = null,
+        private ?EventDispatcherInterface $events = null,
     ) {
     }
 
@@ -234,6 +250,24 @@ final readonly class TaskClientApiController
 
             return [$this->taskResponse($call, $parent, 200, ['itemId' => $item->getId(), 'itemRevision' => $item->getRevision()]), $parent->getBoard()];
         });
+    }
+
+    /**
+     * Since 3.7.0 (Beacon Desktop BDA13-L2): `POST logout` signs the client out — the host's revoker revokes the presented
+     * token (and only it), then {@see TaskClientLoggedOutEvent} is dispatched. Always `204` with no body, also for a
+     * token that was already revoked, has expired or is unknown (answered by the authenticator: never an oracle), so a
+     * client may retry it freely. No scope, account, context or budget check. Without a revoker it still answers `204`
+     * and the token stays valid until it expires: `me.features.serverLogout` tells the client so. A failing revoker is
+     * an error answer (`500 server_error`, `409 unavailable` on a lock conflict): the client retries.
+     */
+    public function logout(Request $request): Response
+    {
+        $principal = TaskClientCall::principalOf($request);
+        // The authenticator resolved a principal from this request's Bearer token, so the token is there.
+        $this->revoker?->revoke((string) TaskClientAuthenticator::bearer($request), $principal, new TaskClientRequest($request->getClientIp(), null, $request->getPathInfo(), $request->getMethod()));
+        $this->events?->dispatch(new TaskClientLoggedOutEvent($principal->tokenId, SyncUser::id($principal->user), $this->revoker instanceof TaskClientTokenRevokerInterface, TaskClientAuthenticator::ipPrefix($request->getClientIp())), TaskBoardEvents::CLIENT_API_LOGGED_OUT);
+
+        return TaskClientAuthenticator::signedOut();
     }
 
     /**

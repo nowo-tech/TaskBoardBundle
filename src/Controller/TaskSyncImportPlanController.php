@@ -7,6 +7,8 @@ namespace Nowo\TaskBoardBundle\Controller;
 use DateTimeImmutable;
 use Nowo\TaskBoardBundle\Form\CsrfActionType;
 use Nowo\TaskBoardBundle\Form\ImportPlanStepFormType;
+use Nowo\TaskBoardBundle\Provenance\Attribute\AsWriteChannel;
+use Nowo\TaskBoardBundle\Provenance\WriteChannel;
 use Nowo\TaskBoardBundle\Security\TaskBoardAccessCheckerInterface;
 use Nowo\TaskBoardBundle\Security\TaskBoardResourceAccessChecker;
 use Nowo\TaskBoardBundle\Security\TenantAwareTaskBoardAccessCheckerInterface;
@@ -80,6 +82,7 @@ use const JSON_UNESCAPED_SLASHES;
  * tenant (`import_plan`, deny by default) reach these pages; everyone else gets 404, as for a plan of another tenant.
  * The progress endpoint is a read-only GET (counters only, `no-store`); with the inline runner it advances the plan.
  */
+#[AsWriteChannel(WriteChannel::Web)]
 final class TaskSyncImportPlanController extends AbstractController
 {
     public const PROVIDER = 'clickup';

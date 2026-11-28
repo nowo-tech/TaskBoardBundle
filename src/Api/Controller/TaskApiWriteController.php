@@ -19,6 +19,8 @@ use Nowo\TaskBoardBundle\Api\TaskApiRevision;
 use Nowo\TaskBoardBundle\Api\Value\TaskApiAttachment;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Enum\TaskDependencyType;
+use Nowo\TaskBoardBundle\Provenance\Attribute\AsWriteChannel;
+use Nowo\TaskBoardBundle\Provenance\WriteChannel;
 use Nowo\TaskBoardBundle\Routing\TaskBoardRouteLoader;
 use Psr\Clock\ClockInterface;
 use Symfony\Component\Clock\NativeClock;
@@ -38,6 +40,7 @@ use const PATHINFO_EXTENSION;
  * Since 2.2.0 (spec 213): the write endpoints. Thin: parse the body, call one operation, answer as ClickUp does, with
  * `warnings` for the fields nothing read.
  */
+#[AsWriteChannel(WriteChannel::Api)]
 #[Route(requirements: TaskBoardRouteLoader::API_REQUIREMENTS, defaults: TaskBoardRouteLoader::API_DEFAULTS)]
 final readonly class TaskApiWriteController
 {

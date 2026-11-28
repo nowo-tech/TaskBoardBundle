@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\TaskBoardBundle\Service;
 
 use DateTimeImmutable;
+use Nowo\CorrelationContract\CorrelationIdProviderInterface;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
 use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskChangeHistory;
@@ -28,10 +29,14 @@ final readonly class TaskChangeRecorder
      * @param TaskChangeContext|null $cause since 2.3.0 (spec 216): the cause written on every row recorded while it is set
      * @param WriteProvenanceProviderInterface|null $provenance since 2.18.0 (Beacon spec 234): the host's provenance of the
      *                                                          write, stored on every row and on the task as its last write
+     * @param CorrelationIdProviderInterface|null $correlation since 3.7.0 (Beacon spec 235, FR-004): the host's correlation
+     *                                                         id provider (autowired when the host registers one); the id
+     *                                                         of the current unit of work is stored on every row
      */
     public function __construct(
         private ?TaskChangeContext $cause = null,
         private ?WriteProvenanceProviderInterface $provenance = null,
+        private ?CorrelationIdProviderInterface $correlation = null,
     ) {
     }
 
@@ -75,6 +80,7 @@ final readonly class TaskChangeRecorder
             context: $context,
             cause: $this->cause?->current(),
             provenance: $provenance,
+            correlationId: $this->correlation?->current(),
         ));
         // Since 2.18.0 (Beacon spec 234): the task keeps who made its last recorded write and where it came from.
         $task->recordWrite($user, $provenance);
@@ -109,6 +115,7 @@ final readonly class TaskChangeRecorder
             cause: $this->cause?->current(),
             provenance: $this->provenance?->current(),
             actorName: $actorName,
+            correlationId: $this->correlation?->current(),
         ));
     }
 

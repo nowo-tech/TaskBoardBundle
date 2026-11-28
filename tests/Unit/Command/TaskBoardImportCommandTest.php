@@ -7,10 +7,15 @@ namespace Nowo\TaskBoardBundle\Tests\Unit\Command;
 use Doctrine\ORM\EntityManagerInterface;
 use Nowo\TaskBoardBundle\Command\TaskBoardImportCommand;
 use Nowo\TaskBoardBundle\Entity\BoardColumn;
+use Nowo\TaskBoardBundle\Entity\Task;
 use Nowo\TaskBoardBundle\Entity\TaskBoard;
 use Nowo\TaskBoardBundle\Import\ClickUp\ClickUpCsvImporter;
 use Nowo\TaskBoardBundle\Import\NullTaskImportUserResolver;
 use Nowo\TaskBoardBundle\Import\TaskImportOrchestrator;
+use Nowo\TaskBoardBundle\Provenance\NoWriteProvenance;
+use Nowo\TaskBoardBundle\Provenance\ScopedWriteProvenance;
+use Nowo\TaskBoardBundle\Provenance\WriteChannel;
+use Nowo\TaskBoardBundle\Provenance\WriteChannelScope;
 use Nowo\TaskBoardBundle\Repository\BoardColumnRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskBoardRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\TaskRepositoryInterface;
@@ -23,6 +28,9 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorage;
 use Symfony\Component\Security\Core\Authentication\Token\UsernamePasswordToken;
+
+use function array_filter;
+use function array_values;
 
 final class TaskBoardImportCommandTest extends TestCase
 {
@@ -116,7 +124,26 @@ final class TaskBoardImportCommandTest extends TestCase
         self::assertStringContainsString($message, $tester->getDisplay());
     }
 
-    private function tester(bool $authenticated): CommandTester
+    public function testTheWritesOfARunCarryTheCliChannelSince370(): void
+    {
+        $scope     = new WriteChannelScope();
+        $persisted = [];
+        $tester    = $this->tester(true, $scope, $persisted);
+
+        self::assertSame(Command::SUCCESS, $tester->execute(['board-id' => $this->board->getId(), 'file' => self::FIXTURE]));
+        $tasks = array_values(array_filter($persisted, static fn (object $entity): bool => $entity instanceof Task));
+        self::assertNotSame([], $tasks);
+        foreach ($tasks as $task) {
+            self::assertInstanceOf(Task::class, $task);
+            self::assertSame(WriteChannel::Cli, $task->getChannel());
+        }
+        self::assertNull($scope->current(), 'nothing outlives the run');
+    }
+
+    /**
+     * @param list<object> $persisted
+     */
+    private function tester(bool $authenticated, ?WriteChannelScope $scope = null, array &$persisted = []): CommandTester
     {
         $boards = $this->createMock(TaskBoardRepositoryInterface::class);
         $boards->method('findById')->willReturnCallback(fn (string $id): ?TaskBoard => $id === $this->board->getId() ? $this->board : null);
@@ -124,13 +151,18 @@ final class TaskBoardImportCommandTest extends TestCase
         $tasks = $this->createMock(TaskRepositoryInterface::class);
         $tasks->method('findByBoard')->willReturn([]);
 
+        $entityManager = $this->createMock(EntityManagerInterface::class);
+        $entityManager->method('persist')->willReturnCallback(static function (object $entity) use (&$persisted): void {
+            $persisted[] = $entity;
+        });
+
         $orchestrator = new TaskImportOrchestrator(
             importers: [new ClickUpCsvImporter()],
             taskRepository: $tasks,
             columnManager: new BoardColumnManager($this->createMock(BoardColumnRepositoryInterface::class)),
-            changeRecorder: new TaskChangeRecorder(),
+            changeRecorder: new TaskChangeRecorder(provenance: $scope instanceof WriteChannelScope ? new ScopedWriteProvenance(new NoWriteProvenance(), $scope) : null),
             userResolver: new NullTaskImportUserResolver(),
-            entityManager: $this->createMock(EntityManagerInterface::class),
+            entityManager: $entityManager,
         );
 
         $tokenStorage = new TokenStorage();
@@ -138,6 +170,6 @@ final class TaskBoardImportCommandTest extends TestCase
             $tokenStorage->setToken(new UsernamePasswordToken($this->user, 'main', $this->user->getRoles()));
         }
 
-        return new CommandTester(new TaskBoardImportCommand($boards, $orchestrator, $tokenStorage));
+        return new CommandTester($scope instanceof WriteChannelScope ? new TaskBoardImportCommand($boards, $orchestrator, $tokenStorage, $scope) : new TaskBoardImportCommand($boards, $orchestrator, $tokenStorage));
     }
 }

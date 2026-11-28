@@ -96,6 +96,8 @@ use Nowo\TaskBoardBundle\Port\Internal\SyncLimitCheckerInterface;
 use Nowo\TaskBoardBundle\Port\Internal\TaskBoardDefaultViewResolverInterface;
 use Nowo\TaskBoardBundle\Port\Internal\TaskMentionCandidatesResolverInterface;
 use Nowo\TaskBoardBundle\Port\Snapshots;
+use Nowo\TaskBoardBundle\Provenance\Attribute\AsWriteChannel;
+use Nowo\TaskBoardBundle\Provenance\WriteChannel;
 use Nowo\TaskBoardBundle\Question\TaskQuestionView;
 use Nowo\TaskBoardBundle\Repository\ArchiveAwareTaskRepositoryInterface;
 use Nowo\TaskBoardBundle\Repository\BoundedTaskRepositoryInterface;
@@ -200,6 +202,7 @@ use const PHP_QUERY_RFC3986;
 /**
  * Manage UI for task boards, kanban, list, and task detail.
  */
+#[AsWriteChannel(WriteChannel::Web)]
 final class TaskBoardManageController extends AbstractController
 {
     /** Since 2.24.0: the header of a refused calendar event move's domain code. */

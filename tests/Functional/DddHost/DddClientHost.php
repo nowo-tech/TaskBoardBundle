@@ -13,6 +13,7 @@ use Nowo\TaskBoardBundle\ClientApi\Contract\TaskClientContextPolicyInterface;
 use Nowo\TaskBoardBundle\ClientApi\Contract\TaskClientPrincipalResolverInterface;
 use Nowo\TaskBoardBundle\ClientApi\Model\TaskClientPrincipal;
 use Nowo\TaskBoardBundle\ClientApi\Model\TaskClientRequest;
+use SensitiveParameter;
 
 /**
  * Since 3.4.0: the client API's ports of the DDD host (id user references), for the look-alike checks: one space for
@@ -20,7 +21,7 @@ use Nowo\TaskBoardBundle\ClientApi\Model\TaskClientRequest;
  */
 final class DddClientHost implements TaskClientPrincipalResolverInterface, TaskClientContextPolicyInterface, TaskApiWorkspaceInterface, TaskApiPlanGateInterface
 {
-    public function resolve(string $bearer, TaskClientRequest $request): ?TaskClientPrincipal
+    public function resolve(#[SensitiveParameter] string $bearer, TaskClientRequest $request): ?TaskClientPrincipal
     {
         return null;
     }
