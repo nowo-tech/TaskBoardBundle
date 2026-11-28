@@ -142,6 +142,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- PHP 8.6: `composer.json` allows PHP below 8.7 (was below 8.6). CI adds a forward-compatibility workflow with a
+  PHP 8.6 cell and a Symfony 8.2 cell (both stable, no allowed failures).
+- PHP 8.6: `spl_object_hash()` (deprecated in PHP 8.6) is replaced by `spl_object_id()` in the sync writer's fallback
+  user id; a JSON error test accepts the PHP 8.6 message, which adds the error location.
+
 ### Documentation
 
 - Spec Kit code inventory (`specs/001-baseline/code-inventory.md`) covers all 1179 production files: 13 files of 3.3.0 to 3.7.0 added, the removed `add-column-modal-controller.ts` row dropped, `FR-AUDIT-001` added, SC-001 and the coverage summary recounted.
@@ -1024,6 +1031,7 @@ UPGRADING "To 3.0.0".
   so with an application `EntityManagerDecorator` they stayed managed. The managers are now matched by their unit of
   work.
 
+
 ### Documentation
 
 - `docs/CONCURRENCY.md`: the remote sync, import and number-backfill writes (transactions, run lock, conflicts), the
@@ -1261,6 +1269,7 @@ UPGRADING "To 3.0.0".
   connections (Messenger to other transports, HTTP, mail or raw PDO still answer `CONFLICT_001`); `TASK_ERASED` is
   documented as dispatched inside the delete's transaction (it may still roll back: act after the commit).
 
+
 ### Documentation
 
 - [ROADMAP.md](ROADMAP.md): new roadmap from a feature gap review (current state by area, then Next, Later, Considering and Decided), linked from the README.
@@ -1344,6 +1353,7 @@ UPGRADING "To 3.0.0".
 ### Demo
 
 - The demo is built on UiKit and FormKit (REQ-DEMO-014 / REQ-DEMO-015): `templates/base.html.twig` is UiKit's admin layout with its default theme and a masthead (the dead Tabler-CDN base template, the CDN Bootstrap Icons stylesheet, `admin.html.twig` and `demo.css` are gone), `nowo_ui_kit` uses `css_framework: custom` with `icon_set: svg_inline`, the Twig, TagInput and Tiptap form themes are UiKit's `nowo_ui_layout`, and `nowo_form_kit.css_framework` is `none`. `nowo-tech/ui-kit-bundle` is required by the demo (`^2.52`, `form-kit-bundle` `^2.23`). The icon e2e test checks that no stylesheet comes from a foreign host instead of the Bootstrap Icons font. WebP screenshots (`make -C demo/symfony8 demo-screenshots`) added to the README (REQ-DEMO-013). No bundle runtime change.
+
 
 ### Documentation
 
@@ -1781,6 +1791,7 @@ columns.
   `DddHostEraseChunksTest` (an id-mode erasure of 66,000 rows). `TaskBoardPortsPassTest` also covers which service the
   public `SyncActorProviderInterface` alias ends up on.
 
+
 ### Documentation
 
 - `docs/SECURITY.md`: record the latest AI security audits (Appendices NN, NI, KO, JY) with dates and grade (REQ-SEC-004).
@@ -1989,6 +2000,7 @@ ports, see Tests). See [UPGRADING](UPGRADING.md#to-2150).
   (`movedDates()` in `calendar-utils.ts`; `task-board.js` rebuilt).
 - **The calendar's assignee filter has a stable order (audit NN-I2).** `DoctrineOrmTaskRepository::findCalendarAssignees()`
   sorts the people by label, then id, so the filter lists them in the same order on SQLite, MySQL and PostgreSQL.
+
 
 ### Documentation
 
@@ -2216,6 +2228,7 @@ Target 2.9.1 (patch). See [UPGRADING](UPGRADING.md#to-291).
 - **A column with a legacy icon can be renamed again (audit JM-I7).** A column whose stored icon is no longer storable (written straight to the database, a pre-2.9.0 `default_columns` value such as `fa fa-bug`, or an icon with tag text stored before JM-I3) refused a plain rename with the icon flash ("The column was not saved…"), because the dialog posted that value back and the grid did not accept it. The grid now accepts the edited column's own current icon whatever it is (`BoardColumnManager::update()` still drops a value that is not storable), and the edit button carries `data-column-icon-storable="0"` for such an icon so the dialog opens it as "No icon", with the grid and with a host widget (`board.column_icon_form_type`) alike. Saving the dialog drops the icon, as UPGRADING already said. New Twig function `nowo_task_board_column_icon_storable(icon)`; new exported helper `dialogIcon()` in `edit-column-modal-controller.ts`.
 - **A legacy bare current icon no longer shadows an offered icon (audit JM-I8).** The grid's choices are keyed by label; the edited column's own icon now has its own label key (`BoardColumnFormType::CURRENT_ICON_LABEL_PREFIX`, `current: <icon>`), so a bare name such as `bug` next to an offered `tabler:bug` (label `bug`) no longer replaces that choice: both stay valid for that column.
 
+
 ### Documentation
 
 - USAGE: new section "Using it from a DDD / hexagonal application" (where the bundle sits in a hexagonal host, the ports, events and DTOs to build an anti-corruption layer on, and the known limitations).
@@ -2329,6 +2342,7 @@ Every lock conflict of a board move ends as "changed since" (`stale`) when the m
 - **Move: every lock conflict is "changed since"** (audit IC-I9r a, b). PostgreSQL's `lock_timeout` (SQLSTATE `55P03`, not mapped by Doctrine DBAL) and a MySQL deadlock raised during the flush (whose `ROLLBACK TO SAVEPOINT` fails with 1305 because InnoDB already rolled back) are answered as `stale` instead of a 500; nothing is written. In the second case the connection is closed to reset DBAL's transaction nesting level. Other driver errors still reach the caller. Only a move that owns the whole transaction maps a lock conflict to `stale`: called inside a transaction the caller opened, the move rolls back its own levels, never closes the connection, and rethrows the driver error, since a MySQL deadlock has also rolled back the caller's earlier writes (audit IG-L1).
 - **Move: no half-applied move after a failure** (audit IC-I9r c). Once the move has started to change the entities, any failure closes the entity manager, so a later `flush()` in the same request cannot write part of the move outside the rolled-back transaction. A refusal before that keeps it open. The audit of this release is Appendix IG.
 
+
 ### Documentation
 
 - SECURITY and UPGRADING ("To 2.3.1", "Locks"): the lock conflicts above, and the residuals of audit IC-I8r (a *Fields* document from before 1.28 never synced since stays visible on the target; with sync off and no `detached_task_id` column the source board's erasure does not find a moved task's document).
@@ -2401,6 +2415,7 @@ Target: 2.1.1. Reported by Beacon on 2.0.2. No schema, configuration or permissi
 - New board is primary whatever the host's `nowo_ui_kit.action_variants.create` says. It is the page's main action, and an explicit variant is how UiKit keeps one (`Action::create()` does the same).
 - The Board / List / Gantt buttons of the index end under their Views heading. On a phone, where cards replace the table, they stay at the start beside their label.
 
+
 ### Documentation
 
 - `BoardScopeProviderInterface::scopes()` and `docs/CONFIGURATION.md` state what the code already does: any scope shows New board, so a provider returns `[]` on a tenant's page where the user may not create, and `canCreateBoard()` then decides. `[]` is not a denial: access stays the checker's (audit HZ-L2).
@@ -2433,6 +2448,7 @@ Target: 2.0.2. Audit HY (2026-11-07): Pass (good) / Low at `a510f4f`.
 - The board index and the list page no longer answer 500 on a host with `nowo_ui_kit.icon_set: ux_icon` that imports Tabler only (`Icon "bi:plus" not found`, then `Icon "bi:chevron-up" not found`). The New board action asks for `tabler:plus` and the filter fold for `tabler:chevron-up` and `tabler:chevron-down` there. Output on a webfont host does not change.
 - The all-digit checklist item fix of 2.0.1 survives `rector process`: the parent check reads the id from the item instead of casting the array key, a cast rector removes as useless. An all-digit item that names itself as parent stays on the list.
 - `nowo_ui_kit.action_icons.create` now sets the icon of New board, whatever the icon set; `chevron_up` and `chevron_down` keep setting the filter fold's. The bundle's own `plus` used to win over the host's map.
+
 
 ### Documentation
 

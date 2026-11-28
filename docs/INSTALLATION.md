@@ -17,7 +17,7 @@
 
 - **FormKitBundle** (`nowo-tech/form-kit-bundle` ^2.0) — dashboard/admin Symfony forms (`FormOptionsTrait`, profile `task_board`). Register `NowoFormKitBundle` in `config/bundles.php` (Flex / demo). Optional host YAML: `config/packages/nowo_form_kit.yaml`.
 
-- PHP 8.2+ (< 8.6)
+- PHP 8.2+ (< 8.7)
 - Symfony 7.4+ or 8.x
 - Doctrine ORM 3.7+
 - Doctrine Bundle 2.10+ (Symfony 7.x) or 3.0+ (Symfony 8.x)

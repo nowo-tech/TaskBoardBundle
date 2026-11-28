@@ -82,7 +82,7 @@ final class JsonImportGuardTest extends TestCase
             $guard->decode('{oops', 'Bad: ');
             self::fail('invalid');
         } catch (InvalidArgumentException $exception) {
-            self::assertSame('Bad: Syntax error', $exception->getMessage());
+            self::assertStringStartsWith('Bad: Syntax error', $exception->getMessage());
         }
         try {
             $guard->decode(str_repeat('[', 70) . str_repeat(']', 70), 'Bad: ');
