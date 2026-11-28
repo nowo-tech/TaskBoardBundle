@@ -2,7 +2,7 @@
 
 **Baseline spec**: [`spec.md`](spec.md)  
 **Package**: `nowo-tech/task-board-bundle`  
-**Last audited**: 2026-11-26 (3.4.0: client API v1, personal-data export, Forget this person, token page way back; FR-CLIENT-001, FR-PD-001, FR-SYNC-016, FR-SYNC-017); 2026-11-26 (3.3.0: native custom fields from the import and the Custom fields page, FR-FIELD-002); 2026-11-25 (3.2.0: ClickUp import plans, FR-SYNC-015); 2026-11-25 (3.1.0: ClickUp OAuth, FR-SYNC-014); 2026-11-24 (3.0.0: every tracked file of `src/`, releases 1.10–3.0; 2026-11-22: v2.30.0)
+**Last audited**: 2026-11-28 (3.7.0: 13 files of 3.3.0–3.7.0 added, `add-column-modal-controller.ts` row removed; 3.4.0: client API v1, personal-data export, Forget this person, token page way back; FR-CLIENT-001, FR-PD-001, FR-SYNC-016, FR-SYNC-017); 2026-11-26 (3.3.0: native custom fields from the import and the Custom fields page, FR-FIELD-002); 2026-11-25 (3.2.0: ClickUp import plans, FR-SYNC-015); 2026-11-25 (3.1.0: ClickUp OAuth, FR-SYNC-014); 2026-11-24 (3.0.0: every tracked file of `src/`, releases 1.10–3.0; 2026-11-22: v2.30.0)
 
 Production scope excludes Vitest sources (`*.test.ts`).
 
@@ -232,7 +232,6 @@ Files added by the 1.27.0 stack. The coverage summary below is the 2026-11-03 au
 | Source file | Spec section | Requirement IDs |
 | --- | --- | --- |
 | `Resources/assets/src/activity-filter-controller.ts` | Comments / all activity toggle (since 1.16) | FR-UI-008, FR-COMMENT-001 |
-| `Resources/assets/src/add-column-modal-controller.ts` | Modal Stimulus controllers | FR-UI-007 |
 | `Resources/assets/src/add-task-modal-controller.ts` | Modal Stimulus controllers | FR-UI-007 |
 | `Resources/assets/src/board-controller.ts` | Frontend assets | FR-UI-002 |
 | `Resources/assets/src/css-vars.ts` | CSP-safe CSS variables from data attributes | FR-UI-008 |
@@ -1236,24 +1235,43 @@ removed (their rows are gone).
 | `Sync/Event/SyncPersonForgetCheckEvent.php` | Forget this person (3.4.0, Beacon spec 208 E) | FR-SYNC-016 |
 | `Sync/Hook/TenantCredentialReturnAwareSourceInterface.php` | The token page's way back (3.4.0) | FR-SYNC-017 |
 
+## Additions 3.5.0–3.7.0 (module gate, logout, timeline source, write channel, dialogs on demand, field reread)
+
+| Source file | Spec section | Requirement IDs |
+| --- | --- | --- |
+| `Bridge/AuditKit/TaskTimelineSource.php` | AuditKit 2.2 timeline source of one task: changes and comments (3.7.0, Beacon spec 235 T003) | FR-AUDIT-001 |
+| `ClientApi/Contract/TaskClientTokenRevokerInterface.php` | Client API v1 logout: host port that revokes the one Bearer token (3.7.0) | FR-CLIENT-001 |
+| `ClientApi/Exception/TaskBoardModuleForbiddenException.php` | Client API v1: `403 module_forbidden` when the person lost the Tasks permission (3.5.0, spec 262 B) | FR-CLIENT-001 |
+| `DependencyInjection/Compiler/ClientApiSecretPass.php` | Client API v1: empty `kernel.secret` fails the container build (3.4.1, audit ZCS-v-I4) | FR-CLIENT-001 |
+| `Event/TaskClientLoggedOutEvent.php` | Client API v1: logout audit event, ids only (3.7.0) | FR-CLIENT-001 |
+| `Provenance/Attribute/AsWriteChannel.php` | Write provenance: channel a controller declares for its writes (3.7.0, spec 235 FR-004) | FR-MEMBER-001 |
+| `Provenance/ScopedWriteProvenance.php` | Write provenance: provider that falls back to the declared channel scope (3.7.0) | FR-MEMBER-001 |
+| `Provenance/WriteChannelControllerListener.php` | Write provenance: runs `#[AsWriteChannel]` controllers inside the scope (3.7.0) | FR-MEMBER-001 |
+| `Provenance/WriteChannelScope.php` | Write provenance: the channel of the entry point running now, no state kept (3.7.0) | FR-MEMBER-001 |
+| `Resources/views/manage/_dialog_openers.html.twig` | On-demand dialogs: opener attributes macros (3.6.0) | FR-UI-007 |
+| `Resources/views/manage/_dialog_shells.html.twig` | On-demand dialogs: the empty remote dialog shells, filled on open (3.6.0) | FR-UI-007 |
+| `Resources/views/manage/_import_dialog.html.twig` | On-demand dialogs: import form content for the remote dialog (3.6.0) | FR-IMPORT-013 |
+| `Sync/Field/SyncNativeFieldReread.php` | Custom fields: next sync reads every task again after Import it again (3.3.0, audit ZCFv2-L1) | FR-FIELD-002 |
+
 ## Coverage summary
 
 | Section | Rows |
 | --- | ---: |
 | PHP classes (`src/**/*.php`) | 180 |
-| Provider sync additions in 1.27.0 (`src/`) | 28 |
-| TypeScript & CSS (`src/Resources/assets/src/`) | 26 |
+| Provider sync additions in 1.27.0 (`src/`) | 29 |
+| TypeScript & CSS (`src/Resources/assets/src/`) | 25 |
 | Legacy assets (`src/Resources/public/`) | 2 |
 | Twig views (`src/Resources/views/`) | 39 |
 | Config & translations | 9 |
-| Additions 1.23–2.20 (API, sync, ports, numbers, calendar, recurrence, folders, fields, templates) | 633 |
-| Additions 2.21-2.30 (locks, menus, API conflicts, questions, calendar sources, header search, host ports) | 135 |
-| Additions 2.31–3.0 (dialogs on demand, validators domain, edit-form revision lock, script banner, question counts, 3.0 port removal) | 19 |
+| Additions 1.23–2.20 (API, sync, ports, numbers, calendar, recurrence, folders, fields, templates) | 652 |
+| Additions 2.21-2.30 (locks, menus, API conflicts, questions, calendar sources, header search, host ports) | 136 |
+| Additions 2.31–3.0 (dialogs on demand, validators domain, edit-form revision lock, script banner, question counts, 3.0 port removal) | 59 |
 | Additions 3.4.0 (client API v1, personal-data export, Forget this person, token page way back) | 35 |
-| **Rows in this file** | **1106** |
+| Additions 3.5.0–3.7.0 (module gate, logout, timeline source, write channel, dialogs on demand, field reread) | 13 |
+| **Rows in this file** | **1179** |
 
-Production files under `src/` (everything tracked except co-located Vitest files): **1071**, all named in this inventory, one row per file (rows = production files; the co-located Vitest files below have no row).
+Production files under `src/` (everything tracked except co-located Vitest files): **1179**, all named in this inventory, one row per file (rows = production files; the co-located Vitest files below have no row).
 
 Excluded (25 co-located Vitest files, test artifacts): `Resources/assets/src/anchor-utils.test.ts`, `Resources/assets/src/ask-confirm.test.ts`, `Resources/assets/src/board-create-steps-controller.test.ts`, `Resources/assets/src/board-openers.test.ts`, `Resources/assets/src/calendar-utils.test.ts`, `Resources/assets/src/column-collapse.test.ts`, `Resources/assets/src/css-vars.test.ts`, `Resources/assets/src/edit-column-current-icon.test.ts`, `Resources/assets/src/edit-column-delete-warning.test.ts`, `Resources/assets/src/edit-column-humans-only.test.ts`, `Resources/assets/src/filter-fold.test.ts`, `Resources/assets/src/gantt-scale.test.ts`, `Resources/assets/src/list-filter-utils.test.ts`, `Resources/assets/src/list-sort-utils.test.ts`, `Resources/assets/src/logger.test.ts`, `Resources/assets/src/mention-utils.test.ts`, `Resources/assets/src/option-filter-utils.test.ts`, `Resources/assets/src/storage.test.ts`, `Resources/assets/src/sync-utils.test.ts`, `Resources/assets/src/task-board-css.test.ts`, `Resources/assets/src/task-board.test.ts`, `Resources/assets/src/task-menu-shared.test.ts`, `Resources/assets/src/task-nav-utils.test.ts`, `Resources/assets/src/task-questions.test.ts`, `Resources/assets/src/time-utils.test.ts`.
 
-Audit command: `git ls-files src | wc -l` → **1096** (2026-11-24, 3.0.0); `git ls-files src | grep -vc '\.test\.ts$'` → **1071** production files.
+Audit command: `git ls-files src | wc -l` → **1204** (2026-11-28, 3.7.0); `git ls-files src | grep -vc '\.test\.ts$'` → **1179** production files.

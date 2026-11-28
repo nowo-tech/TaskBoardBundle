@@ -148,6 +148,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   PHP 8.6 cell and a Symfony 8.2 cell (both stable, no allowed failures).
 - PHP 8.6: `spl_object_hash()` (deprecated in PHP 8.6) is replaced by `spl_object_id()` in the sync writer's fallback
   user id; a JSON error test accepts the PHP 8.6 message, which adds the error location.
+### Documentation
+
+- Spec Kit code inventory (`specs/001-baseline/code-inventory.md`) covers all 1179 production files: 13 files of 3.3.0 to 3.7.0 added, the removed `add-column-modal-controller.ts` row dropped, `FR-AUDIT-001` added, SC-001 and the coverage summary recounted.
 
 ## [3.7.0] - 2026-11-28
 
